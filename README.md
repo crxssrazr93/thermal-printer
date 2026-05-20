@@ -1,6 +1,6 @@
 # Thermal Printer
 
-A modern GUI application for controlling Bluetooth thermal printers on Linux. Currently supports the Core Innovation CTP-500, with more printers planned.
+A GUI app for controlling Bluetooth thermal printers on Linux. Currently supports the Core Innovation CTP-500, with more printers planned.
 
 ![License](https://img.shields.io/badge/license-AGPL--3.0-blue)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20WSL-blue)
