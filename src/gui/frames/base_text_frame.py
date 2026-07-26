@@ -563,7 +563,7 @@ class BaseTextFrame(ctk.CTkFrame):
             alignment=self.align_var.get(),
             wrap=self._renderer_wrap,
             line_spacing=self._settings.get(
-                SettingsKeys.Text.LINE_SPACING, DEFAULT_LINE_SPACING
+                self._get_settings_keys().LINE_SPACING, DEFAULT_LINE_SPACING
             )
         )
         darkness = self.darkness_var.get()

@@ -26,6 +26,7 @@ class SettingsKeys:
         DARKNESS = "banner.darkness"
         ADD_DATE = "banner.add_date"
         DATE_FORMAT = "banner.date_format"
+        LINE_SPACING = "banner.line_spacing"
 
     class Image:
         BRIGHTNESS = "image.brightness"
