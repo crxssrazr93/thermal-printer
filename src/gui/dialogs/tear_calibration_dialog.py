@@ -101,9 +101,6 @@ class TearCalibrationDialog(CenteredDialog):
             answer_row,
             text="Yes - tears on the line",
             height=38,
-            fg_color=("green", "#00AA00"),
-            hover_color=("darkgreen", "#008800"),
-            state="disabled",
             command=self._accept
         )
         self.yes_button.pack(side="left", expand=True, fill="x", padx=(0, 6))
@@ -112,10 +109,11 @@ class TearCalibrationDialog(CenteredDialog):
             answer_row,
             text="No - try next",
             height=38,
-            state="disabled",
             command=self._next_step
         )
         self.no_button.pack(side="left", expand=True, fill="x", padx=(6, 0))
+
+        self._set_answers_enabled(False)
 
         # bottom-up: the splash window type gives no titlebar, so the wizard
         # needs a dismiss of its own rather than relying on Escape alone
@@ -133,6 +131,30 @@ class TearCalibrationDialog(CenteredDialog):
         self.status_label.pack(fill="x", side="bottom", pady=(12, 0))
 
         self._refresh()
+
+    def _set_answers_enabled(self, enabled: bool) -> None:
+        """Enable or grey out the yes/no pair.
+
+        CTk renders disabled text in a muted grey, which is illegible against a
+        saturated green or blue fill, so the fill has to move with the state
+        rather than the state alone.
+        """
+        state = "normal" if enabled else "disabled"
+        muted_fill = ("gray80", "gray26")
+        muted_text = ("gray45", "gray60")
+
+        self.yes_button.configure(
+            state=state,
+            fg_color=("#1E8E3E", "#12873F") if enabled else muted_fill,
+            hover_color=("#177032", "#0D6B31"),
+            text_color="white" if enabled else muted_text,
+        )
+        self.no_button.configure(
+            state=state,
+            fg_color=("#1F6FEB", "#2563C9") if enabled else muted_fill,
+            hover_color=("#1859C5", "#1D4FA8"),
+            text_color="white" if enabled else muted_text,
+        )
 
     def _refresh(self) -> None:
         dots = mm_to_dots(self._mm)
@@ -198,8 +220,7 @@ class TearCalibrationDialog(CenteredDialog):
             )
             self._printer.end_print()
 
-            self.yes_button.configure(state="normal")
-            self.no_button.configure(state="normal")
+            self._set_answers_enabled(True)
             self._set_status(f"Printed {self._mm:g}mm - tear it off and judge the line")
         except Exception as error:
             logger.warning("Tear calibration print failed: %s", error)
@@ -216,8 +237,7 @@ class TearCalibrationDialog(CenteredDialog):
             return
 
         self._mm += TEAR_CALIBRATION_STEP_MM
-        self.yes_button.configure(state="disabled")
-        self.no_button.configure(state="disabled")
+        self._set_answers_enabled(False)
         self._refresh()
         self._print_sample()
 

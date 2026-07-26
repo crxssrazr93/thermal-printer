@@ -41,7 +41,11 @@ class PrinterApp(ctk.CTk):
     # tabbed interface for text and image printing
 
     def __init__(self) -> None:
-        super().__init__()
+        # className becomes the X11 WM_CLASS, which is what the taskbar and
+        # window switcher label the app with. Without it tk reports its own
+        # class ("Tk"/"CTk"), which is both meaningless to the user and fails
+        # to match StartupWMClass in the desktop entry, so the icon is lost.
+        super().__init__(className="thermal-printer")
 
         # hide during setup to prevent flash
         self.withdraw()
