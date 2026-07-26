@@ -14,6 +14,19 @@ print it.
 
 ![Composing a page, with the print preview beside it](docs/images/compose.jpg)
 
+<table>
+  <tr>
+    <td width="33%"><img src="docs/images/tables.jpg" alt="A table with its ribbon, and the same table on paper"></td>
+    <td width="33%"><img src="docs/images/along-the-roll.jpg" alt="A banner composed along the roll"></td>
+    <td width="33%"><img src="docs/images/labels.jpg" alt="Text placed on a label background"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Tables, ruled and sized as they will print</sub></td>
+    <td align="center"><sub>Along the roll, trimmed to the paper it needs</sub></td>
+    <td align="center"><sub>Labels, placed by pointing at them</sub></td>
+  </tr>
+</table>
+
 ## Install
 
 ```bash
