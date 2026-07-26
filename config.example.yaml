@@ -21,8 +21,8 @@ image:
   invert: false
   auto_resize: true
 gui:
-  window_width: 800
-  window_height: 700
+  window_width: 1100
+  window_height: 800
   window_x: null
   window_y: null
   appearance_mode: System

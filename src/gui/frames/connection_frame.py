@@ -94,21 +94,21 @@ class ConnectionFrame(ctk.CTkFrame):
             font=label_font,
             text_color=("gray50", "gray50")
         )
-        row.add(self.printer_label, gap=4)
+        row.add_trailing(self.printer_label, gap=4)
 
         self.device_name_label = ctk.CTkLabel(
             row, text="--",
             font=entry_font,
             text_color=("gray50", "gray50")
         )
-        row.add(self.device_name_label, gap=15)
+        row.add_trailing(self.device_name_label, gap=15)
 
         self.status_label = ctk.CTkLabel(
-            row, text="[ ] Disconnected",
+            row, text="\u25cb  Disconnected",
             font=status_font,
             text_color=("gray50", "gray50")
         )
-        row.add(self.status_label, gap=15)
+        row.add_trailing(self.status_label, gap=0)
 
     def _load_settings(self) -> None:
         mac = self._settings.get(SettingsKeys.Printer.MAC_ADDRESS, "")
@@ -186,14 +186,14 @@ class ConnectionFrame(ctk.CTkFrame):
             self._update_device_name(device_name)
             self.device_name_label.configure(text_color=("green", "#00CC00"))
             self.status_label.configure(
-                text="[*] Connected",
+                text="\u25cf  Connected",
                 text_color=("green", "#00CC00")
             )
             self._set_status("Connected to printer")
 
         elif state == ConnectionState.CONNECTING:
             self.status_label.configure(
-                text="[~] Connecting...",
+                text="\u25d0  Connecting\u2026",
                 text_color=("orange", "#FFAA00")
             )
 
@@ -205,7 +205,7 @@ class ConnectionFrame(ctk.CTkFrame):
 
             self.device_name_label.configure(text_color=("gray50", "gray50"))
             self.status_label.configure(
-                text="[ ] Disconnected",
+                text="\u25cb  Disconnected",
                 text_color=("gray50", "gray50")
             )
             self._set_status("Disconnected")
@@ -218,7 +218,7 @@ class ConnectionFrame(ctk.CTkFrame):
 
             self.device_name_label.configure(text_color=("red", "#FF4444"))
             self.status_label.configure(
-                text="[!] Error",
+                text="\u26a0  Error",
                 text_color=("red", "#FF4444")
             )
 
@@ -229,7 +229,7 @@ class ConnectionFrame(ctk.CTkFrame):
     def _show_error(self, message: str) -> None:
         self._set_status(f"Error: {message}")
         self.status_label.configure(
-            text="[!] Error",
+            text="\u26a0  Error",
             text_color=("red", "#FF4444")
         )
 

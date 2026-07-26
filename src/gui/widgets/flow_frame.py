@@ -33,6 +33,7 @@ class FlowFrame(ctk.CTkFrame):
         super().__init__(master, **kwargs)
 
         self._items: List[Tuple[ctk.CTkBaseClass, int]] = []
+        self._trailing: List[Tuple[ctk.CTkBaseClass, int]] = []
         self._hgap = hgap
         self._vgap = vgap
         self._last_width: int = -1
@@ -51,6 +52,18 @@ class FlowFrame(ctk.CTkFrame):
         self._schedule_relayout()
         return widget
 
+    def add_trailing(self, widget, gap: Optional[int] = None):
+        """Register a child that hugs the right edge.
+
+        Trailing items sit right-aligned on the last row while they fit. When
+        the container is too narrow they drop onto their own row rather than
+        being clipped, so they stay reachable at any width.
+        """
+        self._trailing.append((widget, self._hgap if gap is None else gap))
+        widget.place(x=0, y=0)
+        self._schedule_relayout()
+        return widget
+
     def add_spacer(self, width: int):
         """Insert a fixed horizontal gap by widening the previous item's gap."""
         if self._items:
@@ -59,9 +72,10 @@ class FlowFrame(ctk.CTkFrame):
             self._schedule_relayout()
 
     def clear(self) -> None:
-        for widget, _ in self._items:
+        for widget, _ in self._items + self._trailing:
             widget.place_forget()
         self._items.clear()
+        self._trailing.clear()
         self._schedule_relayout()
 
     # -------------------------------------------------------------------------
@@ -86,7 +100,7 @@ class FlowFrame(ctk.CTkFrame):
         self.after_idle(run)
 
     def _relayout(self, available: int) -> None:
-        if not self._items or available <= FLOW_MIN_USABLE_WIDTH:
+        if not (self._items or self._trailing) or available <= FLOW_MIN_USABLE_WIDTH:
             return
 
         self.update_idletasks()
@@ -109,6 +123,23 @@ class FlowFrame(ctk.CTkFrame):
             widget.place(x=x, y=y)
             x += w + gap
             row_height = max(row_height, h)
+
+        if self._trailing:
+            widths = [widget.winfo_reqwidth() for widget, _ in self._trailing]
+            gaps = [gap for _, gap in self._trailing[:-1]]
+            block = sum(widths) + sum(gaps)
+
+            # keep the block on the current row when it fits beside the
+            # flowed items, otherwise give it a row of its own
+            if x > 0 and (x + block) > available:
+                y += row_height + self._vgap
+                row_height = 0
+
+            tx = max(0, available - block)
+            for index, (widget, gap) in enumerate(self._trailing):
+                widget.place(x=tx, y=y)
+                tx += widths[index] + gap
+                row_height = max(row_height, widget.winfo_reqheight())
 
         total_height = y + row_height
         if total_height != self._last_height:
