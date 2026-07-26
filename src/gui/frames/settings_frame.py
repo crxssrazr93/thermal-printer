@@ -34,15 +34,18 @@ from ...config.printer_profile import (
     get_profile_labels,
     get_profile_name,
     get_printer_width,
+    get_tear_gap_mm,
+    mm_to_dots,
     get_printer_width_mm,
     supports,
 )
 from ...config.settings import get_settings
 from ..dialogs.about_dialog import AboutDialog
+from ..dialogs.tear_calibration_dialog import TearCalibrationDialog
 
 # service interfaces
 if TYPE_CHECKING:
-    from ..interfaces import StatusService, SettingsService
+    from ..interfaces import PrinterService, StatusService, SettingsService
 from ..interfaces import create_services_from_app
 
 
@@ -52,6 +55,7 @@ class SettingsFrame(ctk.CTkScrollableFrame):
         self,
         master,
         on_status_change: Optional[Callable[[str], None]] = None,
+        printer_service: Optional["PrinterService"] = None,
         status_service: Optional["StatusService"] = None,
         settings_service: Optional["SettingsService"] = None,
         app=None,  # backward compatibility - accepts full app instance
@@ -64,9 +68,12 @@ class SettingsFrame(ctk.CTkScrollableFrame):
             _printer, _status, _settings, _conn = create_services_from_app(app)
             status_service = status_service or _status
             settings_service = settings_service or _settings
+            printer_service = printer_service or _printer
 
         self._status_service = status_service
         self._settings_service = settings_service
+        # kept so the tear-off wizard can drive the printer directly
+        self._printer_service = printer_service
         self.on_status_change = on_status_change
         self._settings = settings_service if settings_service else get_settings()
 
@@ -361,6 +368,22 @@ class SettingsFrame(ctk.CTkScrollableFrame):
         self.profile_info_label.grid(row=16, column=2, pady=8, padx=5, sticky="w")
         self._update_profile_info()
 
+        self.tear_button = ctk.CTkButton(
+            self,
+            text="Calibrate tear-off...",
+            width=200, height=34,
+            font=label_font,
+            command=self._open_tear_calibration
+        )
+        self.tear_button.grid(row=16, column=3, pady=8, padx=10, sticky="w")
+
+        self.tear_value_label = ctk.CTkLabel(
+            self, text="", font=label_font, text_color="gray", anchor="w"
+        )
+        self.tear_value_label.grid(row=16, column=4, pady=8, padx=5, sticky="w")
+        self._update_tear_label()
+
+
         info_frame.grid(row=17, column=0, columnspan=3, pady=(25, 10), padx=10, sticky="ew")
 
         ctk.CTkLabel(
@@ -491,6 +514,25 @@ class SettingsFrame(ctk.CTkScrollableFrame):
         )
         self._settings.set(SettingsKeys.Printing.FEED_AFTER_DOTS, dots)
         self._settings.save()
+
+    def _update_tear_label(self) -> None:
+        mm = get_tear_gap_mm()
+        if mm > 0:
+            self.tear_value_label.configure(
+                text=f"{mm:g}mm ({mm_to_dots(mm)} dots)"
+            )
+        else:
+            self.tear_value_label.configure(text="not calibrated")
+
+    def _open_tear_calibration(self) -> None:
+        printer = getattr(self._printer_service, "printer", None) or self._printer_service
+        if printer is None or not getattr(printer, "is_connected", False):
+            self._set_status("Connect to the printer before calibrating")
+            return
+
+        dialog = TearCalibrationDialog(self, printer, on_status=self._set_status)
+        self.wait_window(dialog)
+        self._update_tear_label()
 
     def _on_appearance_change(self, value=None) -> None:
         self._apply_appearance()

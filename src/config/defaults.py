@@ -251,6 +251,17 @@ DEFAULT_FEED_AFTER_DOTS = 0
 MAX_FEED_DOTS = 600
 FEED_MAX_DOTS = 2040
 
+# Tear-off gap expressed in millimetres, which is what the user can actually
+# measure against the tear bar. Converted to dot rows at print time using the
+# profile DPI. Calibrated per profile, since the head-to-tear-bar distance is a
+# property of the printer body.
+DEFAULT_TEAR_GAP_MM = 0          # 0 = fall back to feed_after_dots / feed lines
+MIN_TEAR_GAP_MM = 0
+MAX_TEAR_GAP_MM = 60
+TEAR_CALIBRATION_START_MM = 1    # wizard starts here
+TEAR_CALIBRATION_STEP_MM = 1     # whole millimetre increments
+TEAR_CALIBRATION_LINES = 4       # 4 lines of text - fewer is awkward to tear
+
 PRINTER_WIDTH_BITS_PER_BYTE = 8
 PROTOCOL_STATUS_RESPONSE_LENGTH = 38
 PROTOCOL_LITTLE_ENDIAN_BYTE_COUNT = 2
@@ -506,6 +517,7 @@ def get_default_config() -> Dict[str, Any]:
             "feed_lines_before": DEFAULT_FEED_LINES_BEFORE,
             "feed_lines_after": DEFAULT_FEED_LINES_AFTER,
             "feed_after_dots": DEFAULT_FEED_AFTER_DOTS,
+            "tear_gap_mm": {},
         },
         "banner": {
             "font_family": DEFAULT_FONT_FAMILY,

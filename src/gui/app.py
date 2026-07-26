@@ -17,6 +17,7 @@ from ..config.defaults import (
     DEFAULT_COLOR_THEME,
 )
 from ..config.keys import SettingsKeys
+from ..config.printer_profile import get_tear_gap_mm
 from ..config.settings import SettingsFactory
 from ..core.printer import PrinterConnection, ConnectionState
 from ..core.print_job import PrintJobConfig
@@ -331,6 +332,7 @@ class PrinterApp(ctk.CTk):
             feed_before=self.settings_frame.get_feed_lines_before(),
             feed_after=self.settings_frame.get_feed_lines_after(),
             feed_after_dots=self.settings_frame.get_feed_after_dots(),
+            tear_gap_mm=get_tear_gap_mm(),
             command_delay=self.settings_frame.get_command_delay()
         )
 

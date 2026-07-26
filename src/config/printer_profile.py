@@ -169,3 +169,54 @@ def reset_cache() -> None:
     """Drop the cached profile table - used by tests and after editing profiles."""
     global _profiles_cache
     _profiles_cache = None
+
+
+# -----------------------------------------------------------------------------
+# tear-off calibration (per profile)
+# -----------------------------------------------------------------------------
+def get_dpi() -> int:
+    try:
+        return int(get_profile()["media"]["dpi"])
+    except (KeyError, TypeError, ValueError):
+        return 203
+
+
+def mm_to_dots(mm: float) -> int:
+    """Millimetres to dot rows at the active profile's DPI."""
+    return max(0, int(round(mm * get_dpi() / 25.4)))
+
+
+def dots_to_mm(dots: int) -> float:
+    return dots * 25.4 / get_dpi()
+
+
+def get_tear_gap_mm() -> float:
+    """Calibrated tear-off gap for the active profile, 0 when uncalibrated.
+
+    Stored per profile because the head-to-tear-bar distance belongs to the
+    printer body, not to the document being printed.
+    """
+    try:
+        table = _settings().get(SettingsKeys.Printing.TEAR_GAP_MM, {}) or {}
+        if isinstance(table, dict):
+            return float(table.get(get_profile_name(), 0))
+        # tolerate a bare number written by hand
+        return float(table)
+    except (TypeError, ValueError, AttributeError):
+        return 0.0
+
+
+def set_tear_gap_mm(mm: float) -> None:
+    settings = _settings()
+    table = settings.get(SettingsKeys.Printing.TEAR_GAP_MM, {}) or {}
+    if not isinstance(table, dict):
+        table = {}
+    table[get_profile_name()] = round(float(mm), 2)
+    settings.set(SettingsKeys.Printing.TEAR_GAP_MM, table)
+
+    # save() is debounced behind a daemon timer, so a short-lived process can
+    # exit before the write lands. A calibration result must survive that.
+    if hasattr(settings, "save_immediate"):
+        settings.save_immediate()
+    else:
+        settings.save()

@@ -7,6 +7,7 @@ from time import sleep
 from PIL import Image
 
 from .protocol import PrinterProtocol
+from ..config.printer_profile import mm_to_dots
 from .printer import PrinterConnection
 from .exceptions import NotConnectedError, PrintError
 from ..config.defaults import (
@@ -38,6 +39,7 @@ class PrintJobConfig:
     feed_before: int = 0
     feed_after: int = 0
     feed_after_dots: int = 0   # non-zero overrides feed_after with ESC J
+    tear_gap_mm: float = 0.0   # calibrated per profile; wins over both above
     command_delay: float = 0.1
     chunk_size: int = DEFAULT_CHUNK_SIZE
 
@@ -200,7 +202,11 @@ class PrintJobManager:
 
             # Dot feed wins when set - a whole line feed is too coarse to line
             # a tear-off up with the tear bar.
-            if config.feed_after_dots > 0:
+            if config.tear_gap_mm > 0:
+                self._printer.send_raw(
+                    PrinterProtocol.build_feed_dots(mm_to_dots(config.tear_gap_mm))
+                )
+            elif config.feed_after_dots > 0:
                 self._printer.send_raw(
                     PrinterProtocol.build_feed_dots(config.feed_after_dots)
                 )
