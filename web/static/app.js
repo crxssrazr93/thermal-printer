@@ -213,6 +213,10 @@ function inlineToHtml(text) {
     .replace(/!?\[([^\]]+)\]\(([^)]+)\)/g, (_m, label, href) =>
       `<a href="${href}">${label}</a>`)
     .replace(/~~([^~]+)~~/g, (_m, body) => `<del>${body}</del>`)
+    .replace(/==([^=]+)==/g, (_m, body) => `<mark>${body}</mark>`)
+    .replace(/\+\+([^+]+)\+\+/g, (_m, body) => `<u>${body}</u>`)
+    .replace(/\^([^^\s]+)\^/g, (_m, body) => `<sup>${body}</sup>`)
+    .replace(/(?<!~)~([^~\s]+)~(?!~)/g, (_m, body) => `<sub>${body}</sub>`)
     .replace(/(?<!\w)(?:\*\*|__)(?=\S)([\s\S]*?\S)(?:\*\*|__)(?!\w)/g,
       (_m, body) => `<strong>${body}</strong>`)
     .replace(/(?<![\w*_])[*_]([^*_\s][^*_]*?)[*_](?![\w*_])/g,
@@ -264,7 +268,11 @@ function mdToHtml(md) {
       continue;
     }
 
-    if (!trimmed) { i += 1; continue; }
+    // A deliberate blank line is content: it is a line of space on the paper
+    // and an empty paragraph in the editor. Skipping it, which is what a
+    // general markdown parser does, was why pressing Enter twice appeared to
+    // do nothing.
+    if (!trimmed) { out.push('<p></p>'); i += 1; continue; }
 
     const directive = /^<!--\s*table\s+(.*?)\s*-->$/.exec(trimmed);
     if (directive) {
@@ -314,6 +322,19 @@ function mdToHtml(md) {
       continue;
     }
 
+    // a task list is a bullet list whose items start with a box
+    if (/^[-*+]\s+\[[ xX]\]\s/.test(trimmed)) {
+      const items = [];
+      while (i < lines.length && /^[-*+]\s+\[[ xX]\]\s/.test(lines[i].trim())) {
+        const item = /^[-*+]\s+\[([ xX])\]\s+(.*)$/.exec(lines[i].trim());
+        items.push(`<li data-type="taskItem" data-checked="${
+          item[1].toLowerCase() === 'x'}"><p>${inlineToHtml(item[2])}</p></li>`);
+        i += 1;
+      }
+      out.push(`<ul data-type="taskList">${items.join('')}</ul>`);
+      continue;
+    }
+
     const bullet = /^[-*+]\s+/;
     const numbered = /^\d+[.)]\s+/;
     if (bullet.test(trimmed) || numbered.test(trimmed)) {
@@ -348,6 +369,12 @@ function inlineToMd(node) {
     case 'STRONG': case 'B': return inner.trim() ? `**${inner.trim()}**` : '';
     case 'EM': case 'I': return inner.trim() ? `*${inner.trim()}*` : '';
     case 'DEL': case 'S': case 'STRIKE': return inner.trim() ? `~~${inner.trim()}~~` : '';
+    // markdown proper has none of these; these are the spellings the wider
+    // ecosystem settled on, and the renderer understands the same ones
+    case 'MARK': return inner.trim() ? `==${inner.trim()}==` : '';
+    case 'U': return inner.trim() ? `++${inner.trim()}++` : '';
+    case 'SUP': return inner.trim() ? `^${inner.trim()}^` : '';
+    case 'SUB': return inner.trim() ? `~${inner.trim()}~` : '';
     case 'CODE': return inner.trim() ? `\`${inner.trim()}\`` : '';
     case 'A': return `[${inner}](${node.getAttribute('href') || ''})`;
     default: return inner;
@@ -362,6 +389,8 @@ function blockToMd(node) {
     return text ? [text] : [];
   }
   if (node.nodeType !== Node.ELEMENT_NODE) return [];
+  // an empty paragraph is a blank line, not nothing
+  if (node.nodeName === 'P' && !node.textContent.trim() && !node.querySelector('img')) return [''];
 
   const name = node.nodeName;
   const inline = () => inlineToMd(node).split('\n').map((l) => l.trim());
@@ -371,6 +400,10 @@ function blockToMd(node) {
   if (name === 'PRE') return ['```', ...(node.textContent || '').split('\n'), '```'];
   if (name === 'BLOCKQUOTE') {
     return inline().filter((l, i, all) => l || i < all.length - 1).map((l) => `> ${l}`.trimEnd());
+  }
+  if (name === 'UL' && node.dataset.type === 'taskList') {
+    return Array.from(node.children).map((li) =>
+      `- [${li.dataset.checked === 'true' ? 'x' : ' '}] ${inlineToMd(li).trim()}`);
   }
   if (name === 'UL' || name === 'OL') {
     return Array.from(node.children).map((li, index) =>
@@ -407,16 +440,10 @@ function blockToMd(node) {
 
 function htmlToMd(root) {
   const blocks = Array.from(root.childNodes).map(blockToMd).filter((b) => b.length);
-  const out = [];
-  blocks.forEach((block, index) => {
-    const previous = blocks[index - 1];
-    // tables and code fences need a blank line before them to parse back
-    const needsGap = previous && (block[0].startsWith('|') || block[0] === '```'
-      || previous[0].startsWith('|') || previous[previous.length - 1] === '```');
-    if (needsGap) out.push('');
-    out.push(...block);
-  });
-  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  // No inserted gaps: blank lines are the author's, and collapsing runs of
+  // them would silently edit the document. Tables and fences parse without
+  // needing one.
+  return blocks.flat().join('\n').replace(/\s+$/, '');
 }
 
 /* -------------------------------------------------------------- the document */
@@ -489,8 +516,91 @@ function tableExtensions() {
   return [table.configure({ resizable: true }), withAlign(TableCell), withAlign(TableHeader)];
 }
 
+/* Typing {{ offers the tokens that get filled in at print time. They are
+ * inserted as plain text rather than as a node, so the document stays ordinary
+ * markdown and a preset written by hand behaves identically. */
+const TOKENS = [
+  { id: '{{date}}', label: 'date' },
+  { id: '{{time}}', label: 'time' },
+  { id: '{{datetime}}', label: 'date and time' },
+  { id: '{{weekday}}', label: 'weekday' },
+];
+
+function tokenSuggestion() {
+  let list = null;
+  let items = [];
+  let active = 0;
+  let range = null;
+
+  const close = () => { list?.remove(); list = null; };
+
+  const paint = () => {
+    if (!list) return;
+    list.innerHTML = '';
+    items.forEach((item, index) => {
+      const option = document.createElement('button');
+      option.className = `token-option${index === active ? ' is-active' : ''}`;
+      option.textContent = `${item.id}  ${item.label}`;
+      option.addEventListener('mousedown', (event) => { event.preventDefault(); choose(index); });
+      list.append(option);
+    });
+  };
+
+  const choose = (index) => {
+    const item = items[index];
+    if (!item || !range) return;
+    tt.chain().focus().insertContentAt(range, item.id).run();
+    close();
+  };
+
+  return {
+    char: '{{',
+    startOfLine: false,
+    items: ({ query }) => TOKENS.filter((token) =>
+      token.label.startsWith(query.toLowerCase()) || token.id.includes(query.toLowerCase())),
+    render: () => ({
+      onStart: (props) => {
+        items = props.items; active = 0; range = props.range;
+        list = document.createElement('div');
+        list.className = 'token-menu';
+        const box = props.clientRect?.();
+        const shell = $('editorShell').getBoundingClientRect();
+        if (box) {
+          list.style.left = `${box.left - shell.left}px`;
+          list.style.top = `${box.bottom - shell.top + 4}px`;
+        }
+        $('editorShell').append(list);
+        paint();
+      },
+      onUpdate: (props) => { items = props.items; range = props.range; paint(); },
+      onKeyDown: (props) => {
+        if (!list) return false;
+        if (props.event.key === 'ArrowDown') { active = (active + 1) % items.length; paint(); return true; }
+        if (props.event.key === 'ArrowUp') { active = (active - 1 + items.length) % items.length; paint(); return true; }
+        if (props.event.key === 'Enter') { choose(active); return true; }
+        if (props.event.key === 'Escape') { close(); return true; }
+        return false;
+      },
+      onExit: close,
+    }),
+  };
+}
+
+/* A picture can arrive by paste or by drop as well as through the button, and
+ * all three take the same road: upload, then a markdown reference. */
+function handleDroppedFiles(files) {
+  const images = Array.from(files || []).filter((file) => file.type.startsWith('image/'));
+  if (!images.length) return false;
+  images.forEach((file) => uploadAndInsert(file));
+  return true;
+}
+
 function initRichEditor() {
-  const { Editor, StarterKit, TableRow, Image, Link } = window.TipTap;
+  const {
+    Editor, StarterKit, TableRow, Image, Link, TaskList, TaskItem,
+    CharacterCount, Placeholder, Mention,
+    Underline, Highlight, Subscript, Superscript,
+  } = window.TipTap;
 
   tt = new Editor({
     element: $('rich'),
@@ -498,17 +608,41 @@ function initRichEditor() {
       StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
       ...tableExtensions(),
       TableRow,
+      TaskList,
+      TaskItem.configure({ nested: false }),
       Image.configure({ inline: false, allowBase64: false }),
       Link.configure({ openOnClick: false }),
+      Underline,
+      Highlight,
+      Subscript,
+      Superscript,
+      CharacterCount,
+      Placeholder.configure({
+        placeholder: 'Type here. Markdown works, and {{ offers the date tokens.',
+      }),
+      Mention.configure({
+        renderText: ({ node }) => node.attrs.id,
+        suggestion: tokenSuggestion(),
+      }),
     ],
+    editorProps: {
+      handlePaste: (view, event) => handleDroppedFiles(event.clipboardData?.files),
+      handleDrop: (view, event) => handleDroppedFiles(event.dataTransfer?.files),
+    },
     content: '<p></p>',
     onUpdate: () => {
       schedulePreview();
       positionTableTools();
       positionImageTools();
       syncToolbarState();
+      updateCounts();
     },
-    onSelectionUpdate: () => { positionTableTools(); positionImageTools(); syncToolbarState(); },
+    onSelectionUpdate: () => {
+      positionTableTools();
+      positionImageTools();
+      positionSelectionMenus();
+      syncToolbarState();
+    },
     onBlur: () => setTimeout(() => {
       if (!$('tableTools').contains(document.activeElement)) $('tableTools').hidden = true;
     }, 150),
@@ -522,6 +656,14 @@ function initEditorModes() {
   setEditorMode(localStorage.getItem(EDITOR_MODE_KEY) === 'raw' ? 'raw' : 'rendered');
   initTableTools();
   initImageTools();
+  tt.on('focus', positionSelectionMenus);
+  tt.on('blur', () => {
+    setTimeout(() => {
+      const menus = [$('bubbleMenu'), $('floatingMenu')];
+      if (menus.some((menu) => menu.contains(document.activeElement))) return;
+      menus.forEach((menu) => { menu.hidden = true; });
+    }, 150);
+  });
   syncToolbarState();
 }
 
@@ -529,29 +671,96 @@ function initEditorModes() {
 /* The browser has the file and the printer has the paper, so the picture goes
  * to the server, which keeps it by content hash and hands back a reference the
  * document can carry. The renderer dithers it at print time. */
-async function insertImage() {
+async function uploadAndInsert(file) {
+  try {
+    const data = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+    const result = await api('/api/images', { method: 'POST', body: JSON.stringify({ data }) });
+    tt.chain().focus().setImage({ src: result.url, alt: file.name }).run();
+    schedulePreview();
+  } catch (error) {
+    toast(`Could not add that image: ${error.message}`, true);
+  }
+}
+
+function insertImage() {
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = 'image/*';
-  input.addEventListener('change', async () => {
-    const file = input.files?.[0];
-    if (!file) return;
-    try {
-      const data = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-      const result = await api('/api/images', { method: 'POST', body: JSON.stringify({ data }) });
-      tt.chain().focus().setImage({ src: result.url, alt: file.name }).run();
-      schedulePreview();
-    } catch (error) {
-      toast(`Could not add that image: ${error.message}`, true);
-    }
+  input.addEventListener('change', () => {
+    if (input.files?.[0]) uploadAndInsert(input.files[0]);
   });
   input.click();
 }
+
+/* Characters and words are what a text editor counts; on a receipt printer the
+ * number that matters is how much paper this will take, so that is estimated
+ * from the rendered height the preview just reported. */
+function updateCounts() {
+  const counter = $('docCount');
+  if (!counter || !tt?.storage.characterCount) return;
+  const words = tt.storage.characterCount.words();
+  const characters = tt.storage.characterCount.characters();
+  counter.textContent = `${words} word${words === 1 ? '' : 's'} · ${characters} chars${
+    lastPaperMm ? ` · ${lastPaperMm} mm` : ''}`;
+}
+
+let lastPaperMm = 0;
+
+/* --------------------------------------------------------- menus in place */
+/* Formatting where the selection is, and block choices on an empty line, so
+ * the common moves do not need a trip to the toolbar. */
+function positionSelectionMenus() {
+  const bubble = $('bubbleMenu');
+  const floating = $('floatingMenu');
+  if (!bubble || !floating || !tt) return;
+
+  const shell = $('editorShell').getBoundingClientRect();
+  const { state } = tt;
+  const { empty, from } = state.selection;
+  const inTable = tt.isActive('table');
+
+  const place = (element, coords) => {
+    element.hidden = false;
+    element.style.left = `${Math.max(6, Math.min(coords.left - shell.left,
+      shell.width - element.offsetWidth - 10))}px`;
+    element.style.top = `${Math.max(4, coords.top - shell.top)}px`;
+  };
+
+  // the blur handler is what takes them away; asking the editor whether it is
+  // focused right now answers "no" during the very transitions that should
+  // show them
+  if (isRawMode()) {
+    bubble.hidden = true;
+    floating.hidden = true;
+    return;
+  }
+
+  if (!empty) {
+    const start = tt.view.coordsAtPos(from);
+    place(bubble, { left: start.left, top: start.top - 46 });
+    floating.hidden = true;
+    return;
+  }
+
+  bubble.hidden = true;
+
+  // an empty paragraph is an invitation to choose a block
+  const node = state.selection.$from.parent;
+  const emptyBlock = node.type.name === 'paragraph' && node.content.size === 0;
+  if (emptyBlock && !inTable) {
+    const at = tt.view.coordsAtPos(from);
+    place(floating, { left: at.left, top: at.top - 2 });
+  } else {
+    floating.hidden = true;
+  }
+}
+
+const isRawMode = () => !isRendered();
 
 /* ------------------------------------------------------------ image controls */
 /* How a picture is reduced to one bit is the most consequential choice in
@@ -706,11 +915,16 @@ const ACTIVE_STATE = {
   link: () => tt.isActive('link'),
   table: () => tt.isActive('table'),
   math: () => tt.isActive('code'),
+  tasks: () => tt.isActive('taskList'),
+  underline: () => tt.isActive('underline'),
+  highlight: () => tt.isActive('highlight'),
+  sup: () => tt.isActive('superscript'),
+  sub: () => tt.isActive('subscript'),
 };
 
 function syncToolbarState() {
   const rendered = isRendered() && tt;
-  document.querySelectorAll('.toolbar .tool[data-md]').forEach((button) => {
+  document.querySelectorAll('.tool[data-md]').forEach((button) => {
     const check = ACTIVE_STATE[button.dataset.md];
     const on = Boolean(rendered && check && check());
     button.classList.toggle('is-active', on);
@@ -733,6 +947,11 @@ const RICH_ACTIONS = {
   codeblock: () => tt.chain().focus().toggleCodeBlock().run(),
   math: () => tt.chain().focus().toggleCode().run(),
   image: () => insertImage(),
+  tasks: () => tt.chain().focus().toggleTaskList().run(),
+  underline: () => tt.chain().focus().toggleUnderline().run(),
+  highlight: () => tt.chain().focus().toggleHighlight().run(),
+  sup: () => tt.chain().focus().toggleSuperscript().run(),
+  sub: () => tt.chain().focus().toggleSubscript().run(),
   link: () => {
     // pressing it on an existing link takes the link off, which is what a
     // toggle in a toolbar is expected to do
@@ -1121,13 +1340,36 @@ function themeStyle() {
   };
 }
 
+const ORIENTATION_KEY = 'tp.orientation';
+const LENGTH_KEY = 'tp.pageLength';
+
 function renderOptions() {
   return {
     font: currentFont(),
-    size: Number($('fontSize').value) || 24,
+    size: Number($('fontSize').value) || 16,
     darkness: Number($('darkness').value) || 1,
+    orientation: $('orientation')?.value || 'portrait',
+    page_length: Number($('pageLength')?.value) || 1200,
     ...themeStyle(),
   };
+}
+
+function initOrientation() {
+  const direction = $('orientation');
+  const length = $('pageLength');
+  if (!direction || !length) return;
+
+  direction.value = localStorage.getItem(ORIENTATION_KEY) || 'portrait';
+  length.value = localStorage.getItem(LENGTH_KEY) || '1200';
+
+  direction.addEventListener('change', () => {
+    localStorage.setItem(ORIENTATION_KEY, direction.value);
+    refreshPreview();
+  });
+  length.addEventListener('change', () => {
+    localStorage.setItem(LENGTH_KEY, length.value);
+    refreshPreview();
+  });
 }
 
 /* presets store their own font and size but not the setting, which follows
@@ -1768,6 +2010,7 @@ async function boot() {
   initTodos();
   initSettings();
   initFontControls();
+  initOrientation();
   initPresetEditor();
   initShortcuts();
 

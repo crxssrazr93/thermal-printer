@@ -49,8 +49,10 @@ from src.core.printer import PrinterConnection    # noqa: E402
 from src.core.protocol import PrinterProtocol     # noqa: E402
 from PIL import Image                              # noqa: E402
 
-from src.config.defaults import DITHER_MODES                   # noqa: E402
-from src.processing.image_dither import DITHER_LABELS         # noqa: E402
+from src.processing.image_dither import (                     # noqa: E402
+    DITHER_LABELS,
+    DITHER_MODES,
+)
 from src.processing.image_processor import ImageProcessor      # noqa: E402
 from src.processing.markdown_renderer import MarkdownRenderer  # noqa: E402
 from src.utils.font_manager import get_font_manager            # noqa: E402
@@ -184,7 +186,18 @@ class Session:
     def _pipeline(self, text: str, options: Dict[str, Any]):
         """Render markdown and return (rendered image, configured processor)."""
         text = expand_tokens(text)
+        head_width = get_printer_width()
+
+        # Along the roll rather than across it: the page is composed on a strip
+        # as long as the user asks for and only as deep as the head is wide,
+        # then turned a quarter turn so the lines run down the paper. Lines get
+        # long and few, which is the trade: a banner, a label, a ticket.
+        landscape = (options.get("orientation") or "portrait") == "landscape"
+        length = max(head_width, int(options.get("page_length") or 1200))
+        compose_width = length if landscape else head_width
+
         renderer = MarkdownRenderer(
+            width=compose_width,
             font_family=options.get("font") or DEFAULT_FONT,
             font_size=int(options.get("size") or DEFAULT_SIZE),
             line_spacing=float(options.get("line_spacing") or DEFAULT_LINE_SPACING),
@@ -194,6 +207,9 @@ class Session:
             image_root=IMAGES_DIR,
         )
         image = renderer.render(text or " ")
+
+        if landscape:
+            image = self._turn(image, head_width)
         processor = ImageProcessor(
             brightness=1.0,
             contrast=float(options.get("darkness") or 1.0),
@@ -201,6 +217,24 @@ class Session:
             printer_width=get_printer_width(),
         )
         return image, processor
+
+    @staticmethod
+    def _turn(image, head_width: int):
+        """Rotate a composed strip so it prints along the paper.
+
+        Anything deeper than the head is wide cannot be printed at all in this
+        direction, so it is trimmed rather than silently scaled, which would
+        change the type size the user chose.
+        """
+        if image.height > head_width:
+            image = image.crop((0, 0, image.width, head_width))
+
+        turned = image.transpose(Image.ROTATE_270)
+        if turned.width < head_width:
+            padded = Image.new("RGB", (head_width, turned.height), "white")
+            padded.paste(turned, (0, 0))
+            return padded
+        return turned
 
     def render_for_print(self, text: str, options: Dict[str, Any]):
         # process() inverts polarity for the raster protocol, where a set bit

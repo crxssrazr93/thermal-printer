@@ -58,6 +58,10 @@ DEFAULT_PRINT_STYLE = {
     "table_scale": 0.9,          # cell size as a fraction of the body
     "table_cell_pad": 4,         # above and below the text in a cell
     "image_dither": "floyd-steinberg",   # how a picture becomes ink or nothing
+    # Arabic and Hebrew need a face that carries the script and a shaper that
+    # joins it; most mono faces carry neither, so a right to left run is set in
+    # this family instead of the theme's.
+    "rtl_font": "DejaVuSansMono",
 }
 
 _INLINE_CODE = re.compile(r"`([^`]+)`")
@@ -71,6 +75,17 @@ _STRIKE = re.compile(r"~~(.+?)~~")
 _LINK = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 _IMAGE = re.compile(r"!\[([^\]]*)\]\(([^)]+)\)")
 _TABLE_DIRECTIVE = re.compile(r"<!--\s*table\s+(.*?)\s*-->")
+
+# Arabic, Hebrew, Syriac, Thaana and the Arabic supplements. Enough to decide
+# which way a line runs, which is all this needs to know.
+_RTL_RANGE = re.compile(
+    "[\u0590-\u05FF\u0600-\u06FF\u0700-\u074F\u0780-\u07BF"
+    "\u08A0-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]"
+)
+
+
+def is_rtl(text: str) -> bool:
+    return bool(_RTL_RANGE.search(text or ""))
 
 
 def _parse_directive(body: str) -> dict:
@@ -107,6 +122,9 @@ class Span:
     bold: bool = False
     italic: bool = False
     mono: bool = False
+    underline: bool = False
+    highlight: bool = False     # printed as white out of black, which a head does well
+    raise_: int = 0             # +1 superscript, -1 subscript
 
 
 @dataclass
@@ -248,6 +266,9 @@ class MarkdownRenderer:
                 continue
 
             if not stripped:
+                # a deliberate blank line is a line of space, not nothing: it
+                # is what the author typed and what the editor shows
+                blocks.append(Block(kind="space"))
                 i += 1
                 ordered_counter = 0
                 continue
@@ -343,9 +364,14 @@ class MarkdownRenderer:
             numbered = re.match(r"(\d+)[.)]\s+(.*)", stripped)
 
             if bullet:
+                task = re.match(r"\[([ xX])\]\s+(.*)", bullet.group(1))
                 blocks.append(Block(
                     kind="list", level=indent // 2,
-                    spans=self._parse_inline(bullet.group(1)),
+                    # the box is drawn rather than written, so it survives a
+                    # font that has no ballot glyphs
+                    borders=("done" if task and task.group(1).lower() == "x"
+                             else "todo" if task else ""),
+                    spans=self._parse_inline(task.group(2) if task else bullet.group(1)),
                 ))
                 i += 1
                 continue
@@ -385,6 +411,8 @@ class MarkdownRenderer:
         pattern = re.compile(
             r"(?P<code>`[^`]+`)|(?P<both>(?<!\w)\*\*\*.+?\*\*\*(?!\w))|"
             r"(?P<bold>(?<!\w)(?:\*\*|__).+?(?:\*\*|__)(?!\w))|"
+            r"(?P<mark>==[^=]+==)|(?P<under>\+\+[^+]+\+\+)|"
+            r"(?P<sup>\^[^\^\s]+\^)|(?P<sub>(?<!~)~[^~\s]+~(?!~))|"
             r"(?P<italic>(?<![\w\*_])[\*_][^\*_\s][^\*_]*?[\*_](?![\w\*_]))"
         )
 
@@ -396,6 +424,14 @@ class MarkdownRenderer:
                 spans.append(Span(match.group("code")[1:-1], mono=True))
             elif match.group("both"):
                 spans.append(Span(match.group("both")[3:-3], bold=True, italic=True))
+            elif match.group("mark"):
+                spans.append(Span(match.group("mark")[2:-2], highlight=True))
+            elif match.group("under"):
+                spans.append(Span(match.group("under")[2:-2], underline=True))
+            elif match.group("sup"):
+                spans.append(Span(match.group("sup")[1:-1], raise_=1))
+            elif match.group("sub"):
+                spans.append(Span(match.group("sub")[1:-1], raise_=-1))
             elif match.group("bold"):
                 spans.append(Span(_BOLD.sub(r"\1", match.group("bold")), bold=True))
             else:
@@ -469,6 +505,8 @@ class MarkdownRenderer:
     def _gap(self, previous: str, kind: str) -> int:
         """White space between two blocks, taken from whichever rule is stronger."""
         style = self.style
+        if "space" in (previous, kind):
+            return 0
         if previous == "heading":
             return int(style["heading_gap"])
         if "table" in (previous, kind):
@@ -481,8 +519,90 @@ class MarkdownRenderer:
             return int(style["list_gap"])
         return int(style["block_gap"])
 
+    def _rtl_font(self, size: int, bold: bool = False, italic: bool = False):
+        family = self.style["rtl_font"] or self.font_family
+        return self._fm.load_font(family, size, bold=bold, italic=italic)
+
+    def _draw_rtl(self, draw, block: Block, y: int, left: int, width: int,
+                  size: int, bold: bool = False, italic: bool = False) -> int:
+        """Draw a right to left block: shaped, ordered, and set from the right."""
+        text = "".join(span.text for span in block.spans)
+        font = self._rtl_font(size, bold, italic) or self._font(size, bold, italic)
+        right = width - self.margin
+        available = right - left
+
+        # wrap by measuring whole strings, since a word's shape depends on its
+        # neighbours and its position depends on the line
+        words = text.split()
+        lines, current = [], ""
+        for word in words:
+            candidate = f"{current} {word}".strip()
+            try:
+                too_wide = font.getlength(candidate) > available
+            except (AttributeError, OSError):
+                too_wide = len(candidate) * size * 0.6 > available
+            if too_wide and current:
+                lines.append(current)
+                current = word
+            else:
+                current = candidate
+        if current:
+            lines.append(current)
+
+        for line in lines or [""]:
+            draw.text((right, y), line, font=font, fill="black",
+                      direction="rtl", anchor="ra", language="ar")
+            y += self._line_height(font)
+        return y
+
     def _draw_block(self, draw, image, block: Block, y: int, left: int, width: int) -> int:
         right_margin = self.margin
+
+        # right to left text takes its own path, whatever kind of block it is
+        if block.spans and is_rtl("".join(span.text for span in block.spans)):
+            if block.kind == "heading":
+                scale = HEADING_SCALE.get(block.level, 1.0) * float(self.style["heading_scale"])
+                y = self._draw_rtl(draw, block, y, left, width,
+                                   max(10, int(self.font_size * scale)), bold=True)
+                if block.level <= 2:
+                    weight = int(self.style["rule_weight"]) if block.level == 1 else 1
+                    above = int(self.style["rule_gap_above"])
+                    y += above + self._draw_rule(draw, left, width - right_margin,
+                                                 y + above, weight)
+                return y
+            if block.kind in ("paragraph", "quote", "list"):
+                # No italic here even for a quote: Arabic does not use slanted
+                # type, and the oblique faces that exist carry no Arabic at all,
+                # so asking for one prints a row of empty boxes.
+                edge = width - self.margin
+                inset = 0
+                top = y
+
+                if block.kind == "list":
+                    marker = f"{block.index}." if block.ordered else self._bullet(block.level)
+                    font = self._font(self.font_size)
+                    try:
+                        marker_width = int(font.getlength(marker + " "))
+                    except (AttributeError, OSError):
+                        marker_width = self.font_size
+                    # the marker leads the line, which on this side is the right
+                    draw.text((edge - marker_width, y), marker, font=font, fill="black")
+                    inset = marker_width + int(self.style["list_indent"])
+
+                bar = int(self.style["quote_bar"]) if block.kind == "quote" else 0
+                if bar:
+                    inset = max(inset, bar + int(self.style["quote_pad"]))
+
+                y = self._draw_rtl(draw, block, y, left, width - inset, self.font_size)
+
+                if bar:
+                    # the bar goes on the right, because that is where the text
+                    # starts when the line runs the other way
+                    draw.rectangle([edge - bar, top, edge, y], fill="black")
+                return y
+
+        if block.kind == "space":
+            return y + int(self._line_height(self._font(self.font_size)) * 0.6)
 
         if block.kind == "rule":
             draw.rectangle([left, y, width - right_margin, y + 1], fill="black")
@@ -544,6 +664,27 @@ class MarkdownRenderer:
             marker = f"{block.index}." if block.ordered else self._bullet(block.level)
             indent = left + int(self.style["list_indent"]) + block.level * 16
             font = self._font(self.font_size)
+
+            if block.borders in ("todo", "done"):
+                # drawn rather than written, so it does not depend on the font
+                # carrying ballot glyphs
+                box = int(self.font_size * 0.72)
+                top = y + int(self.font_size * 0.22)
+                draw.rectangle([indent, top, indent + box, top + box],
+                               outline="black", width=2)
+                if block.borders == "done":
+                    draw.line([indent + 3, top + box // 2,
+                               indent + box // 2, top + box - 4], fill="black", width=2)
+                    draw.line([indent + box // 2, top + box - 4,
+                               indent + box - 2, top + 3], fill="black", width=2)
+                marker_width = box + int(self.font_size * 0.45)
+                lines = self._wrap_spans(
+                    block.spans, self.font_size, width - indent - marker_width - right_margin
+                )
+                for line in lines:
+                    y = self._draw_line(draw, line, y, indent + marker_width, self.font_size)
+                return y
+
             try:
                 marker_width = int(font.getlength(marker + " "))
             except (AttributeError, OSError):
@@ -649,12 +790,42 @@ class MarkdownRenderer:
                                   span.italic or force_italic, span.mono)
             if font is None:
                 continue
-            draw.text((x, y), word, font=font, fill=fill)
+
+            # a raised or lowered run is set smaller and shifted, which is all
+            # a one bit page can do to say "superscript"
+            if span.raise_:
+                font = self._font(max(8, int(size * 0.7)), span.bold or force_bold,
+                                  span.italic or force_italic, span.mono) or font
+
             try:
-                x += font.getlength(word)
+                word_width = font.getlength(word)
             except (AttributeError, OSError):
-                x += size * len(word) * 0.6
-            height = max(height, self._line_height(font))
+                word_width = size * len(word) * 0.6
+
+            line_height = self._line_height(font)
+            offset = 0
+            if span.raise_ > 0:
+                offset = -int(size * 0.18)
+            elif span.raise_ < 0:
+                offset = int(size * 0.20)
+
+            if span.highlight:
+                # reverse video: the head is very good at solid black, and this
+                # is the only "colour" a highlight can have on paper
+                draw.rectangle(
+                    [x - 1, y, x + word_width + 1, y + line_height - 2], fill="black"
+                )
+                draw.text((x, y + offset), word, font=font, fill="white")
+            else:
+                draw.text((x, y + offset), word, font=font, fill=fill)
+
+            if span.underline:
+                baseline = y + int(line_height * 0.82)
+                draw.rectangle([x, baseline, x + word_width, baseline + 1], fill=fill)
+
+            x += word_width
+            height = max(height, self._line_height(font) if not span.raise_
+                         else int(size * 1.2))
         return y + (height or int(size * 1.2))
 
     def _draw_image(self, sheet, block: Block, y: int, left: int, width: int) -> int:

@@ -77,6 +77,12 @@
           <span class="tool-sep" aria-hidden="true"></span>
           <button class="tool" data-md="link">Link</button>
           <button class="tool" data-md="image">Image</button>
+          <span class="tool-sep" aria-hidden="true"></span>
+          <button class="tool" data-md="tasks" title="Checklist">Tasks</button>
+          <button class="tool" data-md="underline" title="Underline"><u>U</u></button>
+          <button class="tool" data-md="highlight" title="Highlight">Mark</button>
+          <button class="tool" data-md="sup" title="Superscript">x&sup2;</button>
+          <button class="tool" data-md="sub" title="Subscript">x&#8322;</button>
           <button class="tool" data-md="table">Table</button>
           <button class="tool" data-md="codeblock">Code</button>
           <button class="tool" data-md="rule">Rule</button>
@@ -99,8 +105,29 @@
              into. Raw mode is the markdown behind it. Whichever is showing,
              markdown is what gets saved and printed. -->
         <div class="editor-shell" id="editorShell">
-          <div id="rich" class="rich" contenteditable="true" spellcheck="false"
-               role="textbox" aria-multiline="true" aria-label="Document"></div>
+          <!-- dir=auto so a paragraph typed in Arabic or Hebrew lays itself
+               out right to left while the rest of the document does not -->
+          <div id="rich" class="rich" dir="auto"></div>
+
+          <div class="bubble-menu" id="bubbleMenu" hidden>
+            <button class="tool strong" data-md="bold" title="Bold">B</button>
+            <button class="tool em" data-md="italic" title="Italic">I</button>
+            <button class="tool" data-md="underline" title="Underline"><u>U</u></button>
+            <button class="tool del" data-md="strike" title="Strikethrough">S</button>
+            <button class="tool" data-md="highlight" title="Highlight">Mark</button>
+            <button class="tool code" data-md="code" title="Code">&lt;/&gt;</button>
+            <button class="tool" data-md="link" title="Link">Link</button>
+          </div>
+
+          <div class="floating-menu" id="floatingMenu" hidden>
+            <button class="tool" data-md="h1">H1</button>
+            <button class="tool" data-md="h2">H2</button>
+            <button class="tool" data-md="ul">List</button>
+            <button class="tool" data-md="tasks">Tasks</button>
+            <button class="tool" data-md="quote">Quote</button>
+            <button class="tool" data-md="table">Table</button>
+            <button class="tool" data-md="image">Image</button>
+          </div>
           <textarea id="editor" class="editor-area" spellcheck="false"
             placeholder="Type here. Markdown works: # heading, **bold**, - list, > quote, | tables |"></textarea>
 
@@ -234,13 +261,34 @@
         </div>
 
         <div class="field">
-          <label for="fontFamily">Font</label>
+          <label for="fontFamily">Paper font</label>
           <select id="fontFamily" class="control"></select>
+          <p class="hint">The face the whole receipt is set in. Emphasis inside
+            the document comes from the document, not from here.</p>
         </div>
 
         <div class="field">
-          <label for="fontSize">Font size</label>
-          <input id="fontSize" class="control" type="number" min="8" max="72" step="1" value="24">
+          <label for="fontSize">Paper font size</label>
+          <input id="fontSize" class="control" type="number" min="8" max="72" step="1" value="16">
+          <p class="hint">Sets the body size for the whole page, which is why a
+            longer page needs more paper. Headings scale from it.</p>
+        </div>
+
+        <div class="field">
+          <label for="orientation">Direction</label>
+          <select id="orientation" class="control">
+            <option value="portrait">Across the roll (normal)</option>
+            <option value="landscape">Along the roll (turned)</option>
+          </select>
+          <p class="hint">Along the roll composes a strip as long as you like
+            and only as deep as the head is wide, then turns it a quarter turn,
+            so the lines run down the paper. Long lines, few of them: banners,
+            labels, tickets.</p>
+        </div>
+
+        <div class="field">
+          <label for="pageLength">Length along the roll (dots)</label>
+          <input id="pageLength" class="control" type="number" min="384" max="4000" step="20" value="1200">
         </div>
 
         <div class="field">
@@ -291,6 +339,7 @@
   <!-- ------------------------------------------------ status -->
   <footer class="statusbar">
     <span id="statusMsg">Ready</span>
+    <span id="docCount" class="count"></span>
     <span class="status-right">
       <span id="statusProfile"></span>
       <span id="statusWidth"></span>

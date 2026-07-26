@@ -140,20 +140,54 @@ the document carries as ordinary markdown. At print time the renderer scales it
 to the paper and screens it into dots, since a thermal head has one colour. An
 image that cannot be loaded prints its alt text rather than leaving a hole.
 
-Seven screening methods are available, the same ones the desktop app's image
-tab uses:
+Eleven screening methods are available. The diffusion kernels come from
+dither-me-this, which states each one as offsets and factors over a common
+divisor:
 
 | Method | Suits |
 |--------|-------|
 | Threshold | line art, text, logos, anything already black and white |
-| Floyd-Steinberg | photographs, the usual default |
 | Ordered | an even, visibly patterned look |
-| Atkinson | soft results, and noticeably less ink on the paper |
+| Sierra lite | fast and grainy |
+| False Floyd-Steinberg | coarser and faster than the real one |
+| Floyd-Steinberg | photographs, the usual default |
 | Burkes | sharper than Floyd-Steinberg |
+| Sierra two row | lighter than full Sierra |
 | Sierra | smooth gradients |
+| Jarvis-Judice-Ninke | smooth, with the error spread widest |
 | Stucki | the finest detail, and the slowest |
+| Atkinson | soft results, and the least ink on the paper |
 
 Settings holds the default. A single picture can override it from the control
 that appears when the picture is selected, and that choice travels in
 markdown's own title slot, `![alt](path "atkinson")`, so it stays with the
 document and any other reader simply ignores it.
+
+## Direction
+
+Normally a page is composed across the roll: 384 dots wide, as long as it
+needs. **Along the roll** composes it the other way, on a strip as long as you
+ask for and only as deep as the head is wide, then turns it a quarter turn so
+the lines run down the paper. You get long lines and few of them, which suits a
+banner, a label or a ticket. Anything deeper than the head is wide is trimmed
+rather than scaled, since scaling would quietly change the size you chose.
+
+## Languages
+
+Arabic, Hebrew and the other right to left scripts print properly: the text is
+shaped and joined, the line runs from the right, and a bullet or a quote bar
+goes on the right where the line begins. A document can mix directions freely,
+paragraph by paragraph, and the editor lays each one out the way it reads.
+
+Most monospaced faces carry no Arabic at all, so a right to left run is set in
+a face that does. The theme's `rtl_font` chooses which; it defaults to DejaVu
+Sans Mono.
+
+## Size
+
+The font size in Settings and on the toolbar is the size of the *page*, not of
+the selection: it sets the body size the whole receipt is composed at, and
+headings scale from it. Emphasis within a document comes from the document,
+through headings, bold, and the marks. Markdown has nowhere to record a size
+for one run of text, and a receipt that changed size halfway through would not
+survive being saved and reopened.

@@ -19,7 +19,14 @@ npm install --no-audit --no-fund --silent \
   @tiptap/core @tiptap/pm @tiptap/starter-kit \
   @tiptap/extension-table @tiptap/extension-table-row \
   @tiptap/extension-table-cell @tiptap/extension-table-header \
-  @tiptap/extension-image @tiptap/extension-link esbuild
+  @tiptap/extension-image @tiptap/extension-link \
+  @tiptap/extension-task-list @tiptap/extension-task-item \
+  @tiptap/extension-character-count @tiptap/extension-placeholder \
+  @tiptap/extension-bubble-menu @tiptap/extension-floating-menu \
+  @tiptap/extension-mention @tiptap/suggestion \
+  @tiptap/extension-underline @tiptap/extension-highlight \
+  @tiptap/extension-subscript @tiptap/extension-superscript \
+  @tiptap/extension-text-align esbuild
 
 npx esbuild entry.js --bundle --format=iife --minify --target=es2020 --outfile=tiptap.js
 cp tiptap.js "$out"
