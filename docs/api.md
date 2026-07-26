@@ -1,0 +1,467 @@
+# The HTTP API
+
+The browser front end is a client of this API and has no private channel to the
+server. Anything that can send JSON can do everything the app does: compose a
+page, see the exact bitmap, print it, manage printers, keep presets.
+
+- **Base URL** `http://127.0.0.1:8760`, unless `THERMAL_WEB_HOST` and
+  `THERMAL_WEB_PORT` say otherwise.
+- **Bodies** are JSON. Send `Content-Type: application/json`. A body that is
+  absent or unparseable is read as `{}` rather than refused, so a missing field
+  falls back to its default instead of failing.
+- **Responses** are JSON, except the four endpoints that return a rendered
+  page, which return `image/png`.
+- **Errors** are `{"ok": false, "message": "..."}` or `{"error": "..."}`
+  depending on the endpoint, with `400` for a bad request, `404` for something
+  that is not there, and `500` with the exception text if a handler raises.
+- **No caching.** Every response carries `Cache-Control: no-store`.
+
+## Authentication
+
+There is none. The server binds to `127.0.0.1`, so by default only this machine
+can reach it. Whoever can reach it can print, spend paper, read presets and add
+devices. Opening it to a network is a deliberate act, made in Settings or
+through [`/api/network`](#post-apinetwork) below.
+
+## One printer, one queue
+
+Every write to the printer goes through a single lock, so overlapping print
+requests are serialised rather than interleaved. A request that arrives while
+another job is on the wire waits for it. There is no job id and no queue to
+inspect: the response arrives when the paper has been sent.
+
+---
+
+# Printing and previewing
+
+## `POST /api/preview`
+
+Render markdown to the exact bitmap the print head would receive, with the
+polarity put back so it reads as black ink on white paper.
+
+```json
+{ "text": "# Saturday\n\nMarket, then the workshop.", "options": {} }
+```
+
+| Field | Type | Default | Meaning |
+|-------|------|---------|---------|
+| `text` | string | `""` | The document, in markdown |
+| `options` | object | `{}` | See [render options](#render-options) |
+
+**Returns** `image/png`, one channel, at the head's width.
+
+The response also carries **`X-Trimmed: 1`** when the page was composed along
+the roll and came out deeper than the head is wide, so some of it was cut off.
+The picture cannot say that about itself, so the header does.
+
+## `POST /api/print`
+
+The same rendering, sent to the printer. Same body as `/api/preview`.
+
+```json
+{ "ok": true, "message": "Printed 421 rows" }
+```
+
+`400` with `"Not connected to a printer"` if no connection is open, or with the
+transport's own error if the write failed.
+
+After the page, the printer feeds the calibrated tear-off gap for the active
+device, so the paper stops where it can be torn.
+
+## Render options
+
+Everything under `options`, used by `/api/preview` and `/api/print`.
+
+| Field | Type | Default | Meaning |
+|-------|------|---------|---------|
+| `font` | string | `DejaVuSansMono` | A family from `GET /api/fonts`; an unknown one falls back silently |
+| `size` | number | `24` | Type size in points |
+| `line_spacing` | number | `1.1` | Multiple of the line height |
+| `darkness` | number | `1.0` | Contrast applied before screening; above 1 burns darker |
+| `orientation` | `portrait` \| `landscape` | `portrait` | Across the roll, or along it |
+| `page_length` | number | `1200` | Along the roll only: how long the strip is, in dots. Not how much paper the job uses, since the blank end is trimmed |
+| `style` | object | the theme's | Typographic detail: margins, rules, bullets, table treatment. Send what `GET /api/themes` gives you under `print.style`, or your own |
+
+Two things markdown cannot express ride in the document rather than in the
+options, so they survive being saved:
+
+- **Table borders and column widths**, in a directive comment above the table:
+  `<!-- table borders=all widths=30,70 -->`. `borders` is `all`, `theme` or
+  `none`; `widths` are percentages, one per column.
+- **How a picture is screened**, in markdown's title slot:
+  `![alt](/images/ab12.png "atkinson t=200 s=0.6")`, where the first word is a
+  mode from `GET /api/dither`, `t` is the cutoff (0 to 255) and `s` the amount
+  (0 to 1).
+
+## `POST /api/calendar`
+
+A month, or a week with room to write beside each day, drawn at the paper's
+width rather than set from markdown.
+
+| Field | Type | Default | Meaning |
+|-------|------|---------|---------|
+| `range` | `month` \| `week` | `month` | Which one |
+| `year`, `month` | number | today's | Month range only |
+| `date` | `YYYY-MM-DD` | today | Week range only: any day in the week |
+| `size` | number | `14` | Type size |
+| `print` | boolean | `false` | Print it instead of returning it |
+
+**Returns** `image/png`, or `{"ok": ..., "message": ...}` when `print` is set.
+
+## `POST /api/label`
+
+Text composed onto a label background.
+
+| Field | Type | Default | Meaning |
+|-------|------|---------|---------|
+| `template` | string | — | A `file` from `GET /api/templates`. Required |
+| `areas` | array | `[]` | The text blocks, below |
+| `darkness` | number | `1.5` | Contrast applied to the composed label |
+| `print` | boolean | `false` | Print it instead of returning it |
+
+Each area:
+
+| Field | Type | Default | Meaning |
+|-------|------|---------|---------|
+| `x`, `y` | number | `0` | Top left of the text, in the background's own pixels |
+| `text` | string | `""` | What it says; `\n` starts a new line |
+| `font_family` | string | `DejaVuSansMono` | Family name |
+| `font_size` | number | `24` | Type size |
+| `bold`, `italic` | boolean | `false` | Weight and slant |
+| `alignment` | `left` \| `center` \| `right` | `left` | Within the block |
+
+**Returns** `image/png` at the paper's width, or a print result. `400` if the
+template is unknown or nothing was drawn.
+
+## `POST /api/tear-test`
+
+Print a short strip whose last line is where the tear should land, then feed
+the gap being tried. Calibration is a physical question, so it is answered on
+paper.
+
+```json
+{ "mm": 12 }
+```
+
+`mm` is clamped to the maximum the app allows. **Returns**
+`{"ok": true, "message": "...", "mm": 12}`.
+
+---
+
+# The printer
+
+## `GET /api/state`
+
+Everything the front end needs to describe the current setup.
+
+```json
+{
+  "connected": false,
+  "activeProfile": "MPT-II Bluetooth",
+  "profiles": [
+    { "name": "MPT-II Bluetooth", "transport": "Bluetooth",
+      "address": "04:7F:0E:11:17:B5", "capabilityProfile": "generic-58mm",
+      "tearGapMm": 8 }
+  ],
+  "capabilityProfiles": { "generic-58mm": "Generic 58mm ESC/POS" },
+  "width": 384,
+  "dpi": 203,
+  "tearGapMm": 8,
+  "lastError": null
+}
+```
+
+`width` is the head in dots, always a multiple of eight, since the raster
+protocol packs eight dots to a byte.
+
+## `GET /api/devices?transport=Bluetooth`
+
+What the machine can see right now. `transport` is `Bluetooth`, `USB` or
+`CUPS`; anything else is read as Bluetooth. Bluetooth lists paired devices,
+USB globs the character devices, CUPS asks for the queues.
+
+```json
+{ "devices": [ { "label": "MPT-II (04:7F:0E:11:17:B5)", "value": "04:7F:0E:11:17:B5" } ] }
+```
+
+Scanning talks to the system, so this one can take a few seconds.
+
+## `POST /api/connect`
+
+```json
+{ "profile": "MPT-II Bluetooth" }
+```
+
+Opens the connection to a saved device profile, closing any open one first.
+**Returns** `{"ok": ..., "message": ..., "state": {...}}`, with `400` if the
+profile is unknown or the port will not open.
+
+## `POST /api/disconnect`
+
+No body. **Returns** `{"ok": true, "state": {...}}`.
+
+## `POST /api/profiles`
+
+Create or update a device profile: how to reach one physical printer.
+
+| Field | Type | Default | Meaning |
+|-------|------|---------|---------|
+| `name` | string | — | What it is called. Required, and made unique if taken |
+| `transport` | `Bluetooth` \| `USB` \| `CUPS` | `Bluetooth` | How to reach it |
+| `address` | string | `""` | MAC, device node or queue name |
+| `capabilityProfile` | string | `""` | A `key` from `GET /api/printer-types` |
+| `tearGapMm` | number | `0` | Calibrated tear-off gap |
+| `originalName` | string | — | The entry being edited. Set it to change a saved device in place, including its name, rather than creating another beside it |
+
+**Returns** `{"ok": true, "name": "...", "state": {...}}`. `400` if the name is
+empty or the transport is not one of the three.
+
+Omitting `tearGapMm` on an edit keeps whatever was calibrated: the gap was
+measured against that printer's body and has no business being reset by a
+change of name.
+
+Profiles are kept in `config.yaml` beside the code, which holds your printer's
+address and is deliberately not committed.
+
+## `DELETE /api/profiles/<name>`
+
+URL-encode the name. If the deleted profile was active, the first remaining one
+takes over. **Returns** `{"ok": true, "state": {...}}`.
+
+## `GET /api/network`
+
+Where the server is listening, and whether that is a choice the app can make.
+
+```json
+{ "exposed": false, "host": "127.0.0.1", "port": 8760,
+  "override": "", "addresses": ["192.168.2.115"] }
+```
+
+`addresses` is what this machine would be reached at, asked of the routing
+table rather than of DNS. `override` is `THERMAL_WEB_HOST` when it is set,
+which means the decision was made outside the app and cannot be changed here.
+
+## `POST /api/network`
+
+```json
+{ "exposed": true }
+```
+
+Open the server to the network, or close it again. The listening socket is
+replaced rather than the process restarted, so an open printer connection and
+anything in flight survive it; the response goes out on the old socket before
+the new one comes up, and a client is typically reconnected within a
+millisecond or two.
+
+**Returns** `{"ok": true, "exposed": true, "host": "0.0.0.0", "port": 8760,
+"addresses": [...], "message": "..."}`. `400` if `THERMAL_WEB_HOST` is set.
+
+If the open socket cannot be bound, the server falls back to local only and
+records that, rather than leaving nothing listening.
+
+**There is still no password.** Exposed means anyone who can route to this
+machine can print.
+
+## `POST /api/tear-gap`
+
+```json
+{ "mm": 12 }
+```
+
+Saves the gap against the **active capability profile**, since the distance
+from head to tear bar belongs to the printer's body. **Returns**
+`{"ok": true, "state": {...}}`.
+
+---
+
+# Printer types
+
+A capability profile says what a model can do. The schema is
+[escpos-printer-db](https://github.com/receipt-print-hq/escpos-printer-db)'s, so
+an entry means the same thing to python-escpos or escpos-php.
+
+## `GET /api/printer-types`
+
+```json
+{ "types": [
+  { "key": "generic-58mm", "name": "Generic 58mm ESC/POS", "vendor": "Generic",
+    "dpi": 203, "widthDots": 384, "widthMm": 57.5,
+    "features": { "bitImageRaster": true, "qrCode": true, "barcodeA": true,
+                  "paperFullCut": false, "paperPartCut": false },
+    "notes": "", "custom": false }
+] }
+```
+
+Shipped types first, then yours; `custom` says which is which, and only a
+custom one can be deleted.
+
+## `POST /api/printer-types`
+
+| Field | Type | Default | Meaning |
+|-------|------|---------|---------|
+| `name` | string | — | Display name. Required |
+| `vendor` | string | `Custom` | Who makes it |
+| `widthDots` | number | `384` | Head width, clamped to 64–2048 and rounded **down to a multiple of eight** |
+| `dpi` | number | `203` | Clamped to 50–600 |
+| `widthMm` | number | derived | Paper width; computed from dots and dpi if omitted |
+| `features` | object | all false | `bitImageRaster`, `qrCode`, `barcodeA`, `paperFullCut`, `paperPartCut`; anything else is ignored |
+| `key` | string | derived | Send it to edit an existing custom type in place; omitted, a key is made from the name |
+
+**Returns** `{"ok": true, "key": "custom-...", "state": {...}}`.
+
+Anything the printer cannot do in firmware is drawn into the picture instead,
+which is slower and softer but always prints. The head width is the one field
+that has to be right.
+
+Custom types live in `~/.local/share/thermal-printer/printer-profiles.json` and
+are merged over the shipped table, so a bundled entry can be corrected by
+reusing its key.
+
+## `DELETE /api/printer-types/<key>`
+
+Only removes one of yours. `404` otherwise.
+
+---
+
+# Labels
+
+## `GET /api/templates`
+
+The backgrounds on offer, with the sizes a caller needs in order to place text.
+
+```json
+{ "templates": [
+  { "name": "CTP500_8BitToDo", "file": "CTP500_8BitToDo.png",
+    "width": 384, "height": 804, "mine": false }
+] }
+```
+
+`mine` marks a background you added, which is also the only kind that can be
+deleted. Fetch the picture itself from `GET /templates/<file>`.
+
+## `POST /api/templates`
+
+Keep a picture as a background of its own.
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `data` | string | A `data:image/...;base64,...` URL. Required, 8 MB limit |
+| `name` | string | Used for the file name; slugged, and made unique |
+
+The image is converted to PNG and kept at its own size: nothing is resized,
+because text is placed in the background's own pixels and the printer's width
+is applied once, at render time.
+
+**Returns** `{"ok": true, "file": "...", "name": "...", "width": n, "height": n, "mine": true}`.
+
+## `DELETE /api/templates/<file>.png`
+
+Only removes one of yours. `404` for a shipped background.
+
+## `GET /api/labels`, `POST /api/labels`, `DELETE /api/labels/<name>`
+
+A saved label is a background plus the blocks placed on it, under a name.
+
+```json
+{ "name": "Shipping", "template": "my-label.png", "areas": [ ... ] }
+```
+
+`areas` are the same shape `/api/label` takes. Saving over a name replaces it.
+Both `POST` and `DELETE` return the whole list back, sorted by name.
+
+---
+
+# Documents that persist
+
+## `GET /api/presets`, `POST /api/presets`, `DELETE /api/presets/<id>`
+
+A preset is a document you keep, with the settings it was designed against.
+
+| Field | Type | Default | Meaning |
+|-------|------|---------|---------|
+| `id` | string | generated | Send it to update, omit it to create |
+| `name` | string | — | Required |
+| `description` | string | `""` | A line about it |
+| `text` | string | `""` | The markdown |
+| `options` | object | — | `font`, `size` and `darkness` are kept |
+
+`{{date}}`, `{{time}}`, `{{datetime}}` and `{{weekday}}` in the text are filled
+in **when it prints**, not when it is saved, so a stored preset stays a
+template.
+
+`POST` returns `{"ok": true, "preset": {...}, "presets": [...]}`.
+
+## `GET /api/todos`, `POST /api/todos`, `PATCH /api/todos/<id>`, `DELETE /api/todos/<id>`, `POST /api/todos/clear-done`
+
+A list that persists. `POST` takes `{"text": "..."}`. `PATCH` takes `done`
+and/or `text`; sent without `done`, it toggles. `clear-done` takes no body.
+All of them return the whole list back.
+
+---
+
+# Reference data
+
+| Endpoint | What it returns |
+|----------|-----------------|
+| `GET /api/fonts` | `{"fonts": [...], "default": "DejaVuSansMono"}`, the families the renderer can load |
+| `GET /api/themes` | The manifest, built-in plus yours: `id`, `name`, `href`, `swatch`, `print` |
+| `GET /api/dither` | `{"modes": [{"id", "label"}], "default": "floyd-steinberg"}` |
+| `GET /api/symbols` | The glyph table, grouped: `{"groups": [{"name", "symbols": [{"char", "name", "use"}]}]}`. Sent whole, since it is small and never changes |
+
+## `POST /api/images`
+
+Take a data URL and keep it as a file, named by the hash of its contents, so
+the same picture inserted twice costs one copy.
+
+```json
+{ "data": "data:image/png;base64,..." }
+```
+
+**Returns** `{"ok": true, "url": "/images/ab12cd34.png"}`, which is what goes in
+the markdown. `400` if it is not an image or is over 8 MB. Fetch it back from
+`GET /images/<name>`.
+
+---
+
+# Examples
+
+Print a note:
+
+```bash
+curl -s localhost:8760/api/print \
+  -H 'Content-Type: application/json' \
+  -d '{"text": "# Back in five\n\nknock if urgent"}'
+```
+
+Save a preview to look at:
+
+```bash
+curl -s localhost:8760/api/preview \
+  -H 'Content-Type: application/json' \
+  -d '{"text": "# Saturday\n- [ ] film\n- [ ] framer", "options": {"size": 28}}' \
+  -o preview.png
+```
+
+A banner down the roll, at a readable size:
+
+```bash
+curl -s localhost:8760/api/print \
+  -H 'Content-Type: application/json' \
+  -d '{"text": "# CLOSED", "options": {"orientation": "landscape", "page_length": 900, "size": 90}}'
+```
+
+Connect, then print, in two steps:
+
+```bash
+curl -s localhost:8760/api/connect -H 'Content-Type: application/json' \
+     -d '{"profile": "MPT-II Bluetooth"}'
+curl -s localhost:8760/api/print -H 'Content-Type: application/json' \
+     -d '{"text": "hello"}'
+```
+
+Today's month, to a file:
+
+```bash
+curl -s localhost:8760/api/calendar -H 'Content-Type: application/json' \
+     -d '{"range": "month"}' -o month.png
+```

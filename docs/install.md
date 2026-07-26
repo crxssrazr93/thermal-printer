@@ -36,17 +36,24 @@ a pinned tab is the closest thing there.
 ## From your phone, or another machine
 
 The server listens on localhost only, so nothing outside this machine can print
-without being invited. To open it to the network:
+without being invited. **Settings, under Network**, has the switch: tick it and
+the server starts listening on every interface, and Settings shows the address
+to use. The listening socket is swapped rather than the app restarted, so
+nothing is interrupted.
+
+Then use `http://<this machine>:8760` from anything on the same network, and
+install it there too. **There is no authentication**: whoever can reach it can
+print, spend your paper and read your presets. Put it on a network you trust,
+turn it off again when you are done, or leave it local and reach it through SSH
+forwarding.
+
+To decide it outside the app, set `THERMAL_WEB_HOST` in the unit, which then
+wins and greys the switch out:
 
 ```bash
 systemctl --user edit --full thermal-print-studio   # set THERMAL_WEB_HOST=0.0.0.0
 systemctl --user restart thermal-print-studio
 ```
-
-Then use `http://<this machine>:8760` from anything on the same network, and
-install it there too. **There is no authentication**: whoever can reach it can
-print. Put it on a network you trust, or leave it on localhost and reach it
-through SSH forwarding.
 
 ## Managing it
 

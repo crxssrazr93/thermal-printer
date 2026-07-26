@@ -42,6 +42,9 @@ the committed file is reproducible rather than mysterious.
 
 ## The HTTP API
 
+Every endpoint in detail, with fields, defaults and examples, is in
+[the API reference](api.md). What follows is the shape of it.
+
 Everything the front end does goes through these. All bodies are JSON unless
 noted; anything that returns a page returns a PNG.
 

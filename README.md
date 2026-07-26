@@ -73,6 +73,7 @@ window and icon. Network access, updating and removal are covered in
 | [Install](docs/install.md) | Installing, the service, network access, updating, removing |
 | [Using it](docs/usage.md) | The editor, tables, pictures, direction, languages, labels, calendars, presets |
 | [Printers](docs/printers.md) | Transports, device profiles, the tear-off gap, describing your own printer |
+| [The API](docs/api.md) | Every endpoint, in detail: the browser is just one client |
 | [Themes](web/static/themes/README.md) | Writing your own theme, on screen and on paper |
 | [Platforms](docs/platforms.md) | What runs where, and what a Windows or macOS contributor would need |
 | [Development](docs/development.md) | Layout, running from a checkout, the HTTP API, the editor bundle |

@@ -3063,11 +3063,13 @@ function renderDevices(profiles) {
         <div class="sub"></div>
       </div>
       <span class="spacer"></span>
+      <button class="iconbtn" data-act="edit">Edit</button>
       <button class="iconbtn del" data-act="delete">Remove</button>`;
     li.querySelector('.name').textContent = profile.name;
     li.querySelector('.sub').textContent =
       `${profile.transport} - ${profile.address} - tear ${profile.tearGapMm} mm`;
 
+    li.querySelector('[data-act="edit"]').addEventListener('click', () => editDevice(profile));
     li.querySelector('[data-act="delete"]').addEventListener('click', async () => {
       await api(`/api/profiles/${encodeURIComponent(profile.name)}`, { method: 'DELETE' });
       await refreshState();
@@ -3102,9 +3104,107 @@ async function scanDevices() {
   }
 }
 
+/* ------------------------------------------------------------- the network */
+/* The server listens to this machine only until it is told otherwise, and this
+ * switch is the whole of that decision. Turning it on replaces the listening
+ * socket rather than restarting anything, so an open printer connection and
+ * whatever is in the editor both survive it. */
+async function initNetworkSwitch() {
+  const box = $('networkExposed');
+  if (!box) return;
+
+  const describe = (data) => {
+    const meta = $('networkMeta');
+    const hint = $('networkHint');
+    box.checked = !!data.exposed;
+    if (data.override) {
+      // the unit file, or whoever started the process, has already decided
+      box.disabled = true;
+      if (meta) meta.textContent = `fixed to ${data.override}`;
+      if (hint) {
+        hint.textContent =
+          `THERMAL_WEB_HOST is set to ${data.override}, so where the server `
+          + 'listens was decided outside the app and cannot be changed here.';
+      }
+      return;
+    }
+    if (!meta) return;
+    meta.textContent = data.exposed
+      ? (data.addresses || []).map((address) => `${address}:${data.port}`)[0]
+        || `open on port ${data.port}`
+      : 'this machine only';
+  };
+
+  try {
+    describe(await api('/api/network'));
+  } catch (error) {
+    return;
+  }
+
+  box.addEventListener('change', async () => {
+    const wanted = box.checked;
+    if (wanted && !confirm(
+      'Anything that can reach this machine will be able to print, and there '
+      + 'is no password. Open it to the network?')) {
+      box.checked = false;
+      return;
+    }
+    try {
+      const result = await api('/api/network',
+        { method: 'POST', body: JSON.stringify({ exposed: wanted }) });
+      describe(result);
+      toast(wanted
+        ? `Open at ${(result.addresses || [])[0] || 'this machine'}:${result.port}`
+        : 'Closed to the network');
+    } catch (error) {
+      box.checked = !wanted;
+      toast(error.message, true);
+    }
+  });
+}
+
+/* A saved device is a name, a way to reach it, a printer type and a calibrated
+ * gap, and any of the four can turn out to be wrong: a printer that moves to a
+ * cable, a type chosen before the right one existed. Editing one fills the
+ * same form the device was made in and sends the old name along, so the entry
+ * is changed rather than a near-duplicate created beside it. */
+let editingDevice = null;
+
+function editDevice(profile) {
+  editingDevice = profile.name;
+  const details = $('addDeviceBtn').closest('details');
+  if (details) details.open = true;
+
+  $('newTransport').value = profile.transport || 'Bluetooth';
+  const devices = $('newDevice');
+  // the address is normally chosen from a scan; the saved one is put in the
+  // list so the device can be edited without the printer being switched on
+  if (!Array.from(devices.options).some((option) => option.value === profile.address)) {
+    devices.append(new Option(profile.address || '(none)', profile.address || ''));
+  }
+  devices.value = profile.address || '';
+  if (profile.capabilityProfile) $('newCapability').value = profile.capabilityProfile;
+  $('newName').value = profile.name;
+
+  $('addDeviceBtn').textContent = 'Save changes';
+  $('cancelEditBtn').hidden = false;
+  details?.querySelector('summary')?.replaceChildren(`Editing ${profile.name}`);
+  $('newName').focus();
+}
+
+function stopEditingDevice() {
+  editingDevice = null;
+  $('addDeviceBtn').textContent = 'Save device';
+  $('cancelEditBtn').hidden = true;
+  $('newName').value = '';
+  const details = $('addDeviceBtn').closest('details');
+  details?.querySelector('summary')?.replaceChildren('Add a device');
+}
+
 function initSettings() {
   $('scanBtn').addEventListener('click', scanDevices);
   $('newTransport').addEventListener('change', scanDevices);
+  $('cancelEditBtn').addEventListener('click', stopEditingDevice);
 
   $('addDeviceBtn').addEventListener('click', async () => {
     try {
@@ -3115,14 +3215,19 @@ function initSettings() {
           transport: $('newTransport').value,
           address: $('newDevice').value,
           capabilityProfile: $('newCapability').value,
+          originalName: editingDevice || undefined,
         }),
       });
+      const was = editingDevice;
+      stopEditingDevice();
       await refreshState();
-      toast('Device saved');
+      toast(was ? 'Device updated' : 'Device saved');
     } catch (error) {
       toast(error.message, true);
     }
   });
+
+  initNetworkSwitch();
 
   $('saveTearBtn').addEventListener('click', async () => {
     await api('/api/tear-gap', { method: 'POST', body: JSON.stringify({ mm: $('tearGap').value }) });

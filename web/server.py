@@ -102,6 +102,11 @@ USER_TEMPLATES_DIR = DATA_DIR / "labels"
 # a saved label is a background plus the blocks placed on it, under a name
 LABELS_FILE = DATA_DIR / "labels.json"
 
+# whether the server listens to the network or only to this machine. Kept here
+# rather than in the unit file so it can be answered in the app, and read at
+# startup as well as when it changes.
+NETWORK_FILE = DATA_DIR / "network.json"
+
 DEFAULT_FONT = "DejaVuSansMono"   # family names carry no spaces; a miss falls back silently
 DEFAULT_SIZE = 24
 DEFAULT_LINE_SPACING = 1.1
@@ -141,6 +146,70 @@ def _write_json(path: Path, payload) -> None:
 
 def load_presets():
     return _read_json(PRESETS_FILE, [])
+
+
+# -----------------------------------------------------------------------------
+# what the server listens on
+# -----------------------------------------------------------------------------
+LOCAL_HOST = "127.0.0.1"
+OPEN_HOST = "0.0.0.0"
+
+# an environment override is the operator speaking, and outranks the checkbox
+HOST_OVERRIDE = os.environ.get("THERMAL_WEB_HOST") or ""
+PORT = int(os.environ.get("THERMAL_WEB_PORT", "8760"))
+
+# set when a rebind has been asked for; main() loops rather than exits
+_rebind_wanted = False
+SERVER = None
+
+
+def network_exposed() -> bool:
+    stored = _read_json(NETWORK_FILE, {})
+    return bool(stored.get("exposed")) if isinstance(stored, dict) else False
+
+
+def set_network_exposed(exposed: bool) -> None:
+    _write_json(NETWORK_FILE, {"exposed": bool(exposed)})
+
+
+def listen_host() -> str:
+    if HOST_OVERRIDE:
+        return HOST_OVERRIDE
+    return OPEN_HOST if network_exposed() else LOCAL_HOST
+
+
+def local_addresses():
+    """Addresses this machine can be reached at, for the app to show.
+
+    Asked of the routing table rather than of DNS: a UDP socket to an address
+    nobody has to answer reveals which interface would carry the traffic.
+    """
+    import socket
+    found = []
+    probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        probe.connect(("192.0.2.1", 9))       # reserved, never routed
+        found.append(probe.getsockname()[0])
+    except OSError:
+        pass
+    finally:
+        probe.close()
+    return found
+
+
+def request_rebind() -> None:
+    """Bring the listener back up on the other address.
+
+    The socket is bound once, at startup, so changing what it listens on means
+    a new socket. main() waits for the old one to stop and starts the next,
+    which is a few milliseconds of no server rather than a restart of the
+    process: the printer connection, the presets and the lock all survive it.
+    """
+    global _rebind_wanted
+    if SERVER is None:
+        return
+    _rebind_wanted = True
+    threading.Thread(target=SERVER.shutdown, daemon=True).start()
 
 
 def load_todos():
@@ -793,14 +862,23 @@ def api_disconnect(handler, match, body):
 # --- device profiles ---
 @route("POST", "/api/profiles")
 def api_profile_save(handler, match, body):
+    original = body.get("originalName")
+    # editing a device sends what the form holds, which is not the calibrated
+    # gap: that was measured against this printer's body and has no business
+    # being reset by a change of name
+    gap = body.get("tearGapMm")
+    if gap is None:
+        existing = profiles.find_profile(original or body.get("name", ""))
+        gap = (existing or {}).get("tear_gap_mm", 0)
+
     try:
         name = profiles.save_profile(
             name=body.get("name", ""),
             transport=body.get("transport", profiles.TRANSPORT_BLUETOOTH),
             address=body.get("address", ""),
             capability_profile=body.get("capabilityProfile", ""),
-            tear_gap_mm=body.get("tearGapMm", 0),
-            original_name=body.get("originalName"),
+            tear_gap_mm=gap,
+            original_name=original,
         )
     except ValueError as error:
         return 400, {"ok": False, "message": str(error)}
@@ -891,6 +969,41 @@ def api_profile_delete(handler, match, body):
     from urllib.parse import unquote
     profiles.delete_profile(unquote(match.group("name")))
     return 200, {"ok": True, "state": SESSION.state()}
+
+
+@route("GET", "/api/network")
+def api_network(handler, match, body):
+    return 200, {
+        "exposed": network_exposed(),
+        "host": listen_host(),
+        "port": PORT,
+        "override": HOST_OVERRIDE,
+        "addresses": local_addresses(),
+    }
+
+
+@route("POST", "/api/network")
+def api_network_set(handler, match, body):
+    """Open the server to the network, or close it again.
+
+    There is no authentication, so this is the whole of the security model:
+    whoever can reach the port can print. The response goes out before the
+    listener is replaced, so the caller hears the answer on the old socket.
+    """
+    exposed = bool(body.get("exposed"))
+    if HOST_OVERRIDE:
+        return 400, {"ok": False,
+                     "message": f"THERMAL_WEB_HOST is set to {HOST_OVERRIDE}, "
+                                "so the app cannot change this"}
+    if exposed == network_exposed():
+        return 200, {"ok": True, "exposed": exposed, "host": listen_host(),
+                     "port": PORT, "addresses": local_addresses()}
+
+    set_network_exposed(exposed)
+    request_rebind()
+    return 200, {"ok": True, "exposed": exposed, "host": listen_host(),
+                 "port": PORT, "addresses": local_addresses(),
+                 "message": "Listening on {} now".format(listen_host())}
 
 
 @route("POST", "/api/tear-gap")
@@ -1114,21 +1227,42 @@ def main() -> int:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 
-    host = os.environ.get("THERMAL_WEB_HOST", "127.0.0.1")
-    port = int(os.environ.get("THERMAL_WEB_PORT", "8760"))
-
-    server = ThreadingHTTPServer((host, port), Handler)
-    logger.info("Thermal Printer web UI on http://%s:%d", host, port)
+    global SERVER, _rebind_wanted
     logger.info("Presets: %s", PRESETS_FILE)
 
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        logger.info("Shutting down")
-    finally:
-        server.server_close()
-        if SESSION.printer.is_connected:
-            SESSION.disconnect()
+    # A rebind stops the listener and starts another on the new address, so
+    # this is a loop rather than a single serve_forever. Everything else about
+    # the process, including an open printer connection, carries across.
+    while True:
+        host = listen_host()
+        try:
+            SERVER = ThreadingHTTPServer((host, PORT), Handler)
+        except OSError as error:
+            if host == LOCAL_HOST:
+                raise
+            logger.warning("Could not listen on %s (%s) - staying local", host, error)
+            set_network_exposed(False)
+            SERVER = ThreadingHTTPServer((LOCAL_HOST, PORT), Handler)
+            host = LOCAL_HOST
+
+        if host == OPEN_HOST:
+            logger.warning("Open to the network on port %d, with no authentication", PORT)
+        logger.info("Thermal Printer web UI on http://%s:%d", host, PORT)
+
+        try:
+            SERVER.serve_forever()
+        except KeyboardInterrupt:
+            logger.info("Shutting down")
+            _rebind_wanted = False
+        finally:
+            SERVER.server_close()
+
+        if not _rebind_wanted:
+            break
+        _rebind_wanted = False
+
+    if SESSION.printer.is_connected:
+        SESSION.disconnect()
     return 0
 
 

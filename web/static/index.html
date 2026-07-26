@@ -584,8 +584,23 @@
             <label for="newName">Name</label>
             <input id="newName" class="control" placeholder="Kitchen printer">
           </div>
-          <button id="addDeviceBtn" class="btn primary">Save device</button>
+          <div class="row-form">
+            <button id="addDeviceBtn" class="btn primary">Save device</button>
+            <button id="cancelEditBtn" class="btn subtle" type="button" hidden>Cancel</button>
+          </div>
         </details>
+
+        <div class="panel-head"><h2>Network</h2>
+          <span class="head-meta" id="networkMeta">&ndash;</span></div>
+        <div class="field">
+          <label class="check"><input type="checkbox" id="networkExposed">
+            Let other machines on this network reach it</label>
+          <p class="hint" id="networkHint">Off, the server listens only to this
+            machine and nothing else can print. On, anything that can reach the
+            port can print, spend your paper and read your presets:
+            <strong>there is no password</strong>. Turn it on for a network you
+            trust, and off again when you are done.</p>
+        </div>
       </div>
     </section>
 
