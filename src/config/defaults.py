@@ -341,8 +341,12 @@ RECOMMENDED_UNICODE_FONTS = [
 # and it carries the Quranic annotation marks that the mono faces leave out.
 RTL_FALLBACK_FONTS = [
     "NotoNaskhArabic",
+    "Amiri",
+    "ScheherazadeNew",
     "NotoSansArabic",
     "NotoKufiArabic",
+    "Lateef",
+    "NotoNastaliqUrdu",
     "NotoSansHebrew",
     "DejaVuSans",
     "FreeSerif",

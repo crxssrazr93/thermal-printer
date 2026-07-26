@@ -147,9 +147,12 @@ shaped and joined, the line runs from the right, and a bullet or a quote bar
 goes on the right where the line begins. A document can mix directions freely,
 paragraph by paragraph, and the editor lays each one out the way it reads.
 
-Most monospaced faces carry no Arabic at all, so a right to left run is set in
-a face that does. The theme's `rtl_font` chooses which; it defaults to DejaVu
-Sans Mono.
+The font you choose is used for Arabic too, whenever it can set it. Most
+monospaced faces carry no Arabic at all, so choosing one of those changes the
+English and leaves the Arabic looking the same: it has fallen back to a face
+that has the script. Pick an Arabic face from the font list, such as Noto Naskh
+Arabic, Noto Kufi Arabic or Amiri if you have it, and the Arabic changes with
+it. The theme's `rtl_font` is what is tried after your choice.
 
 **When that face is not enough**, the whole run moves to one that is. Quranic
 annotation marks are the usual reason: the mono faces carry Arabic letters and

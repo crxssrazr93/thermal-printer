@@ -549,20 +549,23 @@ class MarkdownRenderer:
                   text: str = ""):
         """The face for a right to left run, chosen by what it has to draw.
 
-        The theme names one, and it is used whenever it can set the whole run.
-        Quranic annotation marks are the common case where it cannot: the mono
-        faces carry Arabic letters and vowel marks but stop short of them, so a
-        verse comes out with an empty box where the pause mark should be. When
-        that happens the whole run moves to a face that has everything, rather
-        than one character doing so, because a joining script sets as a piece:
-        swapping a single glyph would break the shapes on either side of it.
+        The font chosen for the document is asked first, so picking one that
+        does carry Arabic changes the Arabic as well as the English. Most
+        monospaced faces do not, and most of those that do stop short of the
+        Quranic annotation marks, so the theme's own right to left face comes
+        next and a list of faces that certainly have everything comes last.
+
+        The choice is by run rather than by character, because a joining script
+        sets as a piece: borrowing one glyph from elsewhere would break the
+        shapes of the letters on either side of it.
         """
-        family = self.style["rtl_font"] or self.font_family
+        candidates = [self.font_family, self.style["rtl_font"], *RTL_FALLBACK_FONTS]
         wanted = getattr(self, "_rtl_corpus", "") or text
         if not wanted:
-            return self._fm.load_font(family, size, bold=bold, italic=italic)
-        return self._fm.font_for_text(
-            [family, *RTL_FALLBACK_FONTS], size, wanted, bold=bold, italic=italic)
+            return self._fm.load_font(candidates[0] or self.font_family, size,
+                                      bold=bold, italic=italic)
+        return self._fm.font_for_text(candidates, size, wanted,
+                                      bold=bold, italic=italic)
 
     def _segments(self, word: str, font):
         """Split a word where the font runs out of glyphs.
