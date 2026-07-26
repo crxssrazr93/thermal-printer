@@ -442,3 +442,40 @@ select.control.slim{padding-right:26px}
   font-size:12px;color:var(--muted)}
 input[type=range]{accent-color:var(--accent);cursor:pointer;height:20px}
 input[type=range]:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+
+/* A two-way choice reads better as one control than as two buttons or a
+   dropdown, and it sits in the preview head because it changes what is shown
+   there. */
+.segmented{display:inline-flex;border:var(--border);border-radius:var(--radius-sm);overflow:hidden;margin-left:auto}
+.segmented .seg{
+  appearance:none;border:0;background:transparent;color:var(--muted);cursor:pointer;
+  font:inherit;font-size:12px;padding:4px 10px;transition:background .15s,color .15s}
+.segmented .seg + .seg{border-left:var(--border)}
+.segmented .seg:hover{color:var(--ink)}
+.segmented .seg[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.segmented .seg:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.panel-head .head-meta{margin-left:10px}
+
+.paper-note{display:flex;align-items:center;gap:10px;padding:0 10px 8px;flex-wrap:wrap}
+.paper-note .unit{font-size:12px;color:var(--muted)}
+.paper-note input[type=number]{width:74px}
+.warn{
+  margin:0 10px 10px;padding:8px 10px;border-radius:var(--radius-sm);
+  background:color-mix(in srgb, var(--danger) 12%, transparent);
+  color:var(--ink);font-size:12px;line-height:1.5}
+
+/* A page composed along the roll comes off the paper turned, so reading it on
+   screen means turning it back. The wrapper takes the swapped size or the
+   rotated image would overlap whatever is under it. */
+.paper-wrap.turned img{transform-origin:top left;position:absolute;left:0;max-width:none}
+.paper-wrap.turned{position:relative}
+
+/* Along the roll the page is wider than it is deep, so the preview stops being
+   a column beside the editor and becomes a band under it, where a long strip
+   has room to be seen at a readable size. */
+.view.split.stacked{grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto}
+.view.split.stacked .side{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--gap)}
+.view.split.stacked .paper-stage{max-height:none;justify-content:flex-start}
+/* stacked, the editor no longer has a column to itself, so it gives up the
+   height it does not need and the strip below stays on screen */
+.view.split.stacked .editor-shell{min-height:180px;max-height:40vh;overflow:auto}

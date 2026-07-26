@@ -184,7 +184,16 @@ needs. **Along the roll** composes it the other way, on a strip as long as you
 ask for and only as deep as the head is wide, then turns it a quarter turn so
 the lines run down the paper. You get long lines and few of them, which suits a
 banner, a label or a ticket. Anything deeper than the head is wide is trimmed
-rather than scaled, since scaling would quietly change the size you chose.
+rather than scaled, since scaling would quietly change the size you chose, and
+the preview says so when it happens rather than letting you find out on paper.
+
+The choice sits in the preview head, next to what it changes, and Settings
+keeps the default. Choosing **Along** rearranges Compose: the preview stops
+being a column beside the editor and becomes a band underneath it, where a
+strip wider than it is deep has room, and it is turned upright so you can read
+it. **Turn to read** switches between that and the page as it actually comes
+off the roll. Strip length is set in millimetres, which is how paper is sold;
+the preview reports both the dots and the millimetres it will use.
 
 ## Languages
 

@@ -1413,28 +1413,112 @@ function renderOptions() {
     font: currentFont(),
     size: Number($('fontSize').value) || 16,
     darkness: Number($('darkness').value) || 1,
-    orientation: $('orientation')?.value || 'portrait',
-    page_length: Number($('pageLength')?.value) || 1200,
+    orientation: currentDirection(),
+    page_length: Number(localStorage.getItem(LENGTH_KEY)) || 1200,
     ...themeStyle(),
   };
+}
+
+/* 203 dots to the inch. Dots are what the printer counts and millimetres are
+ * what a roll of paper is sold in, so the settings keep dots and everything
+ * the user touches is in millimetres. */
+const DOTS_PER_MM = 203 / 25.4;
+const toMm = (dots) => Math.round(dots / DOTS_PER_MM);
+const toDots = (mm) => Math.round(mm * DOTS_PER_MM);
+
+const currentDirection = () => localStorage.getItem(ORIENTATION_KEY) || 'portrait';
+const isAlong = () => currentDirection() === 'landscape';
+
+/* Direction can be set from the preview head or from Settings, and both have
+ * to agree, so it is set in one place and everything else follows it. */
+function setDirection(value) {
+  localStorage.setItem(ORIENTATION_KEY, value);
+  if ($('orientation')) $('orientation').value = value;
+  document.querySelectorAll('.segmented .seg[data-direction]').forEach((button) => {
+    button.setAttribute('aria-pressed', String(button.dataset.direction === value));
+  });
+  // A strip composed along the roll is wider than it is deep, so beside the
+  // editor is the wrong place for it: the compose view stacks, the preview
+  // takes the full width underneath, and it is turned upright by default,
+  // which is the only orientation the strip can be read in.
+  const along = value === 'landscape';
+  $('view-compose')?.classList.toggle('stacked', along);
+  if ($('alongTools')) $('alongTools').hidden = !along;
+  setTurned(along);
+  refreshPreview();
+}
+
+function setLength(dots) {
+  const bounded = Math.max(384, Math.min(4000, Math.round(dots)));
+  localStorage.setItem(LENGTH_KEY, String(bounded));
+  if ($('pageLength')) $('pageLength').value = bounded;
+  if ($('alongLength')) $('alongLength').value = toMm(bounded);
+  refreshPreview();
+}
+
+/* Turning the preview is a way of looking at it, not a property of the page,
+ * so it is never stored and never reaches the printer. */
+function setTurned(on) {
+  const wrap = document.querySelector('.preview .paper-wrap');
+  const button = $('turnToRead');
+  if (!wrap) return;
+  wrap.classList.toggle('turned', on);
+  if (button) button.setAttribute('aria-pressed', String(on));
+  sizeTurnedWrap();
+}
+
+function sizeTurnedWrap() {
+  const wrap = document.querySelector('.preview .paper-wrap');
+  const img = $('preview');
+  if (!wrap || !img || !img.naturalWidth) return;
+
+  if (!wrap.classList.contains('turned')) {
+    wrap.style.width = '';
+    wrap.style.height = '';
+    img.style.width = '';
+    img.style.transform = '';
+    img.style.top = '';
+    return;
+  }
+
+  // A turned page is as wide as the page is long, which is more than the panel
+  // has, so it is scaled to fit: this view is for reading the whole strip at
+  // once, not for judging the type size. Measure the page before it is turned,
+  // since a bounding box reports the transformed shape and would feed back
+  // into itself. Rotated about its top left corner it also has to be pushed
+  // back down into view.
+  const stage = wrap.closest('.paper-stage');
+  const available = (stage?.clientWidth || wrap.clientWidth) - 20;
+  const width = 384;
+  const height = width * (img.naturalHeight / img.naturalWidth);
+  // never shrink past a third, or a long strip turns into a grey smear that
+  // cannot be read at all; past that point the stage scrolls instead
+  const scale = Math.max(0.34, Math.min(1, available / height));
+
+  img.style.width = `${width}px`;
+  img.style.transform = `rotate(-90deg) scale(${scale})`;
+  img.style.top = `${width * scale}px`;
+  wrap.style.width = `${height * scale}px`;
+  wrap.style.height = `${width * scale}px`;
 }
 
 function initOrientation() {
   const direction = $('orientation');
   const length = $('pageLength');
-  if (!direction || !length) return;
 
-  direction.value = localStorage.getItem(ORIENTATION_KEY) || 'portrait';
-  length.value = localStorage.getItem(LENGTH_KEY) || '1200';
+  document.querySelectorAll('.segmented .seg[data-direction]').forEach((button) => {
+    button.addEventListener('click', () => setDirection(button.dataset.direction));
+  });
+  $('alongLength')?.addEventListener('change', () =>
+    setLength(toDots(Number($('alongLength').value) || 150)));
+  $('turnToRead')?.addEventListener('click', () =>
+    setTurned($('turnToRead').getAttribute('aria-pressed') !== 'true'));
 
-  direction.addEventListener('change', () => {
-    localStorage.setItem(ORIENTATION_KEY, direction.value);
-    refreshPreview();
-  });
-  length.addEventListener('change', () => {
-    localStorage.setItem(LENGTH_KEY, length.value);
-    refreshPreview();
-  });
+  direction?.addEventListener('change', () => setDirection(direction.value));
+  length?.addEventListener('change', () => setLength(Number(length.value) || 1200));
+
+  setDirection(currentDirection());
+  setLength(Number(localStorage.getItem(LENGTH_KEY) || 1200));
 }
 
 /* presets store their own font and size but not the setting, which follows
@@ -1512,12 +1596,22 @@ async function renderInto(key, text, img, meta, options) {
       body: JSON.stringify({ text, options: options ? withThemeStyle(options) : renderOptions() }),
     });
     if (!response.ok) throw new Error('render failed');
+    const trimmed = response.headers.get('X-Trimmed') === '1';
     const blob = await response.blob();
     // revoke the previous URL or every keystroke leaks a bitmap
     if (previewUrls[key]) URL.revokeObjectURL(previewUrls[key]);
     previewUrls[key] = URL.createObjectURL(blob);
     img.src = previewUrls[key];
-    img.onload = () => { meta.textContent = `${img.naturalWidth} x ${img.naturalHeight}`; };
+    img.onload = () => {
+      // paper is bought by the metre, so the length is said in millimetres
+      // and the dots are kept beside it for anyone setting a strip by hand
+      meta.textContent =
+        `${img.naturalWidth} x ${img.naturalHeight} - ${toMm(img.naturalHeight)} mm`;
+      if (key === 'compose') {
+        if ($('trimWarning')) $('trimWarning').hidden = !trimmed;
+        sizeTurnedWrap();
+      }
+    };
   } catch (error) {
     meta.textContent = 'preview failed';
   }

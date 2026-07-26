@@ -192,6 +192,7 @@ class Session:
         # as long as the user asks for and only as deep as the head is wide,
         # then turned a quarter turn so the lines run down the paper. Lines get
         # long and few, which is the trade: a banner, a label, a ticket.
+        Session.trimmed = False
         landscape = (options.get("orientation") or "portrait") == "landscape"
         length = max(head_width, int(options.get("page_length") or 1200))
         compose_width = length if landscape else head_width
@@ -218,6 +219,10 @@ class Session:
         )
         return image, processor
 
+    # set when the last composed strip was deeper than the head, so the UI can
+    # say so rather than let the user find out on paper
+    trimmed = False
+
     @staticmethod
     def _turn(image, head_width: int):
         """Rotate a composed strip so it prints along the paper.
@@ -226,7 +231,8 @@ class Session:
         direction, so it is trimmed rather than silently scaled, which would
         change the type size the user chose.
         """
-        if image.height > head_width:
+        Session.trimmed = image.height > head_width
+        if Session.trimmed:
             image = image.crop((0, 0, image.width, head_width))
 
         turned = image.transpose(Image.ROTATE_270)
@@ -491,6 +497,8 @@ def api_preview(handler, match, body):
     image = SESSION.render_preview(body.get("text", ""), body.get("options", {}))
     buffer = io.BytesIO()
     image.convert("L").save(buffer, format="PNG", optimize=True)
+    # the page itself cannot say that some of it was cut off, so the response does
+    handler.extra_headers = {"X-Trimmed": "1" if SESSION.trimmed else "0"}
     return 200, ("image/png", buffer.getvalue())
 
 
@@ -617,6 +625,9 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(data)))
         # this is a localhost tool; no caching keeps edits visible immediately
         self.send_header("Cache-Control", "no-store")
+        # anything a handler wanted to say about the payload rather than in it
+        for name, value in getattr(self, "extra_headers", {}).items():
+            self.send_header(name, value)
         self.end_headers()
         self.wfile.write(data)
 
