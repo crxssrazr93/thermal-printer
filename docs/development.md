@@ -60,7 +60,28 @@ noted; anything that returns a page returns a PNG.
 | `POST /api/images` | A data URL in, a stored reference out |
 | `POST /api/tear-test` | Print a calibration strip at a given gap |
 | `POST /api/connect`, `/api/disconnect` | Open or close the printer |
+| `POST/DELETE /api/templates` | Add or remove a label background of your own |
+| `GET/POST/DELETE /api/labels` | Saved labels: a background plus its blocks |
+| `GET/POST/DELETE /api/printer-types` | Capability profiles, shipped and your own |
+| `POST/DELETE /api/profiles` | Device profiles: transport, address, type, tear gap |
+| `POST /api/tear-gap` | Save the calibrated gap for the active printer |
 | `GET/POST/DELETE /api/presets`, `/api/todos` | The saved things |
+
+The browser is one client of this and nothing more: anything that can send
+JSON can drive the printer, which is the point of the split. `curl` printing a
+line is the smallest useful example.
+
+```bash
+curl -s localhost:8760/api/print \
+  -H 'Content-Type: application/json' \
+  -d '{"text": "# Back in five\n\nknock if urgent"}'
+```
+
+**There is no authentication.** The server binds to `127.0.0.1` unless
+`THERMAL_WEB_HOST` says otherwise, so by default the API is reachable only from
+this machine. Anything that can reach it can print, spend paper and read your
+presets, so opening it to a network is a decision to make deliberately: see
+[install](install.md#from-your-phone-or-another-machine).
 
 ## How a page becomes paper
 
