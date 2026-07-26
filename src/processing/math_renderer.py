@@ -72,11 +72,14 @@ def render_math(
         return None
 
     try:
-        parser = mathtext.MathTextParser("bitmap")
+        # math_to_image is the supported entry point; MathTextParser("bitmap")
+        # and its to_png method were removed in matplotlib 3.11
         properties = FontProperties(size=font_size,
                                     weight="bold" if bold else "normal")
         buffer = io.BytesIO()
-        parser.to_png(buffer, f"${body}$", prop=properties, dpi=_MATH_DPI)
+        mathtext.math_to_image(
+            f"${body}$", buffer, prop=properties, dpi=_MATH_DPI, format="png"
+        )
         buffer.seek(0)
         image = Image.open(buffer)
         image.load()

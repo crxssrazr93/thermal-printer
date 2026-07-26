@@ -131,7 +131,7 @@ class DeviceProfileDialog(CenteredDialog):
         ).pack(side="right", padx=(6, 0))
 
         ctk.CTkButton(
-            actions, text="Cancel", height=36, command=self._close
+            actions, text="Cancel", height=36, command=self._on_close
         ).pack(side="right")
 
         self._reload_devices()
@@ -222,13 +222,13 @@ class DeviceProfileDialog(CenteredDialog):
             self.status_label.configure(text=str(error))
             return
 
-        self._close()
+        self._on_close()
 
     def _delete(self) -> None:
         if self._edit_name:
             profiles.delete_profile(self._edit_name)
             self._saved_name = None
-        self._close()
+        self._on_close()
 
     @property
     def saved_name(self) -> Optional[str]:

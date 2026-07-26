@@ -217,7 +217,7 @@ class TearCalibrationDialog(CenteredDialog):
         self._set_status(
             f"Saved {self._mm:g}mm for profile {get_profile_name()}"
         )
-        self.after(600, self._close)
+        self.after(600, self._on_close)
 
     @property
     def accepted_mm(self) -> Optional[float]:
