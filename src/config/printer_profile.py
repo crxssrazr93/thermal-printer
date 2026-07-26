@@ -23,6 +23,16 @@ logger = logging.getLogger(__name__)
 
 _PROFILES_PATH = Path(__file__).parent / "data" / "printer_profiles.json"
 
+# A printer nobody has written a profile for is still a printer, so one can be
+# described here instead: same schema, kept with the user's data rather than in
+# the repo, and merged over the shipped table so a bundled entry can also be
+# corrected without editing the source.
+import os                                                     # noqa: E402
+
+_USER_PROFILES_PATH = Path(
+    os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share")
+) / "thermal-printer" / "printer-profiles.json"
+
 # fallback used only if the bundled profile file is missing or corrupt, so a
 # broken install degrades to "works like a standard 58mm printer" rather than
 # refusing to start
@@ -68,8 +78,50 @@ def load_profiles() -> Dict[str, Dict[str, Any]]:
         )
         profiles = {DEFAULT_PRINTER_PROFILE: dict(_FALLBACK_PROFILE)}
 
+    profiles = dict(profiles)
+    for key, entry in load_user_profiles().items():
+        if isinstance(entry, dict) and entry.get("media"):
+            entry = dict(entry)
+            entry["custom"] = True
+            profiles[key] = entry
+
     _profiles_cache = profiles
     return profiles
+
+
+def load_user_profiles() -> Dict[str, Dict[str, Any]]:
+    """Whatever the user has described, keyed the same way as the shipped set."""
+    try:
+        with open(_USER_PROFILES_PATH, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, ValueError):
+        return {}
+    entries = data.get("profiles") if isinstance(data, dict) else None
+    return entries if isinstance(entries, dict) else {}
+
+
+def save_user_profile(key: str, profile: Dict[str, Any]) -> None:
+    """Write one user profile and drop the cache, so it takes effect at once."""
+    entries = load_user_profiles()
+    entries[key] = profile
+    _USER_PROFILES_PATH.parent.mkdir(parents=True, exist_ok=True)
+    temp = _USER_PROFILES_PATH.with_suffix(".json.tmp")
+    with open(temp, "w", encoding="utf-8") as handle:
+        json.dump({"profiles": entries}, handle, indent=2)
+    temp.replace(_USER_PROFILES_PATH)
+    reset_cache()
+
+
+def delete_user_profile(key: str) -> bool:
+    entries = load_user_profiles()
+    if key not in entries:
+        return False
+    del entries[key]
+    _USER_PROFILES_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(_USER_PROFILES_PATH, "w", encoding="utf-8") as handle:
+        json.dump({"profiles": entries}, handle, indent=2)
+    reset_cache()
+    return True
 
 
 # -----------------------------------------------------------------------------

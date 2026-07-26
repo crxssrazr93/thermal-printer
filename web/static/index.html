@@ -527,7 +527,58 @@
           </div>
           <div class="field">
             <label for="newCapability">Printer type</label>
-            <select id="newCapability" class="control"></select>
+            <div class="row-form">
+              <select id="newCapability" class="control grow"></select>
+              <button id="typeEditBtn" class="btn subtle" type="button">Describe one</button>
+            </div>
+            <p class="hint">What the printer can do, in the escpos-printer-db
+              schema. If yours is not listed, describe it: the head width is the
+              part that has to be right.</p>
+          </div>
+
+          <!-- A printer nobody wrote a profile for is still a printer. These
+               are the same fields a shipped profile has, so what is described
+               here is a profile like any other. -->
+          <div class="field" id="typeEditor" hidden>
+            <div class="field-row">
+              <div class="field">
+                <label for="typeName">Type name</label>
+                <input id="typeName" class="control" placeholder="Aunt Sally's 80 mm">
+              </div>
+              <div class="field">
+                <label for="typeVendor">Vendor</label>
+                <input id="typeVendor" class="control" placeholder="Unknown">
+              </div>
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label for="typeWidth">Head width, in dots</label>
+                <input id="typeWidth" class="control" type="number" min="64" max="2048"
+                       step="8" value="384">
+              </div>
+              <div class="field">
+                <label for="typeDpi">Resolution, in dpi</label>
+                <input id="typeDpi" class="control" type="number" min="50" max="600"
+                       step="1" value="203">
+              </div>
+            </div>
+            <div class="field">
+              <span class="label-text">What it can do</span>
+              <label class="check"><input type="checkbox" id="typeRaster" checked>
+                Raster images (<code>GS v 0</code>)</label>
+              <label class="check"><input type="checkbox" id="typeQr"> QR codes in firmware</label>
+              <label class="check"><input type="checkbox" id="typeBarcode"> Barcodes in firmware</label>
+              <label class="check"><input type="checkbox" id="typeFullCut"> A full cutter</label>
+              <label class="check"><input type="checkbox" id="typePartCut"> A partial cutter</label>
+              <p class="hint">Anything the printer cannot do in firmware is
+                drawn into the picture instead, which is slower and softer but
+                always works.</p>
+            </div>
+            <div class="row-form">
+              <button id="typeSaveBtn" class="btn" type="button">Save printer type</button>
+              <button id="typeDeleteBtn" class="btn danger" type="button" hidden>Delete type</button>
+              <button id="typeCancelBtn" class="btn subtle" type="button">Cancel</button>
+            </div>
           </div>
           <div class="field">
             <label for="newName">Name</label>

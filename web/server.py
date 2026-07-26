@@ -37,10 +37,13 @@ from src.config.defaults import (                # noqa: E402
     TEAR_CALIBRATION_LINES,
 )
 from src.config.printer_profile import (          # noqa: E402
+    delete_user_profile as delete_user_printer_profile,
     get_dpi,
     get_printer_width,
     get_profile_labels,
     get_tear_gap_mm,
+    load_profiles as load_printer_profiles,
+    save_user_profile as save_user_printer_profile,
     mm_to_dots,
     set_tear_gap_mm,
 )
@@ -802,6 +805,85 @@ def api_profile_save(handler, match, body):
     except ValueError as error:
         return 400, {"ok": False, "message": str(error)}
     return 200, {"ok": True, "name": name, "state": SESSION.state()}
+
+
+@route("GET", "/api/printer-types")
+def api_printer_types(handler, match, body):
+    """Every capability profile on offer, and what each one claims.
+
+    The dialog needs more than the labels when a type is being edited: the head
+    width, the dpi and the feature flags are the fields it fills in.
+    """
+    entries = []
+    for key, profile in load_printer_profiles().items():
+        media = profile.get("media", {}) or {}
+        width = media.get("width", {}) or {}
+        entries.append({
+            "key": key,
+            "name": profile.get("name", key),
+            "vendor": profile.get("vendor", ""),
+            "dpi": media.get("dpi", 203),
+            "widthDots": width.get("pixels", 384),
+            "widthMm": width.get("mm", 57.5),
+            "features": profile.get("features", {}) or {},
+            "notes": profile.get("notes", ""),
+            "custom": bool(profile.get("custom")),
+        })
+    entries.sort(key=lambda entry: (entry["custom"], entry["name"].lower()))
+    return 200, {"types": entries}
+
+
+@route("POST", "/api/printer-types")
+def api_printer_type_save(handler, match, body):
+    """Describe a printer nobody wrote a profile for.
+
+    The schema is escpos-printer-db's, so an entry written here says the same
+    thing to python-escpos or escpos-php as it does to this app. Width is taken
+    in dots, since that is what the raster protocol counts in, and rounded down
+    to a whole byte because eight dots share one.
+    """
+    name = str(body.get("name") or "").strip()
+    if not name:
+        return 400, {"ok": False, "message": "That printer type needs a name"}
+
+    try:
+        dots = int(body.get("widthDots") or 384)
+        dpi = int(body.get("dpi") or 203)
+    except (TypeError, ValueError):
+        return 400, {"ok": False, "message": "Width and dpi have to be numbers"}
+    dots = max(64, min(2048, dots - (dots % 8)))
+    dpi = max(50, min(600, dpi))
+
+    try:
+        width_mm = round(float(body.get("widthMm") or 0) or dots * 25.4 / dpi, 2)
+    except (TypeError, ValueError):
+        width_mm = round(dots * 25.4 / dpi, 2)
+
+    wanted = body.get("features") or {}
+    features = {
+        flag: bool(wanted.get(flag))
+        for flag in ("bitImageRaster", "qrCode", "barcodeA",
+                     "paperFullCut", "paperPartCut")
+    }
+
+    key = str(body.get("key") or "").strip() or f"custom-{_slug(name) or 'printer'}"
+    profile = {
+        "name": name,
+        "vendor": str(body.get("vendor") or "Custom"),
+        "media": {"dpi": dpi, "width": {"mm": width_mm, "pixels": dots}},
+        "features": features,
+        "commands": {"start_print": "", "end_print": "", "status_request": ""},
+        "notes": str(body.get("notes") or "Described in the app."),
+    }
+    save_user_printer_profile(key, profile)
+    return 200, {"ok": True, "key": key, "state": SESSION.state()}
+
+
+@route("DELETE", r"/api/printer-types/(?P<key>.+)")
+def api_printer_type_delete(handler, match, body):
+    if not delete_user_printer_profile(unquote(match.group("key"))):
+        return 404, {"ok": False, "message": "not one of yours"}
+    return 200, {"ok": True, "state": SESSION.state()}
 
 
 @route("DELETE", "/api/profiles/(?P<name>.+)")

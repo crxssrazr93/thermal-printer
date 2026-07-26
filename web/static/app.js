@@ -1866,14 +1866,118 @@ async function refreshState() {
   $('statusWidth').textContent = `${data.width} px - ${data.dpi} dpi - tear ${data.tearGapMm} mm`;
   $('tearGap').value = data.tearGapMm;
 
-  const capability = $('newCapability');
-  if (capability && !capability.options.length) {
-    Object.entries(data.capabilityProfiles || {}).forEach(([key, label]) => {
-      capability.append(new Option(label, key));
-    });
-  }
+  if ($('newCapability') && !$('newCapability').options.length) loadPrinterTypes();
 
   renderDevices(data.profiles);
+}
+
+/* -------------------------------------------------------- printer types */
+/* A capability profile says what the printer can do: how wide the head is,
+ * what it does in firmware, what has to be drawn instead. The shipped ones
+ * cover the printers somebody has written down; anything else can be described
+ * here, in the same escpos-printer-db schema, and is then a type like any
+ * other. */
+let printerTypes = [];
+
+async function loadPrinterTypes(select) {
+  try {
+    printerTypes = (await api('/api/printer-types')).types || [];
+  } catch (error) {
+    printerTypes = [];
+    return;
+  }
+  const menu = $('newCapability');
+  if (!menu) return;
+  const wanted = select || menu.value;
+  menu.innerHTML = '';
+  printerTypes.forEach((type) => {
+    const option = new Option(
+      type.custom ? `${type.name} (yours)` : type.name, type.key);
+    menu.append(option);
+  });
+  if (wanted && printerTypes.some((type) => type.key === wanted)) menu.value = wanted;
+  markCustomType();
+}
+
+const currentPrinterType = () =>
+  printerTypes.find((type) => type.key === $('newCapability')?.value) || null;
+
+/* the delete button belongs to a type you wrote, so it comes and goes with the
+ * selection rather than sitting there greyed out */
+function markCustomType() {
+  const type = currentPrinterType();
+  const remove = $('typeDeleteBtn');
+  if (remove) remove.hidden = !type?.custom;
+}
+
+function fillTypeEditor(type) {
+  $('typeName').value = type ? `${type.name}${type.custom ? '' : ' (copy)'}` : '';
+  $('typeVendor').value = type?.vendor || '';
+  $('typeWidth').value = type?.widthDots || 384;
+  $('typeDpi').value = type?.dpi || 203;
+  const features = type?.features || { bitImageRaster: true };
+  $('typeRaster').checked = features.bitImageRaster !== false;
+  $('typeQr').checked = !!features.qrCode;
+  $('typeBarcode').checked = !!features.barcodeA;
+  $('typeFullCut').checked = !!features.paperFullCut;
+  $('typePartCut').checked = !!features.paperPartCut;
+}
+
+function initPrinterTypes() {
+  const editor = $('typeEditor');
+  if (!editor) return;
+
+  $('newCapability').addEventListener('change', markCustomType);
+  $('typeEditBtn').addEventListener('click', () => {
+    // a listed type is a starting point rather than a thing to be overwritten:
+    // editing one of yours edits it, editing a shipped one copies it
+    fillTypeEditor(currentPrinterType());
+    editor.hidden = false;
+  });
+  $('typeCancelBtn').addEventListener('click', () => { editor.hidden = true; });
+
+  $('typeSaveBtn').addEventListener('click', async () => {
+    const existing = currentPrinterType();
+    const body = {
+      name: $('typeName').value,
+      vendor: $('typeVendor').value,
+      widthDots: Number($('typeWidth').value),
+      dpi: Number($('typeDpi').value),
+      features: {
+        bitImageRaster: $('typeRaster').checked,
+        qrCode: $('typeQr').checked,
+        barcodeA: $('typeBarcode').checked,
+        paperFullCut: $('typeFullCut').checked,
+        paperPartCut: $('typePartCut').checked,
+      },
+    };
+    // editing one of your own keeps its key, so the devices already pointing
+    // at it keep pointing at it
+    if (existing?.custom && existing.name === $('typeName').value.trim()) {
+      body.key = existing.key;
+    }
+    try {
+      const saved = await api('/api/printer-types',
+        { method: 'POST', body: JSON.stringify(body) });
+      await loadPrinterTypes(saved.key);
+      editor.hidden = true;
+      toast('Printer type saved');
+    } catch (error) {
+      toast(`Could not save it: ${error.message}`, true);
+    }
+  });
+
+  $('typeDeleteBtn').addEventListener('click', async () => {
+    const type = currentPrinterType();
+    if (!type?.custom) return;
+    try {
+      await api(`/api/printer-types/${encodeURIComponent(type.key)}`, { method: 'DELETE' });
+      await loadPrinterTypes();
+      editor.hidden = true;
+    } catch (error) {
+      toast(`Could not remove it: ${error.message}`, true);
+    }
+  });
 }
 
 function initConnection() {
@@ -3055,6 +3159,7 @@ async function boot() {
   initToolMenu();
   initCalendar();
   initLabels();
+  initPrinterTypes();
   initTearWizard();
   initShortcuts();
 
