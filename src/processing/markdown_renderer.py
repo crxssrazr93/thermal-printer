@@ -25,6 +25,24 @@ HEADING_SCALE = {1: 1.6, 2: 1.35, 3: 1.15, 4: 1.0, 5: 1.0, 6: 1.0}
 
 BULLETS = ["\u2022", "-", "*"]  # only glyphs the mono faces reliably carry
 
+# How a page is set, as opposed to what it says. A theme supplies a partial
+# override of this; anything it leaves out keeps the default, so a theme can be
+# as light a touch as one different bullet.
+DEFAULT_PRINT_STYLE = {
+    "heading_case": "none",      # none | upper
+    "heading_align": "left",     # left | center
+    "heading_banner": False,     # set a level 1 heading white out of a black bar
+    "heading_scale": 1.0,        # multiplier on top of HEADING_SCALE
+    "rule_style": "solid",       # solid | double | dotted | none
+    "rule_weight": 3,            # dots thick, for a level 1 heading rule
+    "bullet": "\u2022",
+    "table_rule": "dotted",      # dotted | solid | none
+    "table_header_rule": 2,
+    "quote_bar": 3,              # dots wide; 0 draws no bar
+    "quote_italic": True,
+    "block_gap": 6,              # blank dots after a paragraph
+}
+
 _INLINE_CODE = re.compile(r"`([^`]+)`")
 # Emphasis must not fire mid-word. Markdown allows intraword "*", but on a
 # printer the input is as often plain text as markup, and silently italicising
@@ -67,12 +85,14 @@ class MarkdownRenderer:
         font_size: int = 24,
         line_spacing: Optional[float] = None,
         margin: int = 6,
+        style: Optional[dict] = None,
     ):
         self.width = width if width is not None else get_printer_width()
         self.font_family = font_family
         self.font_size = font_size
         self.line_spacing = line_spacing if line_spacing is not None else DEFAULT_LINE_SPACING
         self.margin = margin
+        self.style = {**DEFAULT_PRINT_STYLE, **(style or {})}
         self._fm = get_font_manager()
 
     # -------------------------------------------------------------------------
@@ -363,31 +383,22 @@ class MarkdownRenderer:
             return self._draw_table(draw, block, y, left, width)
 
         if block.kind == "heading":
-            size = max(10, int(self.font_size * HEADING_SCALE.get(block.level, 1.0)))
-            lines = self._wrap_spans(block.spans, size, width - left - right_margin)
-            for line in lines:
-                y = self._draw_line(draw, line, y, left, size, force_bold=True)
-            if block.level <= 2:
-                # a heavier rule under a top-level heading, so the hierarchy is
-                # legible on paper where there is no colour to carry it
-                thickness = 3 if block.level == 1 else 1
-                draw.rectangle(
-                    [left, y + 2, width - right_margin, y + 2 + thickness], fill="black"
-                )
-                y += 8 + thickness
-            return y + 4
+            return self._draw_heading(draw, block, y, left, width)
 
         if block.kind == "quote":
-            inner = left + 12
+            bar = int(self.style["quote_bar"])
+            inner = left + (12 if bar else 8)
             top = y
             lines = self._wrap_spans(block.spans, self.font_size, width - inner - right_margin)
             for line in lines:
-                y = self._draw_line(draw, line, y, inner, self.font_size, force_italic=True)
-            draw.rectangle([left, top, left + 3, y], fill="black")
+                y = self._draw_line(draw, line, y, inner, self.font_size,
+                                    force_italic=bool(self.style["quote_italic"]))
+            if bar:
+                draw.rectangle([left, top, left + bar, y], fill="black")
             return y + 6
 
         if block.kind == "list":
-            marker = f"{block.index}." if block.ordered else BULLETS[min(block.level, 2)]
+            marker = f"{block.index}." if block.ordered else self._bullet(block.level)
             indent = left + block.level * 16
             font = self._font(self.font_size)
             try:
@@ -405,10 +416,85 @@ class MarkdownRenderer:
         lines = self._wrap_spans(block.spans, self.font_size, width - left - right_margin)
         for line in lines:
             y = self._draw_line(draw, line, y, left, self.font_size)
-        return y + 6
+        return y + int(self.style["block_gap"])
+
+    # ---------------------------------------------------------------- style
+    def _bullet(self, level: int) -> str:
+        if level == 0:
+            return str(self.style["bullet"]) or BULLETS[0]
+        return BULLETS[min(level, 2)]
+
+    @staticmethod
+    def _line_width(line) -> int:
+        total = 0
+        for _span, word, font in line:
+            try:
+                total += font.getlength(word)
+            except (AttributeError, OSError):
+                total += len(word) * 8
+        return int(total)
+
+    def _draw_rule(self, draw, x0: int, x1: int, y: int, weight: int) -> int:
+        """Draw the rule the theme asked for and return the height it used."""
+        kind = self.style["rule_style"]
+        if kind == "none":
+            return 0
+        if kind == "dotted":
+            self._dotted_rule(draw, x0, x1, y)
+            return 1
+        if kind == "double":
+            draw.rectangle([x0, y, x1, y], fill="black")
+            draw.rectangle([x0, y + 3, x1, y + 3], fill="black")
+            return 4
+        draw.rectangle([x0, y, x1, y + weight - 1], fill="black")
+        return weight
+
+    def _draw_heading(self, draw, block: Block, y: int, left: int, width: int) -> int:
+        right = width - self.margin
+        scale = HEADING_SCALE.get(block.level, 1.0) * float(self.style["heading_scale"])
+        size = max(10, int(self.font_size * scale))
+
+        spans = block.spans
+        if self.style["heading_case"] == "upper":
+            spans = [Span(s.text.upper(), s.bold, s.italic, s.mono) for s in spans]
+
+        banner = bool(self.style["heading_banner"]) and block.level == 1
+        pad = 5 if banner else 0
+        available = width - left - self.margin - 2 * pad
+        lines = self._wrap_spans(spans, size, available)
+
+        if banner:
+            # a filled bar with the heading knocked out of it; the strongest
+            # mark a one-bit page can make, and unmistakably one theme's voice
+            height = sum(
+                max((self._line_height(font) for _s, _w, font in line), default=size)
+                for line in lines
+            )
+            draw.rectangle([left, y, right, y + height + 2 * pad], fill="black")
+            text_y = y + pad
+            for line in lines:
+                x = left + pad
+                if self.style["heading_align"] == "center":
+                    x = left + max(pad, (right - left - self._line_width(line)) // 2)
+                text_y = self._draw_line(draw, line, text_y, x, size,
+                                         force_bold=True, fill="white")
+            return y + height + 2 * pad + 8
+
+        for line in lines:
+            x = left
+            if self.style["heading_align"] == "center":
+                x = left + max(0, (right - left - self._line_width(line)) // 2)
+            y = self._draw_line(draw, line, y, x, size, force_bold=True)
+
+        if block.level <= 2:
+            weight = int(self.style["rule_weight"]) if block.level == 1 else 1
+            used = self._draw_rule(draw, left, right, y + 2, weight)
+            y += 6 + used
+        return y + 4
 
     def _draw_line(self, draw, line, y: int, x_start: int, size: int,
-                   force_bold: bool = False, force_italic: bool = False) -> int:
+                   force_bold: bool = False, force_italic: bool = False,
+                   fill: str = "black") -> int:
         x = x_start
         height = 0
         for span, word, font in line:
@@ -417,7 +503,7 @@ class MarkdownRenderer:
                                   span.italic or force_italic, span.mono)
             if font is None:
                 continue
-            draw.text((x, y), word, font=font, fill="black")
+            draw.text((x, y), word, font=font, fill=fill)
             try:
                 x += font.getlength(word)
             except (AttributeError, OSError):
@@ -455,14 +541,21 @@ class MarkdownRenderer:
                 draw.text((x, y), text, font=cell_font or font, fill="black")
                 x += column_width
             y += pitch
+            right = width - self.margin
             if row_index == 0:
-                draw.rectangle([left, y, width - self.margin, y + 2], fill="black")
-                y += 5
+                weight = max(1, int(self.style["table_header_rule"]))
+                draw.rectangle([left, y, right, y + weight], fill="black")
+                y += 3 + weight
             elif row_index < len(block.rows) - 1:
-                # dotted rather than solid between body rows: it separates the
-                # rows without the page turning into a grid of black bars
-                self._dotted_rule(draw, left, width - self.margin, y + 3)
-                y += 8
+                # separating body rows without turning the page into a grid of
+                # black bars, in whichever way the theme asks for
+                kind = self.style["table_rule"]
+                if kind == "dotted":
+                    self._dotted_rule(draw, left, right, y + 3)
+                    y += 8
+                elif kind == "solid":
+                    draw.rectangle([left, y + 3, right, y + 3], fill="black")
+                    y += 8
 
         return y + 6
 

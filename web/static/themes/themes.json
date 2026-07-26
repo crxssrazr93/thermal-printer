@@ -5,28 +5,91 @@
       "name": "Theme 1",
       "stylesheet": "01.css",
       "swatch": ["#1B5CFF", "#0C0C0D"],
-      "print": { "font": "NotoSansMono Medium", "size": 24 }
+      "print": {
+        "font": "NotoSansMono Medium",
+        "size": 24,
+        "line_spacing": 1.05,
+        "style": {
+          "heading_case": "upper",
+          "heading_align": "left",
+          "heading_scale": 0.92,
+          "rule_style": "solid",
+          "rule_weight": 1,
+          "bullet": "-",
+          "table_rule": "solid",
+          "table_header_rule": 1,
+          "quote_bar": 2,
+          "quote_italic": false,
+          "block_gap": 4
+        }
+      }
     },
     {
       "id": "2",
       "name": "Theme 2",
       "stylesheet": "02.css",
       "swatch": ["#8A5A2B", "#EFEAE0"],
-      "print": { "font": "NimbusMonoPS", "size": 25 }
+      "print": {
+        "font": "NimbusMonoPS",
+        "size": 25,
+        "line_spacing": 1.22,
+        "style": {
+          "heading_align": "center",
+          "rule_style": "double",
+          "bullet": "•",
+          "table_rule": "dotted",
+          "table_header_rule": 1,
+          "quote_bar": 0,
+          "quote_italic": true,
+          "block_gap": 9
+        }
+      }
     },
     {
       "id": "3",
       "name": "Theme 3",
       "stylesheet": "03.css",
       "swatch": ["#FFD400", "#2563EB"],
-      "print": { "font": "NotoSansMono Black", "size": 24 }
+      "print": {
+        "font": "NotoSansMono Black",
+        "size": 24,
+        "line_spacing": 1.08,
+        "style": {
+          "heading_case": "upper",
+          "heading_banner": true,
+          "heading_align": "left",
+          "rule_style": "solid",
+          "rule_weight": 4,
+          "bullet": "▪",
+          "table_rule": "solid",
+          "table_header_rule": 3,
+          "quote_bar": 6,
+          "quote_italic": false,
+          "block_gap": 7
+        }
+      }
     },
     {
       "id": "4",
       "name": "Theme 4",
       "stylesheet": "04.css",
       "swatch": ["#FFFFFF", "#0A0A0B"],
-      "print": { "font": "AdwaitaMono", "size": 24 }
+      "print": {
+        "font": "AdwaitaMono",
+        "size": 24,
+        "line_spacing": 1.28,
+        "style": {
+          "heading_align": "center",
+          "heading_scale": 1.05,
+          "rule_style": "dotted",
+          "bullet": "·",
+          "table_rule": "none",
+          "table_header_rule": 1,
+          "quote_bar": 0,
+          "quote_italic": true,
+          "block_gap": 10
+        }
+      }
     }
   ]
 }

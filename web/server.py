@@ -176,6 +176,9 @@ class Session:
             font_family=options.get("font") or DEFAULT_FONT,
             font_size=int(options.get("size") or DEFAULT_SIZE),
             line_spacing=float(options.get("line_spacing") or DEFAULT_LINE_SPACING),
+            # how the page is set: the theme's own typographic voice, so its
+            # printed output is as recognisable as its chrome
+            style=options.get("style") or None,
         )
         image = renderer.render(text or " ")
         processor = ImageProcessor(

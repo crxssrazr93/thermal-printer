@@ -510,13 +510,27 @@ function currentFont() {
   return $('fontFamily').value || localStorage.getItem(FONT_KEY) || 'DejaVuSansMono';
 }
 
+/* A theme sets the page as well as the screen: its manifest carries the print
+ * font and a small set of typographic choices (heading treatment, rules,
+ * bullet, spacing) that the server's renderer honours. Font and size can be
+ * overridden per preset or by hand; the setting stays with the theme. */
+function themeStyle() {
+  const print = themePrint(document.documentElement.dataset.theme);
+  return { style: print.style || {}, line_spacing: print.line_spacing };
+}
+
 function renderOptions() {
   return {
     font: currentFont(),
     size: Number($('fontSize').value) || 24,
     darkness: Number($('darkness').value) || 1,
+    ...themeStyle(),
   };
 }
+
+/* presets store their own font and size but not the setting, which follows
+ * whichever theme is in use when they print */
+const withThemeStyle = (options) => ({ ...(options || {}), ...themeStyle() });
 
 /* keep the Settings pane and the compose toolbar showing the same thing */
 function setPrintFont(font, size, { pin = false } = {}) {
@@ -586,7 +600,7 @@ async function renderInto(key, text, img, meta, options) {
     const response = await fetch('/api/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, options: options || renderOptions() }),
+      body: JSON.stringify({ text, options: options ? withThemeStyle(options) : renderOptions() }),
     });
     if (!response.ok) throw new Error('render failed');
     const blob = await response.blob();
@@ -679,7 +693,7 @@ async function printText(text, label = 'Printed', options) {
   try {
     const result = await api('/api/print', {
       method: 'POST',
-      body: JSON.stringify({ text, options: options || renderOptions() }),
+      body: JSON.stringify({ text, options: options ? withThemeStyle(options) : renderOptions() }),
     });
     toast(label);
     status(result.message || 'Ready');

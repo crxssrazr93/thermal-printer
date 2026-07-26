@@ -77,9 +77,13 @@ built-in id replaces that theme with yours. `web/static/themes/README.md` has
 the full shape, the variable list, and the rules for writing theme CSS that
 cannot leak into the rest of the page.
 
-Each theme also names the font its printed output uses, so switching theme
-changes the paper as well as the screen. Choosing a font by hand pins it, and
-from then on theme changes leave it alone.
+Each theme also describes how its printed output is set: the font, the line
+spacing, and a handful of typographic choices (headings in capitals or knocked
+out of a filled bar, the weight and style of rules, the bullet glyph, how table
+rows are separated, how quotes are marked). Switching theme therefore changes
+the paper as much as the screen. Choosing a font by hand pins it, and from then
+on theme changes leave the font alone while the rest of the setting still
+follows the theme.
 
 ## Editor modes
 
