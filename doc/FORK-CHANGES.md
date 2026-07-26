@@ -83,11 +83,64 @@ four rows with everything reachable.
 - That required `run.sh` to set its own working directory (`cd "$SCRIPT_DIR"`),
   since `python -m src.main` only resolves with the repo root as cwd.
 
+## 6. Saved device profiles
+
+Connecting meant typing a MAC address or `/dev` path into a free-text field.
+A device profile now bundles transport, address, capability profile and
+calibrated tear gap, and the connection bar lists printers by name.
+`core/device_discovery.py` enumerates Bluetooth (BlueZ over D-Bus, falling back
+to `bluetoothctl`), USB (sysfs descriptors, falling back to the IEEE 1284 ID)
+and CUPS queues.
+
+Device listings no longer special-case the CTP-500: detection was a literal
+match on the name "CorePrint" with a `[CTP]` tag, and is now a generic printer
+heuristic over the name and the Serial Port Profile UUID.
+
+## 7. Tear-off calibration
+
+The head-to-tear-bar distance is physical, so it is measured rather than
+guessed. Settings -> Printer -> Calibrate tear-off prints a sample at 1mm and
+steps up in whole millimetres until confirmed, storing the result against the
+profile.
+
+Units follow the usual split: millimetres in the UI because that is what can be
+measured, dot rows (`ESC J`) on the wire because that is the only precise unit
+the printer understands. Feed *lines* are not used - quantised to 1/6 inch
+(~4.2mm at 203 dpi), they cannot express a gap falling between two lines, which
+is exactly the case on the test unit (8.5mm).
+
+## 8. Markdown and LaTeX math
+
+A Markdown tab renders headings, emphasis, lists, tables, code, quotes, rules
+and links with live preview, subclassing `BaseTextFrame` and swapping only the
+renderer. Display math (`$$...$$`) uses matplotlib's mathtext engine, which
+needs no TeX installation; matplotlib is optional and the raw source prints
+when it is absent.
+
+MathML is deliberately unsupported - no usable pure-Python renderer exists, and
+the alternatives are an external Java toolchain or a hand-written
+MathML-to-LaTeX converter.
+
+## 9. Bug fixes
+
+- **USB jobs truncated.** `UsbTransport` opened the device `O_NONBLOCK` and
+  closed immediately after the last write, dropping whatever the kernel had not
+  yet handed to the printer. Writes are now blocking and `close()` drains first.
+- **Every failed Bluetooth scan raised `NameError`.** The handler captured the
+  exception variable in a lambda deferred via `after(0, ...)`; Python clears
+  that variable when the `except` block ends.
+- **Calibration could be lost.** `Settings.save()` is debounced behind a daemon
+  timer, so a prompt close discarded it. Calibration uses `save_immediate()`.
+- **Banner used the Text tab's line spacing** - the lookup hardcoded
+  `SettingsKeys.Text` instead of the section accessor.
+- **Calendar fallback was hardcoded to 384px**, ignoring the active profile.
+- Removed a dead `PREVIEW_PAPER_WIDTH` constant and ~50 unused imports;
+  portal file dialogs no longer swallow exceptions silently.
+
 ## Known limitations
 
-- `config.yaml` is tracked in git upstream, so local settings (including the
-  printer MAC address) show as modifications. It should arguably be gitignored
-  with a shipped `config.example.yaml`.
+- Render/process/print logic is still duplicated across the text, image,
+  template and calendar frames.
 - The CTP-500 vendor commands remain unverified on non-CTP-500 hardware; the
   `generic-*` profiles avoid them entirely.
 - `CupsTransport` is spooled, not streaming — bytes reach the printer as one job

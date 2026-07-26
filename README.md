@@ -41,17 +41,36 @@ A GUI app for controlling Bluetooth thermal printers on Linux. Currently support
 
 ### Printing Modes
 
-- **Text Printing** - Type or load text files with customizable fonts, sizes, alignment, and darkness control
-- **Banner Printing** - Create vertical banners with 90-degree rotated text for receipt paper
-- **Template Printing** - Design labels with multiple drag-and-drop text areas, each with independent formatting
-- **Image Printing** - Print images with brightness/contrast controls and 7 dithering algorithms (Floyd-Steinberg, Ordered, Atkinson, Burkes, Sierra, Stucki, None)
-- **Calendar Printing** - Generate printable weekly, monthly, or yearly calendars
+- **Text** - fonts, sizes, bold/italic, alignment, darkness, optional date stamp
+- **Markdown** - headings, bold/italic, lists, tables, code blocks, quotes,
+  rules and links, with live preview. Display math via `$$...$$` when
+  matplotlib is installed
+- **Banner** - large vertical text rotated for the paper roll
+- **Template** - drag-and-drop text areas over a background image
+- **Image** - seven dithering algorithms, brightness/contrast, rotation, invert,
+  and a Fit control (fit to width, shrink to fit, original size)
+- **Calendar** - weekly, monthly and yearly
 
 ### Connection and Hardware
 
-- **Bluetooth Scanner** - Scan and connect to nearby thermal printers with auto-detection
-- **Auto-Reconnect** - Automatic reconnection with exponential backoff on connection loss
-- **Print Job Management** - Progress tracking with cancellation support
+Three transports, selectable per saved device profile:
+
+- **Bluetooth** - RFCOMM/SPP, with channel auto-discovery
+- **USB** - direct writes to `/dev/usb/lp*`
+- **CUPS** - spools to any configured queue, so network and driver-backed
+  printers work too
+
+Printers are stored as **device profiles**. A profile bundles the transport,
+address, capability profile and calibrated tear-off gap, so switching printers
+is one choice rather than four. Profiles can be created, renamed and deleted
+from the connection bar, and devices are listed by name rather than by MAC
+address or `/dev` path.
+
+Printer capabilities come from `src/config/data/printer_profiles.json`, which
+follows the [escpos-printer-db](https://github.com/receipt-print-hq/escpos-printer-db)
+schema, so profiles are portable to python-escpos and escpos-php. Ships
+profiles for generic 58mm, generic 80mm, NT-5890K and the Core Innovation
+CTP-500.
 
 ### User Interface
 
@@ -100,6 +119,12 @@ pip install -r requirements.txt
 ```
 
 ## Requirements
+
+Python 3.10+, a Bluetooth adapter (for the Bluetooth transport), BlueZ, and
+tkinter. `matplotlib` is optional and only needed for LaTeX math in the
+Markdown tab.
+
+## Requirements (detail)
 
 - Linux (or Windows with WSL2)
 - Python 3.10 or higher
@@ -493,10 +518,18 @@ Contributions are welcome! Please feel free to submit issues or pull requests.
 - [CTP500PrinterApp](https://github.com/thirtythreedown/CTP500PrinterApp) - Original project by ThirtyThreeDown
 - [CorePrint-print-server](https://github.com/voidsshadows/CorePrint-print-server) - Minimal Python implementation
 
+## Related Projects (this fork)
+
+- [escpos-printer-db](https://github.com/receipt-print-hq/escpos-printer-db) - printer capability schema (CC BY 4.0)
+- [python-escpos](https://github.com/python-escpos/python-escpos) - reference for the ESC/POS command encodings
+
 ## TODO
 
+- [x] Markdown support
+- [x] LaTeX math support (via matplotlib mathtext; MathML deliberately out of
+      scope - no usable pure-Python renderer exists)
+- [x] Various bug fixes - see `doc/FORK-CHANGES.md`
+- [ ] Refactor out duplicate code (render/process/print paths still repeat
+      across the text, image, template and calendar frames)
 - [ ] Create executable binary
-- [ ] Various bug fixes
-- [ ] Refactor out duplicate code
-- [ ] Markdown support
-- [ ] Add LaTeX or MathML support
+- [ ] Verify the CTP-500 vendor command sequences on real CTP-500 hardware
