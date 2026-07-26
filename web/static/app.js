@@ -179,13 +179,19 @@ function initTabs() {
   });
 }
 
+const VIEW_KEY = 'tp.view';
+
 function showView(name) {
+  if (!$(`view-${name}`)) name = 'compose';
   document.querySelectorAll('.tab').forEach((tab) => {
     tab.setAttribute('aria-selected', String(tab.dataset.view === name));
   });
   document.querySelectorAll('.view').forEach((view) => {
     view.hidden = view.id !== `view-${name}`;
   });
+  // where you were is where you meant to be: a reload while setting up a
+  // label should not drop you back in the editor
+  remember(VIEW_KEY, name);
   if (name === 'compose') $('editor').focus();
   if (name === 'todos') refreshTodoPreview();
   if (name === 'calendar') refreshCalendar();
@@ -1667,19 +1673,20 @@ function setLength(dots) {
 }
 
 /* Turning the preview is a way of looking at it, not a property of the page,
- * so it is never stored and never reaches the printer. */
-function setTurned(on) {
-  const wrap = document.querySelector('.preview .paper-wrap');
-  const button = $('turnToRead');
+ * so it is never stored and never reaches the printer. Both panes that can
+ * compose along the roll use these, told which preview they mean. */
+function setTurned(on, image = 'preview', control = 'turnToRead') {
+  const wrap = $(image)?.closest('.paper-wrap');
+  const button = $(control);
   if (!wrap) return;
   wrap.classList.toggle('turned', on);
   if (button) button.setAttribute('aria-pressed', String(on));
-  sizeTurnedWrap();
+  sizeTurnedWrap(image);
 }
 
-function sizeTurnedWrap() {
-  const wrap = document.querySelector('.preview .paper-wrap');
-  const img = $('preview');
+function sizeTurnedWrap(image = 'preview') {
+  const img = $(image);
+  const wrap = img?.closest('.paper-wrap');
   if (!wrap || !img || !img.naturalWidth) return;
 
   if (!wrap.classList.contains('turned')) {
@@ -1763,7 +1770,7 @@ async function loadFonts() {
   const data = await api('/api/fonts');
   fontList = data.fonts || [];
 
-  ['fontFamily', 'fontQuick', 'presetFont'].forEach((id) => {
+  ['fontFamily', 'fontQuick', 'presetFont', 'todoFont'].forEach((id) => {
     const select = $(id);
     if (!select) return;
     select.innerHTML = '';
@@ -1821,6 +1828,10 @@ async function renderInto(key, text, img, meta, options) {
         if ($('trimWarning')) $('trimWarning').hidden = !trimmed;
         sizeTurnedWrap();
       }
+      if (key === 'todos') {
+        if ($('todoTrimWarning')) $('todoTrimWarning').hidden = !trimmed;
+        sizeTurnedWrap('todoPreview');
+      }
     };
   } catch (error) {
     meta.textContent = 'preview failed';
@@ -1837,14 +1848,101 @@ function debounce(key, fn, wait = 260) {
 const refreshPreview = () => renderInto('compose', editorMarkdown(), $('preview'), $('previewMeta'));
 const schedulePreview = () => debounce('compose', refreshPreview);
 
-/* Direction is a property of the document being composed, not of the printer,
- * so the panes that write their own document keep their own: a to-do list is
- * always set across the roll, whatever Compose is doing. */
-const acrossOptions = () => ({ ...renderOptions(), orientation: 'portrait' });
+/* Direction is a property of the document being composed rather than of the
+ * printer, so each pane that writes its own document keeps its own. A list is
+ * usually set across the roll, but two items printed large down the length of
+ * the paper is a different and useful thing, so the choice is offered where
+ * the list is, and remembered separately from Compose. */
+const TODO_ORIENTATION_KEY = 'tp.todoOrientation';
+const TODO_LENGTH_KEY = 'tp.todoLength';
+const TODO_SIZE_KEY = 'tp.todoSize';
+const TODO_FONT_KEY = 'tp.todoFont';
+
+const todoDirection = () => localStorage.getItem(TODO_ORIENTATION_KEY) || 'portrait';
+const todoIsAlong = () => todoDirection() === 'landscape';
+
+/* The list has its own face and size as well as its own direction. Two items
+ * printed large down the roll want 60 point type; the same list across the
+ * roll wants 24. Neither is what Compose is set to, and having to change
+ * Compose to print a list would be a strange way round. Empty means follow
+ * Compose, which is what most lists want. */
+function todoOptions() {
+  const options = { ...renderOptions(), orientation: todoDirection() };
+  const font = localStorage.getItem(TODO_FONT_KEY);
+  const size = Number(localStorage.getItem(TODO_SIZE_KEY));
+  if (font) options.font = font;
+  if (size) options.size = size;
+  if (todoIsAlong()) {
+    options.page_length = Number(localStorage.getItem(TODO_LENGTH_KEY)) || 1200;
+  }
+  return options;
+}
+
+function setTodoDirection(value) {
+  localStorage.setItem(TODO_ORIENTATION_KEY, value);
+  document.querySelectorAll('[data-todo-direction]').forEach((button) => {
+    button.setAttribute('aria-pressed', String(button.dataset.todoDirection === value));
+  });
+  const along = value === 'landscape';
+  $('view-todos')?.classList.toggle('stacked', along);
+  if ($('todoAlongTools')) $('todoAlongTools').hidden = !along;
+  setTurned(along, 'todoPreview', 'todoTurnToRead');
+  refreshTodoPreview();
+}
+
+function setTodoLength(dots) {
+  const bounded = Math.max(384, Math.min(4000, Math.round(dots)));
+  localStorage.setItem(TODO_LENGTH_KEY, String(bounded));
+  if ($('todoLength')) $('todoLength').value = toMm(bounded);
+  refreshTodoPreview();
+}
+
+function initTodoDirection() {
+  document.querySelectorAll('[data-todo-direction]').forEach((button) => {
+    button.addEventListener('click', () => setTodoDirection(button.dataset.todoDirection));
+  });
+  $('todoLength')?.addEventListener('change', () =>
+    setTodoLength(toDots(Number($('todoLength').value) || 150)));
+  $('todoSize')?.addEventListener('change', () => {
+    const size = Math.max(8, Math.min(120, Number($('todoSize').value) || 24));
+    localStorage.setItem(TODO_SIZE_KEY, String(size));
+    $('todoSize').value = size;
+    refreshTodoPreview();
+  });
+  $('todoFont')?.addEventListener('change', () => {
+    localStorage.setItem(TODO_FONT_KEY, $('todoFont').value);
+    refreshTodoPreview();
+  });
+  $('todoTypeReset')?.addEventListener('click', () => {
+    localStorage.removeItem(TODO_FONT_KEY);
+    localStorage.removeItem(TODO_SIZE_KEY);
+    showTodoType();
+    refreshTodoPreview();
+  });
+  $('todoTurnToRead')?.addEventListener('click', () =>
+    setTurned($('todoTurnToRead').getAttribute('aria-pressed') !== 'true',
+              'todoPreview', 'todoTurnToRead'));
+
+  showTodoType();
+  setTodoLength(Number(localStorage.getItem(TODO_LENGTH_KEY)) || 1200);
+  setTodoDirection(todoDirection());
+}
+
+/* what the fields say when nothing of the list's own is set: whatever Compose
+ * is using, since that is what will be printed */
+function showTodoType() {
+  const font = $('todoFont');
+  const size = $('todoSize');
+  if (font) font.value = localStorage.getItem(TODO_FONT_KEY) || currentFont();
+  if (size) {
+    size.value = Number(localStorage.getItem(TODO_SIZE_KEY))
+      || Number($('fontSize')?.value) || 24;
+  }
+}
 
 const refreshTodoPreview = () =>
   renderInto('todos', todosAsMarkdown(), $('todoPreview'), $('todoPreviewMeta'),
-             acrossOptions());
+             todoOptions());
 const scheduleTodoPreview = () => debounce('todos', refreshTodoPreview);
 
 /* -------------------------------------------------------------- connection */
@@ -2062,9 +2160,9 @@ function renderPresets() {
           <div class="sub"></div>
         </div>
         <span class="spacer"></span>
-        <button class="iconbtn" data-act="open">Open</button>
-        <button class="iconbtn" data-act="edit">Edit</button>
-        <button class="iconbtn" data-act="print">Print</button>`;
+        ${icon('open', 'Open in Compose')}
+        ${icon('edit', 'Edit this preset')}
+        ${icon('print', 'Print it now')}`;
       li.querySelector('.name').textContent = preset.name;
       li.querySelector('.sub').textContent = bits.join(' · ');
 
@@ -2931,6 +3029,27 @@ async function loadTodos() {
   renderTodos();
 }
 
+/* ------------------------------------------------------------------ icons */
+/* A row of small buttons reads faster as shapes than as words, and stays the
+ * same width in every language. Drawn rather than typed: an emoji is a font
+ * question and renders differently on every machine. Each one keeps a label
+ * for anything that is not looking at it. */
+const ICON_PATHS = {
+  edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+  delete: '<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/>',
+  save: '<path d="M20 6 9 17l-5-5"/>',
+  cancel: '<path d="M18 6 6 18"/><path d="M6 6l12 12"/>',
+  open: '<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M21 14v7H3V3h7"/>',
+  print: '<path d="M6 9V2h12v7"/><rect x="2" y="9" width="20" height="8" rx="2"/><path d="M6 14h12v8H6z"/>',
+};
+
+function icon(name, label) {
+  return `<button class="iconbtn${name === 'delete' ? ' del' : ''}" data-act="${name}"
+      title="${label}" aria-label="${label}"><svg viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" stroke-width="2" stroke-linecap="round"
+      stroke-linejoin="round" aria-hidden="true">${ICON_PATHS[name]}</svg></button>`;
+}
+
 function renderTodos() {
   const list = $('todoList');
   list.innerHTML = '';
@@ -2945,31 +3064,88 @@ function renderTodos() {
   }
 
   state.todos.forEach((todo) => {
-    const li = document.createElement('li');
-    li.className = `item${todo.done ? ' done' : ''}`;
-    li.innerHTML = `
-      <input type="checkbox" ${todo.done ? 'checked' : ''} aria-label="Done">
-      <div class="name"></div>
-      <span class="spacer"></span>
-      <button class="iconbtn del" data-act="delete">Delete</button>`;
-    li.querySelector('.name').textContent = todo.text;
+    list.append(todo.id === editingTodo ? todoEditRow(todo) : todoRow(todo));
+  });
+  // typing into the item that is being edited, rather than at the end of the list
+  $('todoList').querySelector('[data-field="text"]')?.focus();
+}
 
-    li.querySelector('input').addEventListener('change', async (event) => {
+/* Which item is open for editing, if any. One at a time: a list where every
+ * line is a text box is a form, not a list. */
+let editingTodo = null;
+
+function todoRow(todo) {
+  const li = document.createElement('li');
+  li.className = `item${todo.done ? ' done' : ''}`;
+  li.innerHTML = `
+    <input type="checkbox" ${todo.done ? 'checked' : ''} aria-label="Done">
+    <div class="name"></div>
+    <span class="spacer"></span>
+    ${icon('edit', 'Edit this item')}
+    ${icon('delete', 'Delete this item')}`;
+  li.querySelector('.name').textContent = todo.text;
+
+  li.querySelector('input').addEventListener('change', async (event) => {
+    const data = await api(`/api/todos/${todo.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ done: event.target.checked }),
+    });
+    state.todos = data.todos;
+    renderTodos();
+  });
+  // the text itself is the obvious thing to click when you want to change it
+  li.querySelector('.name').addEventListener('click', () => {
+    editingTodo = todo.id;
+    renderTodos();
+  });
+  li.querySelector('[data-act="edit"]').addEventListener('click', () => {
+    editingTodo = todo.id;
+    renderTodos();
+  });
+  li.querySelector('[data-act="delete"]').addEventListener('click', async () => {
+    const data = await api(`/api/todos/${todo.id}`, { method: 'DELETE' });
+    state.todos = data.todos;
+    renderTodos();
+  });
+  return li;
+}
+
+/* The same line with its text in a field: Enter or Save keeps the change,
+ * Escape or the cross leaves it alone. Nothing is written until one of those
+ * happens, so an abandoned edit costs nothing. */
+function todoEditRow(todo) {
+  const li = document.createElement('li');
+  li.className = 'item editing';
+  li.innerHTML = `
+    <input class="control grow" data-field="text" aria-label="Item text">
+    ${icon('save', 'Keep this change')}
+    ${icon('cancel', 'Leave it as it was')}`;
+  const field = li.querySelector('[data-field="text"]');
+  field.value = todo.text;
+
+  const close = () => { editingTodo = null; renderTodos(); };
+  const save = async () => {
+    const text = field.value.trim();
+    if (!text || text === todo.text) { close(); return; }
+    try {
       const data = await api(`/api/todos/${todo.id}`, {
         method: 'PATCH',
-        body: JSON.stringify({ done: event.target.checked }),
+        body: JSON.stringify({ text, done: todo.done }),
       });
       state.todos = data.todos;
-      renderTodos();
-    });
-    li.querySelector('[data-act="delete"]').addEventListener('click', async () => {
-      const data = await api(`/api/todos/${todo.id}`, { method: 'DELETE' });
-      state.todos = data.todos;
-      renderTodos();
-    });
+    } catch (error) {
+      toast(`Could not save that: ${error.message}`, true);
+    }
+    close();
+  };
 
-    list.append(li);
+  field.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') { event.preventDefault(); save(); }
+    if (event.key === 'Escape') { event.preventDefault(); close(); }
   });
+  li.querySelector('[data-act="save"]').addEventListener('click', save);
+  li.querySelector('[data-act="cancel"]').addEventListener('click', close);
+  return li;
 }
 
 const TODO_TITLE_KEY = 'tp.todoTitle';
@@ -3034,7 +3210,7 @@ function initTodos() {
 
   $('printTodosBtn').addEventListener('click', () => {
     if (!state.todos.length) { toast('Nothing to print', true); return; }
-    printText(todosAsMarkdown(), 'Printed to-do list', acrossOptions());
+    printText(todosAsMarkdown(), 'Printed to-do list', todoOptions());
   });
 
   $('todoToPresetBtn').addEventListener('click', () => {
@@ -3067,8 +3243,8 @@ function renderDevices(profiles) {
         <div class="sub"></div>
       </div>
       <span class="spacer"></span>
-      <button class="iconbtn" data-act="edit">Edit</button>
-      <button class="iconbtn del" data-act="delete">Remove</button>`;
+      ${icon('edit', 'Edit this device')}
+      ${icon('delete', 'Remove this device')}`;
     li.querySelector('.name').textContent = profile.name;
     li.querySelector('.sub').textContent =
       `${profile.transport} - ${profile.address} - tear ${profile.tearGapMm} mm`;
@@ -3260,6 +3436,7 @@ async function boot() {
   initToolbar();
   initConnection();
   initTodos();
+  initTodoDirection();
   initSettings();
   initFontControls();
   initOrientation();
@@ -3283,6 +3460,9 @@ async function boot() {
     await refreshState();
     await Promise.all([loadFonts(), loadDitherModes(), loadPresets(), loadTodos(),
                        loadTemplates(), loadSavedLabels()]);
+    // the list's font field is filled from the same list as everything else,
+    // so it can only be set once that list has arrived
+    showTodoType();
   } catch (error) {
     toast(`Could not reach the server: ${error.message}`, true);
   }
@@ -3291,6 +3471,10 @@ async function boot() {
     setEditorMarkdown('# Groceries\nMilk and eggs.\n- bread\n- butter\n> dont forget the receipt');
   }
   refreshPreview();
+
+  // back to whichever pane was open, once everything it needs has loaded
+  const last = recall(VIEW_KEY);
+  if (last && last !== 'compose') showView(last);
 
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(() => {});

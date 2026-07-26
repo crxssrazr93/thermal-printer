@@ -310,11 +310,20 @@ select.control.slim{padding-right:26px}
 .item .sub{font-size:11.5px;color:var(--faint)}
 .item .spacer{flex:1}
 .item.done .name{text-decoration:line-through;color:var(--faint)}
+/* the text is the handle for editing it, so it says so under the pointer */
+.item .name{cursor:text}
+.item .name:hover{color:var(--accent)}
+.item.editing{gap:8px}
+.item.editing .control{min-height:32px;padding:5px 9px}
 .item input[type="checkbox"]{width:17px;height:17px;accent-color:var(--accent);cursor:pointer}
 .item .iconbtn{
   padding:5px 9px;color:var(--muted);border-radius:var(--radius-sm);font-size:12px;
   border:var(--border) solid var(--line);background:var(--panel);
 }
+/* an icon button is square and the icon sits in the middle of it, so a row of
+   them lines up whatever each one happens to draw */
+.item .iconbtn:has(svg){display:inline-grid;place-items:center;width:30px;height:30px;padding:0}
+.item .iconbtn svg{width:15px;height:15px;display:block}
 .item .iconbtn:hover{color:var(--ink);border-color:var(--accent)}
 .item .iconbtn.del:hover{color:var(--danger)}
 .empty{padding:22px 14px;text-align:center;color:var(--faint);font-size:13px}

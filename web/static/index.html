@@ -265,6 +265,18 @@
           <button class="btn" type="submit">Add</button>
         </form>
 
+        <div class="paper-note" id="todoType">
+          <label class="slider" for="todoFont">Font
+            <select id="todoFont" class="control slim"></select>
+          </label>
+          <label class="slider" for="todoSize">Size
+            <input id="todoSize" class="control slim narrow" type="number"
+                   min="8" max="120" step="1" value="24">
+          </label>
+          <button type="button" class="tool" id="todoTypeReset"
+                  title="Use whatever Compose is set to">Match Compose</button>
+        </div>
+
         <ul class="list scroll" id="todoList"></ul>
 
         <div class="actions">
@@ -275,6 +287,18 @@
       <aside class="panel preview">
         <div class="panel-head">
           <h2>Preview</h2>
+          <!-- a list has its own direction: a couple of items printed big down
+               the roll is a different thing from a list printed across it -->
+          <div class="segmented" role="group" aria-label="Print direction">
+            <button type="button" class="seg" data-todo-direction="portrait"
+                    aria-pressed="true" title="Across the roll: lines run across the paper, the usual way">
+              <span aria-hidden="true">A&rarr;B</span>
+              <span class="sr-only">Across the roll</span></button>
+            <button type="button" class="seg" data-todo-direction="landscape"
+                    aria-pressed="false" title="Along the roll: lines run down the length of the paper">
+              <span aria-hidden="true">A&darr;B</span>
+              <span class="sr-only">Along the roll</span></button>
+          </div>
           <span class="head-meta" id="todoPreviewMeta">&ndash;</span>
         </div>
         <div class="paper-stage">
@@ -282,6 +306,18 @@
             <img id="todoPreview" class="paper" alt="To-do list print preview">
           </div>
         </div>
+        <div class="paper-note" id="todoAlongTools" hidden>
+          <label class="slider" for="todoLength">Strip up to
+            <input id="todoLength" class="control slim" type="number"
+                   min="48" max="500" step="5" value="150">
+            <span class="unit">mm</span>
+          </label>
+          <button type="button" class="tool" id="todoTurnToRead" aria-pressed="false"
+                  title="Turn the preview upright so you can read it">Turn to read</button>
+        </div>
+        <p class="warn" id="todoTrimWarning" hidden>
+          Too tall for this direction. The head is 48 mm deep, so anything past
+          that has been cut off rather than shrunk.</p>
         <div class="actions">
           <button id="printTodosBtn" class="btn primary">Print list</button>
           <button id="todoToPresetBtn" class="btn">Save as preset</button>

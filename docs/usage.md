@@ -178,9 +178,15 @@ survive being saved and reopened.
 
 ## To-dos
 
-A list that persists, with its own preview and one tap to print. It is always
-set across the roll, whatever Compose is doing, since a checklist that reads
-sideways is no use to anyone.
+A list that persists, with its own preview and one tap to print. Click an item,
+or its pencil, to change the wording: the tick keeps it, the cross or Escape
+leaves it alone, and nothing is written until you say so.
+
+It keeps its own **direction, font and size**, separately from Compose. Across
+the roll is the usual way for a list. Along it is for the other case: one or
+two things printed large down the length of the paper, big enough to read from
+across the room and stuck where you cannot miss them. Match Compose puts the
+face and size back to whatever the editor is using.
 
 ## Labels
 
