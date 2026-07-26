@@ -11,6 +11,7 @@ from ..config.defaults import (
     DEFAULT_TEXT_ALIGN,
     DEFAULT_PRINTER_WIDTH,
 )
+from ..config.printer_profile import get_printer_width
 from ..utils.font_manager import get_font_manager
 from ..utils.unicode_text_renderer import get_unicode_renderer
 
@@ -88,10 +89,10 @@ class LabelRenderer:
     def __init__(
         self,
         template: Optional[Image.Image] = None,
-        target_width: int = DEFAULT_PRINTER_WIDTH,
+        target_width: Optional[int] = None,
     ):
         self._template: Optional[Image.Image] = template
-        self._target_width = target_width
+        self._target_width = target_width if target_width is not None else get_printer_width()
         self._font_manager = get_font_manager()
         self._unicode_renderer = get_unicode_renderer()
 

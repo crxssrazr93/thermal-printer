@@ -8,6 +8,13 @@ from dataclasses import dataclass
 from enum import Enum
 
 from .protocol import PrinterProtocol
+from .transport import (
+    UsbTransport,
+    CupsTransport,
+    TransportError,
+    list_usb_printers,
+    list_cups_queues,
+)
 from ..config.defaults import (
     RECONNECT_MAX_ATTEMPTS,
     RECONNECT_BACKOFF_BASE,
@@ -244,6 +251,75 @@ class PrinterConnection:
             self._set_state(ConnectionState.ERROR)
             raise ConnectionError(f"Unexpected error connecting: {e}")
 
+    def connect_usb(self, device_path: Optional[str] = None) -> bool:
+        """Connect over USB instead of Bluetooth.
+
+        Uses the same send path as RFCOMM - only the underlying transport
+        differs. With no device_path the first /dev/usb/lp* is used.
+        """
+        if self.is_connected:
+            raise AlreadyConnectedError("Already connected to a printer")
+
+        if device_path is None:
+            candidates = list_usb_printers()
+            if not candidates:
+                self._set_state(ConnectionState.ERROR)
+                raise ConnectionError(
+                    "No USB printer found at /dev/usb/lp* - check the cable and power"
+                )
+            device_path = candidates[0]
+
+        self._set_state(ConnectionState.CONNECTING)
+        self._mac_address = None
+        self._device_name = device_path
+
+        try:
+            transport = UsbTransport(device_path)
+            transport.connect()
+            self._socket = transport
+            self._set_state(ConnectionState.CONNECTED)
+            self._reconnect_attempts = 0
+            self._last_successful_connection = time.time()
+            return True
+        except TransportError as e:
+            self._cleanup_socket()
+            self._set_state(ConnectionState.ERROR)
+            raise ConnectionError(str(e))
+        except Exception as e:
+            self._cleanup_socket()
+            self._set_state(ConnectionState.ERROR)
+            raise ConnectionError(f"Unexpected error connecting over USB: {e}")
+
+    def connect_cups(self, queue_name: str) -> bool:
+        """Spool to an existing CUPS queue rather than talking to a device."""
+        if self.is_connected:
+            raise AlreadyConnectedError("Already connected to a printer")
+
+        self._set_state(ConnectionState.CONNECTING)
+        self._mac_address = None
+        self._device_name = queue_name
+
+        try:
+            transport = CupsTransport(queue_name)
+            transport.connect()
+            self._socket = transport
+            self._set_state(ConnectionState.CONNECTED)
+            self._reconnect_attempts = 0
+            self._last_successful_connection = time.time()
+            return True
+        except TransportError as e:
+            self._cleanup_socket()
+            self._set_state(ConnectionState.ERROR)
+            raise ConnectionError(str(e))
+
+    @staticmethod
+    def list_usb_devices():
+        return list_usb_printers()
+
+    @staticmethod
+    def list_cups_destinations():
+        return list_cups_queues()
+
     def disconnect(self) -> None:
         if not self.is_connected:
             raise NotConnectedError("Not connected to any printer")
@@ -340,8 +416,14 @@ class PrinterConnection:
         if not self._socket:
             raise NotConnectedError("Not connected to printer")
 
+        request = PrinterProtocol.CMD_STATUS_REQUEST
+        if not request:
+            # profile defines no status query - reporting empty beats blocking
+            # in recv() forever waiting for a reply that will never arrive
+            return b""
+
         try:
-            self._socket.send(PrinterProtocol.CMD_STATUS_REQUEST)
+            self._socket.send(request)
             return self._socket.recv(PrinterProtocol.STATUS_RESPONSE_LENGTH)
         except socket.error as e:
             raise StatusError(f"Failed to get printer status: {e}")
@@ -375,10 +457,14 @@ class PrinterConnection:
         self.send_raw(PrinterProtocol.CMD_INITIALIZE)
 
     def start_print(self) -> None:
-        self.send_raw(PrinterProtocol.CMD_START_PRINT)
+        command = PrinterProtocol.CMD_START_PRINT
+        if command:
+            self.send_raw(command)
 
     def end_print(self) -> None:
-        self.send_raw(PrinterProtocol.CMD_END_PRINT)
+        command = PrinterProtocol.CMD_END_PRINT
+        if command:
+            self.send_raw(command)
 
     def send_image(self, image_data: bytes) -> None:
         self.send_raw(image_data)

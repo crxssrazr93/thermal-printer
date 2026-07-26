@@ -1,0 +1,100 @@
+{
+  "_comment": [
+    "Printer capability profiles.",
+    "",
+    "The schema follows escpos-printer-db (https://github.com/receipt-print-hq/escpos-printer-db),",
+    "which is shared by python-escpos and escpos-php, so profiles are portable between projects.",
+    "Upstream data is licensed CC BY 4.0 - see doc/CREDITS.md for attribution.",
+    "",
+    "The 'commands' block is a local extension. escpos-printer-db assumes standards-compliant",
+    "printers, but some units need vendor byte sequences around a job. Empty strings mean",
+    "'send nothing', which is correct for any standards-compliant printer.",
+    "Values are hex strings so this file stays plain JSON."
+  ],
+  "profiles": {
+    "generic-58": {
+      "name": "Generic 58mm ESC/POS",
+      "vendor": "Generic",
+      "media": {
+        "dpi": 203,
+        "width": { "mm": 57.5, "pixels": 384 }
+      },
+      "features": {
+        "bitImageRaster": true,
+        "qrCode": true,
+        "barcodeA": true,
+        "paperFullCut": false,
+        "paperPartCut": false
+      },
+      "commands": {
+        "start_print": "",
+        "end_print": "",
+        "status_request": ""
+      },
+      "notes": "Standards-compliant 58mm thermal printer. Safe default for most unbranded units, including the MPT-II."
+    },
+    "generic-80": {
+      "name": "Generic 80mm ESC/POS",
+      "vendor": "Generic",
+      "media": {
+        "dpi": 203,
+        "width": { "mm": 80, "pixels": 576 }
+      },
+      "features": {
+        "bitImageRaster": true,
+        "qrCode": true,
+        "barcodeA": true,
+        "paperFullCut": true,
+        "paperPartCut": true
+      },
+      "commands": {
+        "start_print": "",
+        "end_print": "",
+        "status_request": ""
+      },
+      "notes": "Standards-compliant 80mm receipt printer. Most desktop POS units with an auto-cutter."
+    },
+    "ctp500": {
+      "name": "Core Innovation CTP-500",
+      "vendor": "Core Innovation",
+      "media": {
+        "dpi": 203,
+        "width": { "mm": 57.5, "pixels": 384 }
+      },
+      "features": {
+        "bitImageRaster": true,
+        "qrCode": false,
+        "barcodeA": false,
+        "paperFullCut": false,
+        "paperPartCut": false
+      },
+      "commands": {
+        "start_print": "1d49f019",
+        "end_print": "9a",
+        "status_request": "1e4703"
+      },
+      "notes": "Original target device. Needs vendor sequences around each job; these are not portable to other printers. Native QR/barcode are disabled because the firmware is not known to implement them - content is rasterised instead."
+    },
+    "nt-5890k": {
+      "name": "NT-5890K",
+      "vendor": "Generic",
+      "media": {
+        "dpi": 203,
+        "width": { "mm": 57.5, "pixels": 384 }
+      },
+      "features": {
+        "bitImageRaster": true,
+        "qrCode": true,
+        "barcodeA": true,
+        "paperFullCut": false,
+        "paperPartCut": false
+      },
+      "commands": {
+        "start_print": "",
+        "end_print": "",
+        "status_request": ""
+      },
+      "notes": "Capabilities from escpos-printer-db. Common 58mm portable/handheld class."
+    }
+  }
+}

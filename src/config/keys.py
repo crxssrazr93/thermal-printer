@@ -3,6 +3,7 @@ class SettingsKeys:
         MAC_ADDRESS = "printer.mac_address"
         DEVICE_NAME = "printer.device_name"
         WIDTH = "printer.width"
+        PROFILE = "printer.profile"
         RFCOMM_CHANNEL = "printer.rfcomm_channel"
 
     class Text:

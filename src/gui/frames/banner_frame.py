@@ -11,6 +11,7 @@ from ...config.defaults import (
     TEXT_ALIGN_CENTER,
     TEXT_ALIGN_RIGHT,
 )
+from ...config.printer_profile import get_printer_width
 
 
 class BannerFrame(BaseTextFrame):
@@ -42,7 +43,7 @@ class BannerFrame(BaseTextFrame):
 
     def _apply_vertical_alignment(self, img: Image.Image) -> Image.Image:
         # printer width becomes height after 90 degree rotation
-        target_height = DEFAULT_PRINTER_WIDTH
+        target_height = get_printer_width()
         current_height = img.height
 
         if current_height >= target_height:

@@ -27,3 +27,6 @@ htmlcov/
 # OS files
 .DS_Store
 Thumbs.db
+
+# local runtime config (contains device MAC) - use config.example.yaml as the template
+config.yaml

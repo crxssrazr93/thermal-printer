@@ -2,6 +2,7 @@ printer:
   mac_address: ''
   device_name: ''
   width: 384
+  profile: ctp500
   rfcomm_channel: 1
 text:
   font_family: DejaVu Sans Mono

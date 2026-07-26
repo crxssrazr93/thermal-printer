@@ -12,13 +12,14 @@ from ..config.defaults import (
     TEXT_ALIGN_RIGHT,
 )
 from ..core.protocol import PrinterProtocol
+from ..config.printer_profile import get_printer_width
 from ..utils.font_manager import get_font_manager
 
 
 class TextRenderer:
     def __init__(
         self,
-        width: int = PrinterProtocol.PRINTER_WIDTH,
+        width: Optional[int] = None,
         font_family: str = DEFAULT_FONT_FAMILY,
         font_size: int = DEFAULT_FONT_SIZE,
         bold: bool = False,
@@ -26,7 +27,7 @@ class TextRenderer:
         alignment: str = DEFAULT_TEXT_ALIGN,
         wrap: bool = True,
     ):
-        self.width = width
+        self.width = width if width is not None else get_printer_width()
         self.font_family = font_family
         self.font_size = font_size
         self.bold = bold

@@ -1,5 +1,19 @@
 # Thermal Printer
 
+> **This is a fork** of [n3m0-22/thermal-printer](https://github.com/n3m0-22/thermal-printer).
+>
+> It generalises the app beyond the Core Innovation CTP-500: printer capability
+> profiles in the [escpos-printer-db](https://github.com/receipt-print-hq/escpos-printer-db)
+> schema, USB and CUPS transports alongside Bluetooth, native QR/barcode/paper-cut,
+> and a responsive layout that no longer clips controls when the window is narrow.
+>
+> Full list: [`doc/FORK-CHANGES.md`](doc/FORK-CHANGES.md) ·
+> Attribution: [`doc/CREDITS.md`](doc/CREDITS.md)
+>
+> Tested on a 58mm MPT-II over both Bluetooth RFCOMM and USB.
+
+
+
 A GUI app for controlling Bluetooth thermal printers on Linux. Currently supports the Core Innovation CTP-500, with more printers planned.
 
 ![License](https://img.shields.io/badge/license-AGPL--3.0-blue)

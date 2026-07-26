@@ -7,6 +7,7 @@ from ...core.printer import PrinterConnection, ConnectionState, BluetoothDevice
 from ...config.keys import SettingsKeys
 from ...config.settings import get_settings
 from ...utils.validators import validate_mac_address, normalize_mac_address
+from ..widgets.flow_frame import FlowFrame
 
 if TYPE_CHECKING:
     from ...interfaces import SettingsService
@@ -44,20 +45,20 @@ class ConnectionFrame(ctk.CTkFrame):
         status_font = ctk.CTkFont(size=15, weight="bold")
 
         # single row with printer label mac entry buttons and status
-        row = ctk.CTkFrame(self, fg_color="transparent")
+        row = FlowFrame(self)
         row.pack(fill="x", padx=12, pady=10)
 
-        ctk.CTkLabel(
+        row.add(ctk.CTkLabel(
             row, text="MAC:",
             font=label_font
-        ).pack(side="left", padx=(0, 10))
+        ), gap=10)
 
         self.mac_entry = ctk.CTkEntry(
             row, placeholder_text="XX:XX:XX:XX:XX:XX",
             width=180, height=36,
             font=entry_font
         )
-        self.mac_entry.pack(side="left", padx=(0, 12))
+        row.add(self.mac_entry, gap=12)
 
         btn_width = 100
         btn_height = 36
@@ -68,7 +69,7 @@ class ConnectionFrame(ctk.CTkFrame):
             font=btn_font,
             command=self._on_scan_click
         )
-        self.scan_button.pack(side="left", padx=(0, 8))
+        row.add(self.scan_button, gap=8)
 
         self.connect_button = ctk.CTkButton(
             row, text="Connect",
@@ -76,7 +77,7 @@ class ConnectionFrame(ctk.CTkFrame):
             font=btn_font,
             command=self._on_connect_click
         )
-        self.connect_button.pack(side="left", padx=(0, 8))
+        row.add(self.connect_button, gap=8)
 
         self.disconnect_button = ctk.CTkButton(
             row, text="Disconnect",
@@ -85,7 +86,7 @@ class ConnectionFrame(ctk.CTkFrame):
             state="disabled",
             command=self._on_disconnect_click
         )
-        self.disconnect_button.pack(side="left", padx=(0, 12))
+        row.add(self.disconnect_button, gap=12)
 
         # device name label (next to disconnect button)
         self.printer_label = ctk.CTkLabel(
@@ -93,21 +94,21 @@ class ConnectionFrame(ctk.CTkFrame):
             font=label_font,
             text_color=("gray50", "gray50")
         )
-        self.printer_label.pack(side="left", padx=(0, 4))
+        row.add(self.printer_label, gap=4)
 
         self.device_name_label = ctk.CTkLabel(
             row, text="--",
             font=entry_font,
             text_color=("gray50", "gray50")
         )
-        self.device_name_label.pack(side="left", padx=(0, 15))
+        row.add(self.device_name_label, gap=15)
 
         self.status_label = ctk.CTkLabel(
             row, text="[ ] Disconnected",
             font=status_font,
             text_color=("gray50", "gray50")
         )
-        self.status_label.pack(side="right", padx=(15, 0))
+        row.add(self.status_label, gap=15)
 
     def _load_settings(self) -> None:
         mac = self._settings.get(SettingsKeys.Printer.MAC_ADDRESS, "")

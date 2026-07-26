@@ -24,6 +24,14 @@ from ...config.defaults import (
 from ...utils.font_manager import get_font_manager
 from ..widgets.font_selector import FontSelector
 from ...config.keys import SettingsKeys
+from ...config.printer_profile import (
+    load_profiles,
+    get_profile_labels,
+    get_profile_name,
+    get_printer_width,
+    get_printer_width_mm,
+    supports,
+)
 from ...config.settings import get_settings
 from ..dialogs.about_dialog import AboutDialog
 
@@ -284,7 +292,35 @@ class SettingsFrame(ctk.CTkScrollableFrame):
         self.unicode_font_selector.grid(row=14, column=1, pady=8, padx=10, sticky="w")
 
         info_frame = ctk.CTkFrame(self, fg_color="transparent")
-        info_frame.grid(row=15, column=0, columnspan=3, pady=(25, 10), padx=10, sticky="ew")
+        ctk.CTkLabel(
+            self, text="Printer",
+            font=section_font
+        ).grid(row=15, column=0, columnspan=3, pady=(20, 8), padx=10, sticky="w")
+
+        ctk.CTkLabel(self, text="Profile:", font=label_font).grid(
+            row=16, column=0, pady=8, padx=(20, 10), sticky="w")
+
+        self._profile_labels = get_profile_labels()
+        self._profile_keys = list(self._profile_labels.keys())
+        self.profile_var = ctk.StringVar(value=self._profile_labels[get_profile_name()])
+        self.profile_dropdown = ctk.CTkOptionMenu(
+            self,
+            values=list(self._profile_labels.values()),
+            variable=self.profile_var,
+            width=240, height=34,
+            font=label_font,
+            dynamic_resizing=False,
+            command=self._on_profile_change
+        )
+        self.profile_dropdown.grid(row=16, column=1, pady=8, padx=10, sticky="w")
+
+        self.profile_info_label = ctk.CTkLabel(
+            self, text="", font=label_font, text_color="gray", anchor="w"
+        )
+        self.profile_info_label.grid(row=16, column=2, pady=8, padx=5, sticky="w")
+        self._update_profile_info()
+
+        info_frame.grid(row=17, column=0, columnspan=3, pady=(25, 10), padx=10, sticky="ew")
 
         ctk.CTkLabel(
             info_frame,
@@ -294,7 +330,7 @@ class SettingsFrame(ctk.CTkScrollableFrame):
         ).pack(anchor="w")
 
         button_frame = ctk.CTkFrame(self, fg_color="transparent")
-        button_frame.grid(row=16, column=0, columnspan=3, pady=10, padx=10, sticky="ew")
+        button_frame.grid(row=18, column=0, columnspan=3, pady=10, padx=10, sticky="ew")
 
         self.reset_button = ctk.CTkButton(
             button_frame,
@@ -354,6 +390,42 @@ class SettingsFrame(ctk.CTkScrollableFrame):
         self._settings.set(SettingsKeys.Unicode.SHOW_FONT_SWITCH_POPUP, self.unicode_popup_var.get())
         self._settings.set(SettingsKeys.Unicode.PREFERRED_FONT, self.unicode_font_selector.get())
         self._settings.save()
+
+    def _on_profile_change(self, value=None) -> None:
+        label = self.profile_var.get()
+        selected = None
+        for key, text in self._profile_labels.items():
+            if text == label:
+                selected = key
+                break
+        if selected is None:
+            return
+
+        self._settings.set(SettingsKeys.Printer.PROFILE, selected)
+
+        # An explicit printer.width always wins over the profile, so without
+        # this the user could pick an 80mm profile and silently keep printing
+        # at 384 dots. Adopt the new profile's width on switch; it stays
+        # editable afterwards for hardware that does not match its profile.
+        try:
+            pixels = load_profiles()[selected]["media"]["width"]["pixels"]
+            self._settings.set(SettingsKeys.Printer.WIDTH, int(pixels))
+        except (KeyError, TypeError, ValueError):
+            pass
+
+        self._settings.save()
+        self._update_profile_info()
+        self._set_status(f"Printer profile: {label}")
+
+    def _update_profile_info(self) -> None:
+        width = get_printer_width()
+        mm = get_printer_width_mm()
+        cut = "cut" if supports("paperFullCut") else "no cut"
+        qr = "QR" if supports("qrCode") else "no QR"
+        mm_text = f"{mm:g}mm" if mm else "?"
+        self.profile_info_label.configure(
+            text=f"{width} dots / {mm_text} - {qr}, {cut}"
+        )
 
     def _on_appearance_change(self, value=None) -> None:
         self._apply_appearance()

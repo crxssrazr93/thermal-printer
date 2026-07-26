@@ -9,5 +9,6 @@ if [ ! -d "$VENV_PATH" ]; then
     exit 1
 fi
 
+cd "$SCRIPT_DIR"
 source "$VENV_PATH/bin/activate"
 python -m src.main "$@"

@@ -7,13 +7,13 @@ import calendar
 from PIL import Image, ImageDraw, ImageFont
 
 from ..core.protocol import PrinterProtocol
+from ..config.printer_profile import get_printer_width
 from ..utils.font_manager import get_font_manager
 
 
 class CalendarRenderer:
 
-    # thermal printer width
-    PRINTER_WIDTH = PrinterProtocol.PRINTER_WIDTH  # 384px
+    # thermal printer width - resolved from config at use time
 
     # calendar dimensions sized for 58mm thermal paper
     CELL_WIDTH = 54  # width of each day cell
@@ -116,7 +116,7 @@ class CalendarRenderer:
         row_height = 36
         note_area_height = 48  # extra space for notes doubled
 
-        width = self.PRINTER_WIDTH
+        width = get_printer_width()
         height = (
             self.HEADER_HEIGHT +
             (row_height + note_area_height) * 7 +

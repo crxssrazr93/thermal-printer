@@ -25,6 +25,7 @@ from ...processing.text_renderer import TextRenderer
 from ...processing.image_processor import ImageProcessor
 from ..widgets.preview_canvas import PreviewCanvas
 from ..widgets.font_selector import FontSelector
+from ..widgets.flow_frame import FlowFrame
 from ...utils.file_dialogs import open_file_dialog, save_file_dialog
 from ..dialogs.template_gallery import TemplateGallery
 from ...utils.unicode_detect import contains_special_unicode, find_unicode_font
@@ -112,25 +113,27 @@ class BaseTextFrame(ctk.CTkFrame):
         label_font = ctk.CTkFont(size=14, weight="bold")
         ctrl_font = ctk.CTkFont(size=14)
 
-        # font controls row
-        font_frame = ctk.CTkFrame(self, fg_color="transparent")
+        # font controls row - flows onto extra rows when the window is narrow
+        font_frame = FlowFrame(self)
         font_frame.pack(fill="x", padx=8, pady=(8, 4))
         self._setup_font_controls(font_frame)
 
         # alignment darkness and date row
-        options_frame = ctk.CTkFrame(self, fg_color="transparent")
+        options_frame = FlowFrame(self)
         options_frame.pack(fill="x", padx=8, pady=4)
 
-        ctk.CTkLabel(options_frame, text="Align:", font=label_font, width=50).pack(side="left", padx=(0, 5))
+        options_frame.add(
+            ctk.CTkLabel(options_frame, text="Align:", font=label_font, width=50), gap=5
+        )
 
         self.align_var = ctk.StringVar(value=TEXT_ALIGN_LEFT)
 
         for text, value in self._get_alignment_options():
-            ctk.CTkRadioButton(
+            options_frame.add(ctk.CTkRadioButton(
                 options_frame, text=text, variable=self.align_var,
                 value=value, command=self._on_alignment_change,
                 font=ctrl_font
-            ).pack(side="left", padx=(0, 8))
+            ), gap=8)
 
         # darkness controls
         self._setup_darkness_controls(options_frame)
@@ -142,7 +145,7 @@ class BaseTextFrame(ctk.CTkFrame):
             font=ctrl_font,
             command=self._on_text_change
         )
-        self.add_date_check.pack(side="left", padx=(15, 0))
+        options_frame.add(self.add_date_check)
 
         # pack buttons first to prevent resize hiding them
         button_wrapper = ctk.CTkFrame(self, fg_color="transparent", height=50)
@@ -236,7 +239,9 @@ class BaseTextFrame(ctk.CTkFrame):
         label_font = ctk.CTkFont(size=14, weight="bold")
         ctrl_font = ctk.CTkFont(size=14)
 
-        ctk.CTkLabel(parent_frame, text="Font:", font=label_font, width=50).pack(side="left", padx=(0, 5))
+        parent_frame.add(
+            ctk.CTkLabel(parent_frame, text="Font:", font=label_font, width=50), gap=5
+        )
 
         families = self._font_manager.get_available_families()
         if not families:
@@ -250,9 +255,11 @@ class BaseTextFrame(ctk.CTkFrame):
             width=240,
             height=36
         )
-        self.font_selector.pack(side="left", padx=(0, 20))
+        parent_frame.add(self.font_selector, gap=20)
 
-        ctk.CTkLabel(parent_frame, text="Size:", font=label_font).pack(side="left", padx=(0, 5))
+        parent_frame.add(
+            ctk.CTkLabel(parent_frame, text="Size:", font=label_font), gap=5
+        )
 
         self.font_size_var = ctk.IntVar(value=DEFAULT_FONT_SIZE)
         self.size_entry = ctk.CTkEntry(
@@ -262,39 +269,39 @@ class BaseTextFrame(ctk.CTkFrame):
             height=32,
             font=ctrl_font
         )
-        self.size_entry.pack(side="left", padx=(0, 4))
+        parent_frame.add(self.size_entry, gap=4)
         self.size_entry.bind("<Return>", lambda e: self._on_font_change())
         self.size_entry.bind("<FocusOut>", lambda e: self._on_font_change())
 
-        ctk.CTkButton(
+        parent_frame.add(ctk.CTkButton(
             parent_frame, text="-", width=36, height=32, font=ctrl_font,
             command=lambda: self._change_size(-2)
-        ).pack(side="left", padx=2)
+        ), gap=4)
 
-        ctk.CTkButton(
+        parent_frame.add(ctk.CTkButton(
             parent_frame, text="+", width=36, height=32, font=ctrl_font,
             command=lambda: self._change_size(2)
-        ).pack(side="left", padx=(2, 20))
+        ), gap=20)
 
         self.bold_var = ctk.BooleanVar(value=False)
         self.bold_button = ctk.CTkCheckBox(
             parent_frame, text="Bold", variable=self.bold_var,
             font=ctrl_font, command=self._on_font_change
         )
-        self.bold_button.pack(side="left", padx=(0, 5))
+        parent_frame.add(self.bold_button, gap=5)
 
         self.italic_var = ctk.BooleanVar(value=False)
         self.italic_button = ctk.CTkCheckBox(
             parent_frame, text="Italic", variable=self.italic_var,
             font=ctrl_font, command=self._on_font_change
         )
-        self.italic_button.pack(side="left", padx=(0, 10))
+        parent_frame.add(self.italic_button, gap=10)
 
         self.symbols_button = ctk.CTkButton(
             parent_frame, text="Symbols", width=70, height=32,
             font=ctrl_font, command=self._on_math_symbols
         )
-        self.symbols_button.pack(side="left")
+        parent_frame.add(self.symbols_button)
 
     def _on_font_change(self, *args) -> None:
         try:
@@ -347,17 +354,20 @@ class BaseTextFrame(ctk.CTkFrame):
         label_font = ctk.CTkFont(size=14, weight="bold")
         ctrl_font = ctk.CTkFont(size=14)
 
-        ctk.CTkLabel(parent_frame, text="Darkness:", font=label_font).pack(side="left", padx=(20, 5))
+        parent_frame.add_spacer(12)
+        parent_frame.add(
+            ctk.CTkLabel(parent_frame, text="Darkness:", font=label_font), gap=5
+        )
 
         self.darkness_var = ctk.DoubleVar(value=1.5)
         self.darkness_slider = ctk.CTkSlider(
             parent_frame, from_=0.3, to=3.0, variable=self.darkness_var,
             width=180, height=20, command=self._on_darkness_slider_change
         )
-        self.darkness_slider.pack(side="left", padx=(0, 5))
+        parent_frame.add(self.darkness_slider, gap=5)
 
         self.darkness_entry = ctk.CTkEntry(parent_frame, width=50, font=ctrl_font, justify="center")
-        self.darkness_entry.pack(side="left")
+        parent_frame.add(self.darkness_entry)
         self.darkness_entry.insert(0, "1.5")
         self.darkness_entry.bind("<Return>", self._on_darkness_entry_change)
         self.darkness_entry.bind("<FocusOut>", self._on_darkness_entry_change)

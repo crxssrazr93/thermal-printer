@@ -23,6 +23,7 @@ from ...config.keys import SettingsKeys
 from ...config.settings import get_settings
 from ...processing.image_processor import ImageProcessor
 from ..widgets.preview_canvas import PreviewCanvas
+from ..widgets.flow_frame import FlowFrame
 from ...utils.file_dialogs import open_file_dialog, save_file_dialog
 from ..dialogs.template_gallery import TemplateGallery
 
@@ -92,10 +93,12 @@ class ImageFrame(ctk.CTkFrame):
         button_frame.pack(fill="x", expand=True, pady=4)
 
         # brightness and contrast sliders
-        adjust_frame = ctk.CTkFrame(self, fg_color="transparent")
+        adjust_frame = FlowFrame(self)
         adjust_frame.pack(fill="x", padx=10, pady=5)
 
-        ctk.CTkLabel(adjust_frame, text="Brightness:", font=label_font, width=85, anchor="w").pack(side="left", padx=(0, 5))
+        adjust_frame.add(ctk.CTkLabel(
+            adjust_frame, text="Brightness:", font=label_font, width=85, anchor="w"
+        ), gap=5)
 
         self.brightness_var = ctk.DoubleVar(value=DEFAULT_BRIGHTNESS)
         self.brightness_slider = ctk.CTkSlider(
@@ -105,12 +108,14 @@ class ImageFrame(ctk.CTkFrame):
             width=180, height=20,
             command=self._on_adjustment_change
         )
-        self.brightness_slider.pack(side="left", padx=5)
+        adjust_frame.add(self.brightness_slider, gap=5)
 
         self.brightness_value = ctk.CTkLabel(adjust_frame, text="1.0", width=45, font=ctrl_font)
-        self.brightness_value.pack(side="left", padx=(0, 25))
+        adjust_frame.add(self.brightness_value, gap=25)
 
-        ctk.CTkLabel(adjust_frame, text="Contrast:", font=label_font, width=75).pack(side="left", padx=(0, 5))
+        adjust_frame.add(
+            ctk.CTkLabel(adjust_frame, text="Contrast:", font=label_font, width=75), gap=5
+        )
 
         self.contrast_var = ctk.DoubleVar(value=DEFAULT_CONTRAST)
         self.contrast_slider = ctk.CTkSlider(
@@ -120,16 +125,18 @@ class ImageFrame(ctk.CTkFrame):
             width=180, height=20,
             command=self._on_adjustment_change
         )
-        self.contrast_slider.pack(side="left", padx=5)
+        adjust_frame.add(self.contrast_slider, gap=5)
 
         self.contrast_value = ctk.CTkLabel(adjust_frame, text="1.0", width=45, font=ctrl_font)
-        self.contrast_value.pack(side="left")
+        adjust_frame.add(self.contrast_value)
 
         # dithering rotation invert options
-        options_frame = ctk.CTkFrame(self, fg_color="transparent")
+        options_frame = FlowFrame(self)
         options_frame.pack(fill="x", padx=10, pady=5)
 
-        ctk.CTkLabel(options_frame, text="Dithering:", font=label_font, width=85, anchor="w").pack(side="left", padx=(0, 5))
+        options_frame.add(ctk.CTkLabel(
+            options_frame, text="Dithering:", font=label_font, width=85, anchor="w"
+        ), gap=5)
 
         self.dither_var = ctk.StringVar(value=DEFAULT_DITHER_MODE)
         self.dither_dropdown = ctk.CTkOptionMenu(
@@ -141,9 +148,11 @@ class ImageFrame(ctk.CTkFrame):
             dynamic_resizing=False,
             command=self._on_option_change
         )
-        self.dither_dropdown.pack(side="left", padx=(0, 25))
+        options_frame.add(self.dither_dropdown, gap=25)
 
-        ctk.CTkLabel(options_frame, text="Rotation:", font=label_font, width=75).pack(side="left", padx=(0, 5))
+        options_frame.add(
+            ctk.CTkLabel(options_frame, text="Rotation:", font=label_font, width=75), gap=5
+        )
 
         rotation_values = [str(r) for r in ROTATION_OPTIONS]
         self.rotation_var = ctk.StringVar(value=str(DEFAULT_ROTATION))
@@ -156,7 +165,7 @@ class ImageFrame(ctk.CTkFrame):
             dynamic_resizing=False,
             command=self._on_option_change
         )
-        self.rotation_dropdown.pack(side="left", padx=(0, 25))
+        options_frame.add(self.rotation_dropdown, gap=25)
 
         self.invert_var = ctk.BooleanVar(value=False)
         self.invert_checkbox = ctk.CTkCheckBox(
@@ -166,7 +175,7 @@ class ImageFrame(ctk.CTkFrame):
             font=ctrl_font,
             command=self._on_option_change
         )
-        self.invert_checkbox.pack(side="left", padx=(0, 15))
+        options_frame.add(self.invert_checkbox, gap=15)
 
         self.show_dither_var = ctk.BooleanVar(value=False)
         self.dither_preview_check = ctk.CTkCheckBox(
@@ -176,7 +185,7 @@ class ImageFrame(ctk.CTkFrame):
             font=ctrl_font,
             command=self._update_preview
         )
-        self.dither_preview_check.pack(side="left", padx=(0, 15))
+        options_frame.add(self.dither_preview_check, gap=15)
 
         # preview canvas expands to fill space
         preview_container = ctk.CTkFrame(self)

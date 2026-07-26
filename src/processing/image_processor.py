@@ -17,7 +17,7 @@ local variable caching to minimize Python interpreter overhead within the
 required pixel-by-pixel loop.
 """
 
-from typing import Tuple, List
+from typing import Tuple, List, Optional
 import numpy as np
 from PIL import Image, ImageOps, ImageEnhance
 
@@ -28,6 +28,7 @@ from ..config.defaults import (
     DEFAULT_ROTATION,
 )
 from ..core.protocol import PrinterProtocol
+from ..config.printer_profile import get_printer_width
 from ..core.exceptions import InvalidImageError
 
 
@@ -35,7 +36,7 @@ class ImageProcessor:
 
     def __init__(
         self,
-        printer_width: int = PrinterProtocol.PRINTER_WIDTH,
+        printer_width: Optional[int] = None,
         brightness: float = DEFAULT_BRIGHTNESS,
         contrast: float = DEFAULT_CONTRAST,
         dither_mode: str = DEFAULT_DITHER_MODE,
@@ -43,7 +44,7 @@ class ImageProcessor:
         invert: bool = False,
         auto_resize: bool = True,
     ):
-        self.printer_width = printer_width
+        self.printer_width = printer_width if printer_width is not None else get_printer_width()
         self.brightness = brightness
         self.contrast = contrast
         self.dither_mode = dither_mode

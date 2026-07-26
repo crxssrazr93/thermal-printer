@@ -6,6 +6,10 @@ CONFIG_FILENAME = "config.yaml"
 
 # printer
 DEFAULT_PRINTER_WIDTH = 384
+
+# Printer capability profiles live in data/printer_profiles.json (schema follows
+# escpos-printer-db). Loaded at runtime by config/printer_profile.py.
+DEFAULT_PRINTER_PROFILE = "ctp500"
 DEFAULT_RFCOMM_CHANNEL = 1
 
 # fonts
@@ -41,6 +45,11 @@ DEFAULT_ROTATION = 0
 DEFAULT_WINDOW_WIDTH = 800
 DEFAULT_WINDOW_HEIGHT = 700
 MIN_WINDOW_WIDTH = 600
+
+# flow layout - horizontal/vertical gaps between wrapped controls
+FLOW_DEFAULT_HGAP = 8
+FLOW_DEFAULT_VGAP = 6
+FLOW_MIN_USABLE_WIDTH = 1
 MIN_WINDOW_HEIGHT = 500
 
 UI_LABEL_FONT_SIZE = 14
@@ -434,6 +443,7 @@ def get_default_config() -> Dict[str, Any]:
             "mac_address": "",
             "device_name": "",
             "width": DEFAULT_PRINTER_WIDTH,
+            "profile": DEFAULT_PRINTER_PROFILE,
             "rfcomm_channel": DEFAULT_RFCOMM_CHANNEL,
         },
         "text": {
