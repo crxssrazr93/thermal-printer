@@ -30,6 +30,8 @@ never light up. Rarely used insertions live behind **More**.
 
 ### Tables
 
+![A table with its ribbon, and the same table on paper](images/tables.jpg)
+
 Put the caret in a table and its controls appear on the table itself: a plus at
 the right edge adds a column, a plus under the bottom left adds a row, and
 **Table** opens the properties panel with borders, column alignment, column
@@ -53,6 +55,8 @@ markdown syntax, so they are written as a directive comment above the table:
 ```
 
 ### Symbols
+
+![Searching the symbol table](images/symbols.jpg)
 
 The Omega button opens a picker over nine hundred glyphs: mathematics, Greek,
 arrows, set theory, shapes, units. Searching by name or by use ("integral",
