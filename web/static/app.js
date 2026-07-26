@@ -117,9 +117,28 @@ function applyTheme(theme, mode) {
   document.querySelectorAll('.theme-item[data-theme]').forEach((item) => {
     item.setAttribute('aria-checked', String(item.dataset.theme === theme));
   });
-  localStorage.setItem(THEME_KEY, theme);
-  localStorage.setItem(MODE_KEY, mode);
+  remember(THEME_KEY, theme);
+  remember(MODE_KEY, mode);
   applyThemePrintDefaults(theme);
+}
+
+/* The chosen theme is written twice: to local storage, which is where the rest
+ * of this app's preferences live, and to a cookie, which survives storage
+ * being cleared or blocked and is what an installed window falls back on. Both
+ * are read on the way back in, whichever answers first. */
+function remember(key, value) {
+  try { localStorage.setItem(key, value); } catch (error) { /* private mode */ }
+  const year = 365 * 24 * 60 * 60;
+  document.cookie = `${key}=${encodeURIComponent(value)};path=/;max-age=${year};samesite=lax`;
+}
+
+function recall(key) {
+  try {
+    const stored = localStorage.getItem(key);
+    if (stored) return stored;
+  } catch (error) { /* private mode */ }
+  const match = document.cookie.match(new RegExp(`(?:^|; )${key.replace('.', '\\.')}=([^;]*)`));
+  return match ? decodeURIComponent(match[1]) : null;
 }
 
 function initTheme() {
@@ -227,20 +246,29 @@ function inlineToHtml(text) {
       (_m, body) => `<em>${body}</em>`);
 }
 
+/* how wide a table has to be to fill the writing pane; a plain number is
+ * enough before the pane exists, since the next set of content re-measures */
+function editorSpan() {
+  return document.querySelector('.rich .ProseMirror')?.clientWidth || 600;
+}
+
 function tableToHtml(rows, align = [], borders = 'all', shares = []) {
   const head = rows[0] || [];
   const body = rows.slice(1);
   const width = Math.max(...rows.map((r) => r.length), 1);
+  const total = shares.reduce((sum, share) => sum + share, 0) || 1;
   const attribute = (i) => {
     const parts = [];
     if (align[i] && align[i] !== 'left') {
       parts.push(` data-align="${align[i]}" style="text-align:${align[i]}"`);
     }
     // The share also rides on the cell, since that is where the editor reads a
-    // column width from. The editor counts in pixels, so a share becomes one
-    // against a nominal table width; only the ratio between them matters,
-    // because it is normalised back to percentages on the way out.
-    if (shares[i]) parts.push(` colwidth="${Math.round(shares[i] * 6)}"`);
+    // column width from. The editor counts in pixels and sizes the table to
+    // their sum, so a share is turned into a slice of the pane it is going
+    // into: the table fills the width, divided as the document says, and an
+    // edge dragged afterwards still has room to move. It is normalised back to
+    // percentages on the way out, so only the ratio ever survives.
+    if (shares[i]) parts.push(` colwidth="${Math.round((shares[i] / total) * editorSpan())}"`);
     return parts.join('');
   };
   const cells = (row, tag) => Array.from({ length: width }, (_v, i) =>
@@ -694,7 +722,6 @@ function initRichEditor() {
     onSelectionUpdate: () => {
       positionTableTools();
       positionImageTools();
-      positionSelectionMenus();
       syncToolbarState();
     },
     onBlur: () => setTimeout(() => {
@@ -714,13 +741,6 @@ function initEditorModes() {
   setEditorMode('rendered');
   initTableTools();
   initImageTools();
-  tt.on('focus', positionSelectionMenus);
-  tt.on('blur', () => {
-    setTimeout(() => {
-      const menu = $('floatingMenu');
-      if (!menu.contains(document.activeElement)) menu.hidden = true;
-    }, 150);
-  });
   syncToolbarState();
   syncTableBorders();
 }
@@ -768,34 +788,6 @@ function updateCounts() {
 }
 
 let lastPaperMm = 0;
-
-/* --------------------------------------------------------- menus in place */
-/* Formatting where the selection is, and block choices on an empty line, so
- * the common moves do not need a trip to the toolbar. */
-function positionSelectionMenus() {
-  const floating = $('floatingMenu');
-  if (!floating || !tt) return;
-
-  const { state } = tt;
-  const { empty, from } = state.selection;
-
-  // An empty paragraph is an invitation to choose a block, which is worth a
-  // menu. A selection is not: the toolbar is right there and already says
-  // which of its toggles are on.
-  const node = state.selection.$from.parent;
-  const emptyBlock = node.type.name === 'paragraph' && node.content.size === 0;
-  if (isRawMode() || !empty || !emptyBlock || tt.isActive('table')) {
-    floating.hidden = true;
-    return;
-  }
-
-  const shell = $('editorShell').getBoundingClientRect();
-  const at = tt.view.coordsAtPos(from);
-  floating.hidden = false;
-  floating.style.left = `${Math.max(6, Math.min(at.left - shell.left,
-    shell.width - floating.offsetWidth - 10))}px`;
-  floating.style.top = `${Math.max(4, at.top - shell.top - 2)}px`;
-}
 
 const isRawMode = () => !isRendered();
 
@@ -1149,8 +1141,11 @@ function applyWidthFields(even = false) {
     : fields.map((field) => Math.max(5, Number(field.value) || 0));
   const total = shares.reduce((sum, value) => sum + value, 0) || 1;
 
-  // pixels, because that is what the editor's own column widths are in
-  const span = table.clientWidth || 600;
+  // pixels, because that is what the editor's own column widths are in. The
+  // span comes from the pane rather than from the table, since the table's own
+  // width is whatever the last set of widths made it: measuring that and
+  // dividing it again would shrink the table a little on every edit.
+  const span = table.parentElement?.clientWidth || table.clientWidth || 600;
   Array.from(table.querySelectorAll('tr')).forEach((row) => {
     Array.from(row.children).forEach((cell, index) => {
       if (!shares[index]) return;
@@ -2202,21 +2197,140 @@ function initCalendar() {
  * scaled by however large the preview happens to be drawn. */
 const labelState = { template: null, areas: [], selected: null };
 
-async function loadTemplates() {
+async function loadTemplates(keep) {
   try {
     const data = await api('/api/templates');
     const select = $('labelTemplate');
     if (!select) return;
+    const wanted = keep || select.value;
     select.innerHTML = '';
     (data.templates || []).forEach((template) => {
-      const option = new Option(template.name.replace(/^CTP500_/, ''), template.file);
+      const option = new Option(
+        template.mine ? template.name : template.name.replace(/^CTP500_/, ''),
+        template.file);
       option.dataset.width = template.width;
       option.dataset.height = template.height;
+      if (template.mine) option.dataset.mine = '1';
       select.append(option);
     });
+    if (wanted && Array.from(select.options).some((o) => o.value === wanted)) {
+      select.value = wanted;
+    }
     labelState.template = data.templates?.[0] || null;
+    markOwnTemplate();
   } catch (error) {
     toast('Could not list the label backgrounds', true);
+  }
+}
+
+/* Only a background that was uploaded can be taken away again, so the button
+ * that does it is only there when one is selected. */
+function markOwnTemplate() {
+  const option = $('labelTemplate')?.selectedOptions?.[0];
+  const drop = $('labelDropBg');
+  if (drop) drop.hidden = !option?.dataset.mine;
+}
+
+/* A picture of your own becomes a background: the file goes to the server,
+ * which keeps it beside the shipped ones and hands back its size, since text
+ * is placed in the background's own pixels. */
+async function uploadLabelBackground(file) {
+  if (!file) return;
+  const name = file.name.replace(/\.[^.]+$/, '');
+  const data = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('could not read that file'));
+    reader.readAsDataURL(file);
+  });
+  try {
+    const saved = await api('/api/templates',
+      { method: 'POST', body: JSON.stringify({ data, name }) });
+    await loadTemplates(saved.file);
+    labelState.areas = [];
+    renderLabelAreas();
+    await refreshLabel();
+    toast(`Added ${saved.name}`);
+  } catch (error) {
+    toast(`Could not use that picture: ${error.message}`, true);
+  }
+}
+
+/* -------------------------------------------------------- saved labels */
+/* A label worth printing once is usually worth printing again, so a background
+ * and the blocks on it can be kept under a name and come back whole. */
+let savedLabels = [];
+
+async function loadSavedLabels() {
+  try {
+    savedLabels = (await api('/api/labels')).labels || [];
+  } catch (error) {
+    savedLabels = [];
+  }
+  renderSavedLabels();
+}
+
+function renderSavedLabels() {
+  const list = $('labelSaved');
+  const meta = $('labelSavedMeta');
+  if (!list) return;
+  if (meta) meta.textContent = savedLabels.length ? `${savedLabels.length} saved` : '–';
+  list.innerHTML = '';
+  if (!savedLabels.length) {
+    list.innerHTML = '<p class="hint">Nothing saved yet. Place some text, name it, and save.</p>';
+    return;
+  }
+  savedLabels.forEach((label) => {
+    const row = document.createElement('div');
+    row.className = 'item';
+    row.innerHTML = `<div class="row-form">
+        <button class="btn subtle" data-act="open" style="flex:1;text-align:left">
+          ${escapeHtml(label.name)}</button>
+        <button class="btn subtle" data-act="remove" title="Forget this label">Remove</button>
+      </div>`;
+    row.querySelector('[data-act="open"]').addEventListener('click', () => openSavedLabel(label));
+    row.querySelector('[data-act="remove"]').addEventListener('click', async () => {
+      try {
+        savedLabels = (await api(`/api/labels/${encodeURIComponent(label.name)}`,
+          { method: 'DELETE' })).labels || [];
+        renderSavedLabels();
+      } catch (error) {
+        toast(`Could not remove it: ${error.message}`, true);
+      }
+    });
+    list.append(row);
+  });
+}
+
+async function openSavedLabel(label) {
+  const select = $('labelTemplate');
+  if (select && label.template) {
+    if (!Array.from(select.options).some((option) => option.value === label.template)) {
+      toast('That label\'s background is missing', true);
+      return;
+    }
+    select.value = label.template;
+    markOwnTemplate();
+  }
+  labelState.areas = (label.areas || []).map((area) => ({ ...area }));
+  $('labelName').value = label.name;
+  renderLabelAreas();
+  await refreshLabel();
+}
+
+async function saveCurrentLabel() {
+  const name = $('labelName').value.trim();
+  if (!name) { toast('Give the label a name first', true); return; }
+  try {
+    savedLabels = (await api('/api/labels', {
+      method: 'POST',
+      body: JSON.stringify({ name, template: currentTemplate()?.file,
+                             areas: labelState.areas }),
+    })).labels || [];
+    renderSavedLabels();
+    toast(`Saved ${name}`);
+  } catch (error) {
+    toast(`Could not save it: ${error.message}`, true);
   }
 }
 
@@ -2231,6 +2345,12 @@ function currentTemplate() {
 function labelAreaRow(area, index) {
   const row = document.createElement('div');
   row.className = 'item label-area';
+  row.dataset.index = String(index);
+  // pointing at a row lights up the block it stands for, and the other way
+  // round, so which line of the form is which block on the label is never a
+  // question worth asking
+  row.addEventListener('pointerenter', () => highlightLabelArea(index, true));
+  row.addEventListener('pointerleave', () => highlightLabelArea(index, false));
   row.innerHTML = `
     <div class="row-form">
       <input class="control" data-field="text" value="${escapeHtml(area.text)}"
@@ -2261,9 +2381,64 @@ function renderLabelAreas() {
   list.innerHTML = '';
   if (!labelState.areas.length) {
     list.innerHTML = '<p class="hint">No text yet. Click the label where you want some.</p>';
+    placeLabelHandles();
     return;
   }
   labelState.areas.forEach((area, index) => list.append(labelAreaRow(area, index)));
+  placeLabelHandles();
+}
+
+/* A block on the label is text baked into a picture, which nothing can take
+ * hold of. So each one gets a handle laid over the picture where the text
+ * lands: that is what lights up under the pointer and what a drag moves. Its
+ * size is the room the text will take, near enough to grab. */
+function labelHandleBox(area) {
+  const lines = String(area.text || ' ').split('\n');
+  const longest = Math.max(...lines.map((line) => line.length), 1);
+  return {
+    x: area.x,
+    y: area.y,
+    w: Math.max(area.font_size, longest * area.font_size * 0.58),
+    h: Math.max(area.font_size, lines.length * area.font_size * 1.2),
+  };
+}
+
+function placeLabelHandles() {
+  const host = $('labelHandles');
+  const image = $('labelPreview');
+  const stage = $('labelStage');
+  if (!host || !image || !stage) return;
+  const template = currentTemplate();
+  if (!template || !image.naturalWidth) { host.innerHTML = ''; return; }
+
+  const box = image.getBoundingClientRect();
+  const frame = stage.getBoundingClientRect();
+  const scale = box.width / template.width;
+  const offsetX = box.left - frame.left;
+  const offsetY = box.top - frame.top;
+
+  host.innerHTML = '';
+  labelState.areas.forEach((area, index) => {
+    const place = labelHandleBox(area);
+    const handle = document.createElement('div');
+    handle.className = 'label-handle';
+    handle.dataset.index = String(index);
+    handle.tabIndex = 0;
+    handle.title = `${area.text || 'Text'} - drag to move it`;
+    handle.style.left = `${offsetX + place.x * scale}px`;
+    handle.style.top = `${offsetY + place.y * scale}px`;
+    handle.style.width = `${Math.max(18, place.w * scale)}px`;
+    handle.style.height = `${Math.max(14, place.h * scale)}px`;
+    handle.addEventListener('pointerenter', () => highlightLabelArea(index, true));
+    handle.addEventListener('pointerleave', () => highlightLabelArea(index, false));
+    host.append(handle);
+  });
+}
+
+function highlightLabelArea(index, on) {
+  document.querySelectorAll(`#labelHandles .label-handle[data-index="${index}"],
+                             #labelAreas .label-area[data-index="${index}"]`)
+    .forEach((element) => element.classList.toggle('is-hot', on));
 }
 
 function labelBody(extra = {}) {
@@ -2302,7 +2477,25 @@ function initLabels() {
   const stage = $('labelStage');
   if (!stage) return;
 
-  $('labelTemplate').addEventListener('change', refreshLabel);
+  $('labelTemplate').addEventListener('change', () => { markOwnTemplate(); refreshLabel(); });
+  $('labelUpload').addEventListener('click', () => $('labelFile').click());
+  $('labelFile').addEventListener('change', (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    uploadLabelBackground(file);
+  });
+  $('labelDropBg').addEventListener('click', async () => {
+    const option = $('labelTemplate').selectedOptions?.[0];
+    if (!option?.dataset.mine) return;
+    try {
+      await api(`/api/templates/${encodeURIComponent(option.value)}`, { method: 'DELETE' });
+      await loadTemplates();
+      await refreshLabel();
+    } catch (error) {
+      toast(`Could not remove it: ${error.message}`, true);
+    }
+  });
+  $('labelSave').addEventListener('click', saveCurrentLabel);
   $('labelAdd').addEventListener('click', () => {
     labelState.areas.push({ x: 20, y: 20, text: 'Text', font_size: 28,
                             font_family: currentFont(), alignment: 'left' });
@@ -2315,33 +2508,28 @@ function initLabels() {
     refreshLabel();
   });
 
-  // A click on empty label makes a block; a drag that starts on one moves it.
-  // Which of the two it was is only known on release, so the decision waits.
+  // A click on bare label makes a block; a drag that starts on a handle moves
+  // the block that handle belongs to. The handle moves with the pointer and
+  // the picture catches up behind it, because waiting on a round trip for
+  // every pixel would make the drag feel stuck.
   let dragging = null;
+  let handle = null;
   let moved = false;
 
-  const nearestArea = (point) => {
-    const template = currentTemplate();
-    const reach = template ? template.width * 0.18 : 60;
-    let best = null;
-    let bestDistance = reach;
-    labelState.areas.forEach((area) => {
-      const distance = Math.hypot(area.x - point.x, area.y - point.y);
-      if (distance < bestDistance) { best = area; bestDistance = distance; }
-    });
-    return best;
-  };
-
   stage.addEventListener('pointerdown', (event) => {
-    if (event.target.id !== 'labelPreview') return;
+    const grabbed = event.target.closest?.('.label-handle');
     const point = labelPointFromEvent(event);
     if (!point) return;
     moved = false;
-    dragging = nearestArea(point);
-    if (dragging) {
+    if (grabbed) {
+      dragging = labelState.areas[Number(grabbed.dataset.index)];
+      handle = grabbed;
+      if (!dragging) { handle = null; return; }
       dragging.grabX = point.x - dragging.x;
       dragging.grabY = point.y - dragging.y;
+      handle.classList.add('is-held');
       stage.setPointerCapture(event.pointerId);
+      event.preventDefault();
     }
   });
 
@@ -2352,17 +2540,32 @@ function initLabels() {
     moved = true;
     dragging.x = Math.max(0, point.x - dragging.grabX);
     dragging.y = Math.max(0, point.y - dragging.grabY);
+    const image = $('labelPreview');
+    const template = currentTemplate();
+    if (handle && template && image.naturalWidth) {
+      const scale = image.getBoundingClientRect().width / template.width;
+      const frame = stage.getBoundingClientRect();
+      const box = image.getBoundingClientRect();
+      handle.style.left = `${(box.left - frame.left) + dragging.x * scale}px`;
+      handle.style.top = `${(box.top - frame.top) + dragging.y * scale}px`;
+    }
     debounce('label', refreshLabel, 90);
   });
 
+  const drop = () => {
+    if (!dragging) return false;
+    delete dragging.grabX;
+    delete dragging.grabY;
+    dragging = null;
+    handle?.classList.remove('is-held');
+    handle = null;
+    if (moved) { renderLabelAreas(); refreshLabel(); }
+    return true;
+  };
+
+  stage.addEventListener('pointercancel', drop);
   stage.addEventListener('pointerup', (event) => {
-    if (dragging) {
-      delete dragging.grabX;
-      delete dragging.grabY;
-      dragging = null;
-      if (moved) { renderLabelAreas(); refreshLabel(); }
-      return;
-    }
+    if (drop()) return;
     if (event.target.id !== 'labelPreview') return;
     const point = labelPointFromEvent(event);
     if (!point) return;
@@ -2371,6 +2574,11 @@ function initLabels() {
     renderLabelAreas();
     refreshLabel();
   });
+
+  // the handles are laid over a picture whose size follows the window, so they
+  // are placed again whenever that changes or a fresh render arrives
+  $('labelPreview').addEventListener('load', placeLabelHandles);
+  window.addEventListener('resize', () => debounce('labelHandles', placeLabelHandles, 120));
 
   $('labelPrint').addEventListener('click', async () => {
     if (!state.printer.connected) { toast('Not connected to a printer', true); return; }
@@ -2860,7 +3068,7 @@ async function boot() {
   try {
     await refreshState();
     await Promise.all([loadFonts(), loadDitherModes(), loadPresets(), loadTodos(),
-                       loadTemplates()]);
+                       loadTemplates(), loadSavedLabels()]);
   } catch (error) {
     toast(`Could not reach the server: ${error.message}`, true);
   }

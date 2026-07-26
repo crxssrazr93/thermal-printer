@@ -234,11 +234,6 @@ select.control.slim{padding-right:26px}
   content:attr(data-placeholder);color:var(--faint);float:left;height:0;pointer-events:none;
 }
 
-.floating-menu{
-  position:absolute;display:flex;gap:3px;padding:4px;z-index:40;
-  background:var(--panel);border:var(--border) solid var(--line-strong);
-  border-radius:var(--radius-sm);box-shadow:var(--shadow-lift);
-}
 .token-menu{
   position:absolute;z-index:45;min-width:210px;padding:5px;display:flex;flex-direction:column;
   background:var(--panel);border:var(--border) solid var(--line-strong);
@@ -510,8 +505,36 @@ input[type=range]:focus-visible{outline:2px solid var(--accent);outline-offset:3
 .symbol:hover{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .symbol:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
-/* Labels: the background is the canvas, so it takes the room and the click. */
-.label-wrap{cursor:crosshair}
+/* Labels: the background is the canvas, so it takes the room and the click.
+   Every block that has been placed carries a handle over the picture, because
+   a block drawn into a flat PNG has nothing to take hold of otherwise: the
+   handle is what lights up under the pointer and what the drag moves. */
+.label-wrap{cursor:crosshair;position:relative}
+/* A label is placed, not inspected: the whole background has to be on screen
+   for a click on it to land where it looks like it lands, so this one preview
+   is fitted to the pane rather than shown a dot to a pixel. */
+.label-stage{overflow:hidden;align-items:center}
+.label-stage .paper-wrap{max-height:100%;overflow:hidden}
+/* the pane's own ceiling, less the paper's frame and the stage padding, so a
+   tall label lands inside it rather than a scrollbar's width outside it */
+.label-wrap .paper{width:auto;max-width:100%;max-height:calc(min(62vh,640px) - 68px)}
+/* the background is a canvas, not a picture to be dragged off the page: the
+   browser's own image drag and the blue selection would both fight the one
+   gesture this pane has */
+.label-wrap img{user-select:none;-webkit-user-drag:none}
+.label-handles{position:absolute;inset:0;pointer-events:none}
+.label-handle{
+  position:absolute;pointer-events:auto;cursor:grab;
+  border:1px dashed transparent;border-radius:3px;
+  transition:background .12s,border-color .12s,box-shadow .12s}
+.label-handle:hover,.label-handle.is-hot{
+  background:color-mix(in srgb,var(--accent) 18%,transparent);
+  border-color:var(--accent)}
+.label-handle.is-held{cursor:grabbing;border-style:solid;
+  box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 40%,transparent)}
+.label-handle:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.label-area{transition:border-color .12s,background .12s}
+.label-area.is-hot{border-color:var(--accent)}
 .label-area .row-form{gap:6px}
 .label-area .hint{margin:4px 0 0}
 

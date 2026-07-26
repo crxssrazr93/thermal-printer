@@ -136,15 +136,6 @@
                out right to left while the rest of the document does not -->
           <div id="rich" class="rich" dir="auto"></div>
 
-          <div class="floating-menu" id="floatingMenu" hidden>
-            <button class="tool" data-md="h1">H1</button>
-            <button class="tool" data-md="h2">H2</button>
-            <button class="tool" data-md="ul">List</button>
-            <button class="tool" data-md="tasks">Tasks</button>
-            <button class="tool" data-md="quote">Quote</button>
-            <button class="tool" data-md="table">Table</button>
-            <button class="tool" data-md="image">Image</button>
-          </div>
           <textarea id="editor" class="editor-area" spellcheck="false"
             placeholder="Type here. Markdown works: # heading, **bold**, - list, > quote, | tables |"></textarea>
 
@@ -310,7 +301,12 @@
         </div>
         <div class="field">
           <label for="labelTemplate">Background</label>
-          <select id="labelTemplate" class="control"></select>
+          <div class="slider-row">
+            <select id="labelTemplate" class="control grow"></select>
+            <button class="btn subtle" id="labelUpload">Use a picture</button>
+            <button class="btn subtle" id="labelDropBg" hidden>Remove</button>
+          </div>
+          <input id="labelFile" type="file" accept="image/*" hidden>
           <p class="hint">Click the label where text should go, then type. Drag a
             block to move it.</p>
         </div>
@@ -319,14 +315,25 @@
           <button class="btn" id="labelAdd">Add text</button>
           <button class="btn subtle" id="labelClear">Clear all</button>
         </div>
+
+        <div class="panel-head">
+          <h2>Saved labels</h2>
+          <span class="head-meta" id="labelSavedMeta">&ndash;</span>
+        </div>
+        <div id="labelSaved" class="list"></div>
+        <div class="actions">
+          <input id="labelName" class="control grow" placeholder="Name this label">
+          <button class="btn" id="labelSave">Save label</button>
+        </div>
       </div>
 
       <aside class="panel preview">
         <div class="panel-head"><h2>Preview</h2>
           <span class="head-meta" id="labelPreviewMeta">&ndash;</span></div>
-        <div class="paper-stage">
+        <div class="paper-stage label-stage">
           <div class="paper-wrap label-wrap" id="labelStage">
-            <img id="labelPreview" class="paper" alt="Label preview">
+            <img id="labelPreview" class="paper" alt="Label preview" draggable="false">
+            <div id="labelHandles" class="label-handles"></div>
           </div>
         </div>
         <div class="actions">

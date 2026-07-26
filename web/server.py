@@ -27,6 +27,7 @@ import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Tuple
+from urllib.parse import unquote
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -90,8 +91,13 @@ USER_THEMES_DIR = DATA_DIR / "themes"
 # a reference, and the renderer loads the file when it prints.
 IMAGES_DIR = DATA_DIR / "images"
 
-# label backgrounds ship with the app; a user's own go beside them
+# label backgrounds ship with the app; a user's own live in the data directory,
+# so a background that was uploaded survives a checkout the way presets do.
 TEMPLATES_DIR = ROOT / "gallery" / "templates"
+USER_TEMPLATES_DIR = DATA_DIR / "labels"
+
+# a saved label is a background plus the blocks placed on it, under a name
+LABELS_FILE = DATA_DIR / "labels.json"
 
 DEFAULT_FONT = "DejaVuSansMono"   # family names carry no spaces; a miss falls back silently
 DEFAULT_SIZE = 24
@@ -103,6 +109,11 @@ MAX_IMAGE_BYTES = 8 * 1024 * 1024
 # json-backed storage
 # -----------------------------------------------------------------------------
 _store_lock = threading.Lock()
+
+
+def _slug(text: str) -> str:
+    """A file name from something a person typed: letters, digits, dashes."""
+    return re.sub(r"-+", "-", re.sub(r"[^A-Za-z0-9]+", "-", str(text))).strip("-").lower()[:48]
 
 
 def _read_json(path: Path, fallback):
@@ -539,39 +550,144 @@ def api_calendar(handler, match, body):
     return _png(handler, _fit(image))
 
 
+def _template_path(name: str):
+    """Find a label background by file name, shipped or the user's own.
+
+    Both directories are searched and neither can be escaped: a name that
+    resolves anywhere else is simply not a template.
+    """
+    if not name:
+        return None
+    for directory in (TEMPLATES_DIR, USER_TEMPLATES_DIR):
+        target = (directory / name).resolve()
+        if target.parent == directory.resolve() and target.is_file():
+            return target
+    return None
+
+
 @route("GET", "/api/templates")
 def api_templates(handler, match, body):
     """The label backgrounds on offer, with their sizes.
 
     A caller needs the size to place text on one, since the coordinates are in
-    the template's own pixels rather than the paper's.
+    the template's own pixels rather than the paper's. The user's own
+    backgrounds come after the shipped ones and are marked, since those are the
+    ones that can be deleted again.
     """
     entries = []
-    for path in sorted(TEMPLATES_DIR.glob("*.png")):
-        try:
-            with Image.open(path) as picture:
-                width, height = picture.size
-        except OSError:
-            continue
-        entries.append({"name": path.stem, "file": path.name,
-                        "width": width, "height": height})
+    for directory, mine in ((TEMPLATES_DIR, False), (USER_TEMPLATES_DIR, True)):
+        for path in sorted(directory.glob("*.png")):
+            try:
+                with Image.open(path) as picture:
+                    width, height = picture.size
+            except OSError:
+                continue
+            entries.append({"name": path.stem, "file": path.name,
+                            "width": width, "height": height, "mine": mine})
     return 200, {"templates": entries}
+
+
+@route("POST", "/api/templates")
+def api_template_upload(handler, match, body):
+    """Keep a picture as a label background of its own.
+
+    The image is taken as it comes and only converted, not resized: the
+    coordinates text is placed at are the background's own pixels, and the
+    printer's width is applied once, at the end, when the label is rendered.
+    """
+    data_url = body.get("data") or ""
+    parsed = re.match(r"data:image/(?P<kind>[a-z+]+);base64,(?P<payload>.+)", data_url, re.S)
+    if not parsed:
+        return 400, {"ok": False, "message": "Expected an image data URL"}
+
+    try:
+        raw = base64.b64decode(parsed.group("payload"))
+    except (ValueError, binascii.Error):
+        return 400, {"ok": False, "message": "Could not decode that image"}
+    if len(raw) > MAX_IMAGE_BYTES:
+        return 400, {"ok": False, "message": "That image is larger than 8 MB"}
+
+    try:
+        picture = Image.open(io.BytesIO(raw))
+        picture.load()
+    except Exception:
+        return 400, {"ok": False, "message": "That file is not an image"}
+
+    stem = _slug(body.get("name") or "label") or "label"
+    USER_TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
+    name = f"{stem}.png"
+    index = 2
+    while (USER_TEMPLATES_DIR / name).exists():
+        name = f"{stem}-{index}.png"
+        index += 1
+
+    picture.convert("RGB").save(USER_TEMPLATES_DIR / name, format="PNG")
+    return 200, {"ok": True, "file": name, "name": Path(name).stem,
+                 "width": picture.width, "height": picture.height, "mine": True}
+
+
+@route("DELETE", r"/api/templates/(?P<name>[A-Za-z0-9._-]+\.png)")
+def api_template_delete(handler, match, body):
+    """Remove one of the user's own backgrounds. The shipped ones stay put."""
+    target = (USER_TEMPLATES_DIR / match.group("name")).resolve()
+    if target.parent != USER_TEMPLATES_DIR.resolve() or not target.is_file():
+        return 404, {"ok": False, "message": "not one of yours"}
+    target.unlink()
+    return 200, {"ok": True}
 
 
 @route("GET", r"/templates/(?P<name>[A-Za-z0-9._-]+\.png)")
 def api_template_file(handler, match, body):
-    target = (TEMPLATES_DIR / match.group("name")).resolve()
-    if target.parent != TEMPLATES_DIR.resolve() or not target.is_file():
+    target = _template_path(match.group("name"))
+    if not target:
         return 404, {"error": "not found"}
     return 200, ("image/png", target.read_bytes())
+
+
+@route("GET", "/api/labels")
+def api_labels(handler, match, body):
+    return 200, {"labels": _read_json(LABELS_FILE, [])}
+
+
+@route("POST", "/api/labels")
+def api_label_save(handler, match, body):
+    """Save a background and the blocks on it under a name, to come back to.
+
+    Saving over a name replaces it, which is what saving a label you have just
+    changed is meant to do.
+    """
+    name = str(body.get("name") or "").strip()
+    if not name:
+        return 400, {"ok": False, "message": "That label needs a name"}
+    entry = {
+        "name": name,
+        "template": str(body.get("template") or ""),
+        "areas": body.get("areas") or [],
+    }
+    with _store_lock:
+        labels = [item for item in _read_json(LABELS_FILE, [])
+                  if item.get("name") != name]
+        labels.append(entry)
+        labels.sort(key=lambda item: item.get("name", "").lower())
+        _write_json(LABELS_FILE, labels)
+    return 200, {"ok": True, "labels": labels}
+
+
+@route("DELETE", r"/api/labels/(?P<name>.+)")
+def api_label_delete(handler, match, body):
+    wanted = unquote(match.group("name"))
+    with _store_lock:
+        labels = [item for item in _read_json(LABELS_FILE, [])
+                  if item.get("name") != wanted]
+        _write_json(LABELS_FILE, labels)
+    return 200, {"ok": True, "labels": labels}
 
 
 @route("POST", "/api/label")
 def api_label(handler, match, body):
     """Compose text onto a label background and preview or print it."""
-    name = str(body.get("template") or "")
-    target = (TEMPLATES_DIR / name).resolve()
-    if target.parent != TEMPLATES_DIR.resolve() or not target.is_file():
+    target = _template_path(str(body.get("template") or ""))
+    if not target:
         return 400, {"error": "no such template"}
 
     with Image.open(target) as picture:
