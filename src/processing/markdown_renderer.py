@@ -97,7 +97,7 @@ class Span:
 
 @dataclass
 class Block:
-    kind: str                      # paragraph | heading | list | code | quote | rule | table | math
+    kind: str                      # paragraph | heading | list | code | quote | rule | table | math | image
     spans: List[Span] = field(default_factory=list)
     level: int = 0                 # heading level, list depth
     ordered: bool = False
@@ -119,6 +119,7 @@ class MarkdownRenderer:
         line_spacing: Optional[float] = None,
         margin: int = 6,
         style: Optional[dict] = None,
+        image_root: Optional[Path] = None,
     ):
         self.width = width if width is not None else get_printer_width()
         self.font_family = font_family
@@ -128,6 +129,9 @@ class MarkdownRenderer:
         self.margin = int(self.style["margin"]) if margin == 6 else margin
         self._fm = get_font_manager()
         self._italic_cache = {}
+        # where /images/<name> references resolve to; without one an image
+        # falls back to its alt text, which is what the desktop app wants
+        self.image_root = Path(image_root) if image_root else None
 
     # -------------------------------------------------------------------------
     # TextRenderer-compatible surface
@@ -284,6 +288,17 @@ class MarkdownRenderer:
                     borders=pending_directive.get("borders", ""),
                 ))
                 pending_directive = {}
+                continue
+
+            # an image on its own line is a block, not a note inside a line
+            standalone_image = _IMAGE.fullmatch(stripped)
+            if standalone_image:
+                blocks.append(Block(
+                    kind="image",
+                    lines=[standalone_image.group(2)],
+                    spans=[Span(standalone_image.group(1))],
+                ))
+                i += 1
                 continue
 
             # heading
@@ -488,6 +503,9 @@ class MarkdownRenderer:
             image.paste(rendered, (x, y))
             return y + rendered.height
 
+        if block.kind == "image":
+            return self._draw_image(image, block, y, left, width)
+
         if block.kind == "table":
             return self._draw_table(draw, block, y, left, width)
 
@@ -622,6 +640,47 @@ class MarkdownRenderer:
                 x += size * len(word) * 0.6
             height = max(height, self._line_height(font))
         return y + (height or int(size * 1.2))
+
+    def _draw_image(self, sheet, block: Block, y: int, left: int, width: int) -> int:
+        """Place a picture, scaled to the paper and reduced to ink or nothing.
+
+        A thermal head has one colour, so a photograph has to become a dither
+        pattern before it means anything; anything that cannot be loaded falls
+        back to its alt text rather than leaving a hole in the page.
+        """
+        source = block.lines[0] if block.lines else ""
+        picture = self._load_image(source)
+        if picture is None:
+            font = self._font(self.font_size, italic=True)
+            label = (block.spans[0].text if block.spans else "") or source
+            ImageDraw.Draw(sheet).text((left, y), f"[image: {label}]", font=font, fill="black")
+            return y + self._line_height(font)
+
+        available = width - left - self.margin
+        if picture.width > available:
+            picture = picture.resize(
+                (available, max(1, round(picture.height * available / picture.width))),
+                Image.LANCZOS,
+            )
+        # Floyd-Steinberg, which is what convert("1") does, keeps photographic
+        # tone legible at 203 dpi where a hard threshold turns it to mud
+        sheet.paste(picture.convert("L").convert("1").convert("RGB"), (left, y))
+        return y + picture.height
+
+    def _load_image(self, source: str):
+        try:
+            name = source.rsplit("/", 1)[-1]
+            if self.image_root and (source.startswith("/images/") or "/" not in source):
+                path = (self.image_root / name).resolve()
+                if path.parent != Path(self.image_root).resolve() or not path.is_file():
+                    return None
+            else:
+                path = Path(source).expanduser()
+                if not path.is_file():
+                    return None
+            return Image.open(path).convert("RGB")
+        except (OSError, ValueError):
+            return None
 
     def _draw_table(self, draw, block: Block, y: int, left: int, width: int) -> int:
         if not block.rows:

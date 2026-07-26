@@ -39,11 +39,12 @@ web framework would add install friction for no benefit at this size.
 
 | What | Where |
 |------|-------|
-| Presets and to-dos | `~/.local/share/thermal-printer/` |
+| Presets, to-dos and images | `~/.local/share/thermal-printer/` |
 | Printer settings and devices | shared with the desktop app's `config.yaml` |
 | Front end | `web/static/` |
 | Server | `web/server.py` |
 | Built-in themes | `web/static/themes/` |
+| Editor bundle | `web/static/vendor/tiptap.js`, built by `tools/build-editor-bundle.sh` |
 | Your themes | `~/.local/share/thermal-printer/themes/` |
 
 Presets and to-dos sit outside the repo so a `git checkout` cannot wipe them.
@@ -89,21 +90,48 @@ follows the theme.
 
 Two editors over one document, and markdown is the document.
 
-**Rendered** is a real editing surface. A heading is a heading, a quote has its
-bar, and a table is a table you type into. The toolbar drives the document
-directly, so there is no markup to look at while writing.
+**Rendered** is a real editing surface, built on TipTap. A heading is a
+heading, a quote has its bar, and a table is a table you type into. The toolbar
+and the styling stay ours, so each theme still owns how the document looks.
 
 **Raw** is the markdown itself, in a plain textarea, for when the source is
 what you want to see. Switching converts, and either way markdown is what gets
 previewed, printed and saved.
 
+### Why a library
+
+The first version of rendered mode was hand written, and tables were where that
+stopped being tenable: a decorated textarea can paint markdown but it cannot
+give you a cell to type in. TipTap brings a document model, undo, paste
+handling, resizable columns and keyboard behaviour that would otherwise all
+have to be rebuilt. It is headless, which matters here, since a themed editor
+cannot be wearing another product's chrome.
+
+The bundle is built once by `tools/build-editor-bundle.sh` and committed to
+`web/static/vendor/`. Running the app needs no node, no npm and no build step;
+the script exists so the vendored file is reproducible rather than mysterious.
+
 ### Tables
 
-Put the caret in a table and its controls appear above it: add or remove a row
-or a column. Tab walks the cells and adds a row when it runs off the end. Drag
-a column boundary to trade width with the column beside it.
+Put the caret in a table and its controls appear at the top of the pane: add or
+remove a row or a column, align a column left, centre or right, cycle the
+border treatment, or remove the table. Tab walks the cells. Drag a column
+boundary to change its width.
 
-Column widths are a view concern, not part of the document: markdown has
-nowhere to keep them, so a drag changes what you see and never what prints.
-Row height follows the content for the same reason. What the printer receives
-is the markdown table, laid out to the paper by the renderer.
+Alignment rides in the separator row, which is markdown's own syntax for it, so
+any other reader of the file gets it too, and the printer honours it. Border
+treatment has no markdown syntax, so it is written as a directive comment above
+the table and read back the same way.
+
+Column widths are a view concern: markdown has nowhere to keep them, so a drag
+changes what you see and never what prints. Row height follows the content for
+the same reason.
+
+### Pictures
+
+The Image button uploads the file to the server, which stores it by content
+hash under `~/.local/share/thermal-printer/images/` and hands back a reference
+the document carries as ordinary markdown. At print time the renderer scales it
+to the paper and dithers it, since a thermal head has one colour and a
+photograph has to become a pattern of dots to mean anything. An image that
+cannot be loaded prints its alt text rather than leaving a hole.

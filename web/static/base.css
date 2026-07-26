@@ -169,6 +169,7 @@ button{cursor:pointer;background:none;border:0}
   padding:18px 20px;background:transparent;color:var(--ink);
 }
 .rich{font-family:var(--font-ui);font-size:14.5px;line-height:1.65;outline:none}
+.rich .ProseMirror{outline:none;min-height:100%}
 .editor-area{
   width:100%;height:100%;resize:none;font-family:var(--font-mono);font-size:13px;
   line-height:1.85;white-space:pre-wrap;tab-size:2;
@@ -180,52 +181,65 @@ button{cursor:pointer;background:none;border:0}
 
 /* the document itself, set the way the printed page is set: weight and rules
    rather than colour, since that is what the paper can carry */
-.rich > * + *{margin-top:10px}
-.rich h1,.rich h2,.rich h3{margin:18px 0 0;font-family:var(--font-head);line-height:1.25}
-.rich h1{font-size:25px;font-weight:700;letter-spacing:-.02em;
+.rich .ProseMirror > * + *{margin-top:10px}
+.rich .ProseMirror :is(h1,h2,h3){margin:18px 0 0;font-family:var(--font-head);line-height:1.25}
+.rich .ProseMirror h1{font-size:25px;font-weight:700;letter-spacing:-.02em;
   padding-bottom:7px;border-bottom:2px solid var(--ink)}
-.rich h2{font-size:20px;font-weight:700;padding-bottom:5px;
+.rich .ProseMirror h2{font-size:20px;font-weight:700;padding-bottom:5px;
   border-bottom:1px solid var(--line-strong)}
-.rich h3{font-size:16.5px;font-weight:700}
-.rich p{margin:0}
-.rich ul,.rich ol{margin:0;padding-left:24px}
-.rich li{margin:3px 0}
-.rich blockquote{
+.rich .ProseMirror h3{font-size:16.5px;font-weight:700}
+.rich .ProseMirror p{margin:0}
+.rich .ProseMirror ul,.rich .ProseMirror ol{margin:0;padding-left:24px}
+.rich .ProseMirror li{margin:3px 0}
+.rich .ProseMirror blockquote{
   margin:0;padding:2px 0 2px 12px;border-left:3px solid var(--accent);
   color:var(--muted);font-style:italic;
 }
-.rich pre{
+.rich .ProseMirror pre{
   margin:0;padding:11px 13px;border-radius:var(--radius-sm);overflow:auto;
   background:var(--panel-2);border:var(--border) solid var(--line);
   font-family:var(--font-mono);font-size:12.5px;
 }
-.rich code{font-family:var(--font-mono);font-size:.92em;padding:1px 5px;border-radius:4px;
+.rich .ProseMirror code{font-family:var(--font-mono);font-size:.92em;padding:1px 5px;border-radius:4px;
   background:var(--panel-2);border:var(--border) solid var(--line)}
-.rich pre code{padding:0;border:0;background:none}
-.rich hr{border:0;border-top:2px solid var(--line-strong);margin:16px 0}
-.rich a{color:var(--accent)}
+.rich .ProseMirror pre code{padding:0;border:0;background:none}
+.rich .ProseMirror hr{border:0;border-top:2px solid var(--line-strong);margin:16px 0}
+.rich .ProseMirror a{color:var(--accent)}
 
 /* a table is a table: real cells, tab walks them, and the last cell adds a row */
-.rich table{border-collapse:collapse;width:100%;font-size:13.5px;table-layout:fixed}
-.rich th,.rich td{
+.rich .ProseMirror table{border-collapse:collapse;width:100%;font-size:13.5px;table-layout:fixed}
+.rich .ProseMirror th,.rich .ProseMirror td{
   padding:7px 10px;text-align:left;vertical-align:top;
   border:var(--border) solid var(--line);min-width:52px;
 }
-.rich th{font-weight:700;background:var(--panel-2);border-bottom:2px solid var(--line-strong);
+.rich .ProseMirror th{font-weight:700;background:var(--panel-2);border-bottom:2px solid var(--line-strong);
   position:relative}
-.rich td,.rich th{overflow-wrap:anywhere}
-/* drag a boundary to trade width between the two columns either side of it */
-.col-grip{position:absolute;top:0;right:-4px;width:8px;height:100%;cursor:col-resize;z-index:2}
-.col-grip:hover,.col-grip:active{background:var(--accent);opacity:.4}
-.rich td:focus,.rich th:focus{outline:2px solid var(--accent);outline-offset:-2px}
-.rich table + p{margin-top:12px}
+.rich .ProseMirror :is(td,th){overflow-wrap:anywhere}
+/* ProseMirror's own column resize handle, styled to be findable */
+.rich .column-resize-handle{
+  position:absolute;right:-2px;top:0;bottom:0;width:4px;z-index:20;
+  background:var(--accent);pointer-events:none;
+}
+.rich .resize-cursor,.rich .tableWrapper.resize-cursor{cursor:col-resize}
+.rich .ProseMirror table{position:relative}
+.rich .ProseMirror .selectedCell{background:color-mix(in srgb,var(--accent) 16%,transparent)}
+.rich .ProseMirror table.borders-all th,.rich .ProseMirror table.borders-all td{
+  border:var(--border) solid var(--line-strong);
+}
+.rich .ProseMirror table.borders-none th,.rich .ProseMirror table.borders-none td{border:0}
+.rich .ProseMirror img{max-width:100%;height:auto;border-radius:var(--radius-sm)}
+.rich .ProseMirror img.ProseMirror-selectednode{outline:2px solid var(--accent)}
+.rich .ProseMirror td:focus,.rich .ProseMirror th:focus{outline:2px solid var(--accent);outline-offset:-2px}
+.rich .ProseMirror table + p{margin-top:12px}
 .rich:empty::before,.rich > p:only-child:empty::before{
   content:attr(data-placeholder);color:var(--faint);
 }
 
-/* table controls float over the document while the caret is in a table */
+/* table controls, docked at the top of the editing pane while the caret is in
+   a table so they never sit on top of the document */
 .table-tools{
-  position:absolute;z-index:5;display:flex;gap:4px;padding:4px;
+  position:absolute;z-index:5;top:8px;right:10px;display:flex;gap:4px;padding:4px;
+  flex-wrap:wrap;max-width:calc(100% - 20px);
   background:var(--panel);border:var(--border) solid var(--line-strong);
   border-radius:var(--radius-sm);box-shadow:var(--shadow-lift);
 }

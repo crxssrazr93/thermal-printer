@@ -76,6 +76,7 @@
           <button class="tool" data-md="quote">Quote</button>
           <span class="tool-sep" aria-hidden="true"></span>
           <button class="tool" data-md="link">Link</button>
+          <button class="tool" data-md="image">Image</button>
           <button class="tool" data-md="table">Table</button>
           <button class="tool" data-md="codeblock">Code</button>
           <button class="tool" data-md="rule">Rule</button>
@@ -110,6 +111,13 @@
             <button class="tool" data-table="col-after" title="Add a column after">+ Column</button>
             <button class="tool" data-table="row-delete" title="Delete this row">&minus; Row</button>
             <button class="tool" data-table="col-delete" title="Delete this column">&minus; Column</button>
+            <span class="tool-sep" aria-hidden="true"></span>
+            <button class="tool" data-table="align-left" title="Align this column left">&#8676;</button>
+            <button class="tool" data-table="align-center" title="Centre this column">&#8596;</button>
+            <button class="tool" data-table="align-right" title="Align this column right">&#8677;</button>
+            <span class="tool-sep" aria-hidden="true"></span>
+            <button class="tool" data-table="borders" title="Borders: theme, all, none">Borders</button>
+            <button class="tool" data-table="table-delete" title="Delete this table">Remove</button>
           </div>
         </div>
       </div>
@@ -373,6 +381,10 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
+<!-- TipTap, bundled into one file by tools/build-editor-bundle.sh. Vendored
+     rather than fetched, so the app has no network dependency and no build
+     step of its own. -->
+<script src="vendor/tiptap.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

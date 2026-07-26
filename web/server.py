@@ -10,6 +10,9 @@
 # shows is the exact bitmap that gets sent to the printer rather than a CSS
 # approximation of it.
 
+import base64
+import binascii
+import hashlib
 import io
 import json
 import logging
@@ -44,6 +47,8 @@ from src.core.device_discovery import (           # noqa: E402
 )
 from src.core.printer import PrinterConnection    # noqa: E402
 from src.core.protocol import PrinterProtocol     # noqa: E402
+from PIL import Image                              # noqa: E402
+
 from src.processing.image_processor import ImageProcessor      # noqa: E402
 from src.processing.markdown_renderer import MarkdownRenderer  # noqa: E402
 from src.utils.font_manager import get_font_manager            # noqa: E402
@@ -65,9 +70,14 @@ TODOS_FILE = DATA_DIR / "todos.json"
 THEMES_DIR = STATIC_DIR / "themes"
 USER_THEMES_DIR = DATA_DIR / "themes"
 
+# Images live beside the presets rather than in the document: markdown carries
+# a reference, and the renderer loads the file when it prints.
+IMAGES_DIR = DATA_DIR / "images"
+
 DEFAULT_FONT = "DejaVuSansMono"   # family names carry no spaces; a miss falls back silently
 DEFAULT_SIZE = 24
 DEFAULT_LINE_SPACING = 1.1
+MAX_IMAGE_BYTES = 8 * 1024 * 1024
 
 
 # -----------------------------------------------------------------------------
@@ -179,6 +189,7 @@ class Session:
             # how the page is set: the theme's own typographic voice, so its
             # printed output is as recognisable as its chrome
             style=options.get("style") or None,
+            image_root=IMAGES_DIR,
         )
         image = renderer.render(text or " ")
         processor = ImageProcessor(
@@ -328,6 +339,50 @@ def api_user_theme(handler, match, body):
     if target.parent != USER_THEMES_DIR.resolve() or not target.is_file():
         return 404, {"error": "not found"}
     return 200, ("text/css", target.read_bytes())
+
+
+@route("POST", "/api/images")
+def api_image_upload(handler, match, body):
+    """Take a data URL from the editor and keep it as a file.
+
+    Named by the hash of its contents, so inserting the same picture twice
+    costs one copy and a document that references it keeps working.
+    """
+    data_url = body.get("data") or ""
+    match_data = re.match(r"data:image/(?P<kind>[a-z+]+);base64,(?P<payload>.+)", data_url, re.S)
+    if not match_data:
+        return 400, {"ok": False, "message": "Expected an image data URL"}
+
+    try:
+        raw = base64.b64decode(match_data.group("payload"))
+    except (ValueError, binascii.Error):
+        return 400, {"ok": False, "message": "Could not decode that image"}
+
+    if len(raw) > MAX_IMAGE_BYTES:
+        return 400, {"ok": False, "message": "That image is larger than 8 MB"}
+
+    try:
+        image = Image.open(io.BytesIO(raw))
+        image.verify()
+    except Exception:
+        return 400, {"ok": False, "message": "That file is not an image"}
+
+    name = f"{hashlib.sha256(raw).hexdigest()[:16]}.png"
+    target = IMAGES_DIR / name
+    if not target.exists():
+        IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+        Image.open(io.BytesIO(raw)).convert("RGB").save(target, format="PNG")
+
+    return 200, {"ok": True, "url": f"/images/{name}"}
+
+
+@route("GET", r"/images/(?P<name>[A-Za-z0-9._-]+)")
+def api_image(handler, match, body):
+    target = (IMAGES_DIR / match.group("name")).resolve()
+    if target.parent != IMAGES_DIR.resolve() or not target.is_file():
+        return 404, {"error": "not found"}
+    kind = mimetypes.guess_type(str(target))[0] or "application/octet-stream"
+    return 200, (kind, target.read_bytes())
 
 
 @route("GET", "/api/devices")
@@ -593,6 +648,7 @@ def main() -> int:
     global SESSION
     SESSION = Session()
     DATA_DIR.mkdir(parents=True, exist_ok=True)
+    IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 
     host = os.environ.get("THERMAL_WEB_HOST", "127.0.0.1")
     port = int(os.environ.get("THERMAL_WEB_PORT", "8760"))

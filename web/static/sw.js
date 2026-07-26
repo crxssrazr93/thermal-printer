@@ -9,10 +9,11 @@
  * API responses are never cached: printer state, presets and to-dos have to
  * be live.
  */
-const CACHE = 'thermal-shell-v3';
+const CACHE = 'thermal-shell-v4';
 const SHELL = [
   './', 'index.html', 'base.css', 'app.js', 'icon.svg', 'manifest.webmanifest',
   'themes/01.css', 'themes/02.css', 'themes/03.css', 'themes/04.css', 'themes/themes.json',
+  'vendor/tiptap.js',
 ];
 
 self.addEventListener('install', (event) => {

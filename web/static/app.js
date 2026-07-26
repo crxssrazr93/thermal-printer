@@ -187,19 +187,25 @@ function replaceRange(start, end, text, selStart, selEnd) {
 }
 
 /* --------------------------------------------------------- rendered editor */
-/* Two editors over one document, and markdown is the document. Rendered mode
- * is a real rich surface, so a heading is a heading and a table is a table you
- * can type into rather than a row of pipes. Raw mode is the markdown itself.
- * Switching between them converts, and whichever is showing, markdown is what
- * gets previewed, printed and saved. */
+/* Two editors over one document, and markdown is the document.
+ *
+ * Rendered mode is TipTap, vendored as a single file in static/vendor. Writing
+ * this by hand meant reimplementing selection, undo, paste and tables, and the
+ * tables were where it showed: a hand-rolled surface can decorate markdown but
+ * it cannot give you a cell to type in. TipTap brings a real document model,
+ * resizable columns and proper keyboard handling; the toolbar and the styling
+ * stay ours, so the themes still own how it looks.
+ *
+ * Markdown remains what is saved and printed. The converters below are the
+ * only bridge, and they speak this printer's dialect rather than a general
+ * one: a newline is a line break, because that is what the paper does. */
 const EDITOR_MODE_KEY = 'tp.editorMode';
 
 const escapeHtml = (text) =>
   text.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 
-const rich = () => $('rich');
+let tt = null;                       // the TipTap editor
 const isRendered = () => !$('editorShell').classList.contains('raw');
-
 /* ------------------------------------------------------- markdown to html */
 function inlineToHtml(text) {
   return escapeHtml(text)
@@ -213,90 +219,36 @@ function inlineToHtml(text) {
       (_m, body) => `<em>${body}</em>`);
 }
 
-function tableToHtml(rows) {
+function tableToHtml(rows, align = [], borders = '') {
   const head = rows[0] || [];
   const body = rows.slice(1);
   const width = Math.max(...rows.map((r) => r.length), 1);
+  const attribute = (i) => (align[i] && align[i] !== 'left'
+    ? ` data-align="${align[i]}" style="text-align:${align[i]}"` : '');
   const cells = (row, tag) => Array.from({ length: width }, (_v, i) =>
-    `<${tag}>${inlineToHtml(row[i] || '') || '<br>'}</${tag}>`).join('');
+    `<${tag}${attribute(i)}>${inlineToHtml(row[i] || '') || '<br>'}</${tag}>`).join('');
   // A colgroup plus a fixed layout is what stops the columns jumping about
   // while a cell is being typed into; without it every keystroke re-measures
   // the whole table.
   const cols = Array.from({ length: width },
     () => `<col style="width:${(100 / width).toFixed(4)}%">`).join('');
-  return `<table><colgroup>${cols}</colgroup><thead><tr>${cells(head, 'th')}</tr></thead><tbody>${
+  const flag = borders ? ` data-borders="${borders}" class="borders-${borders}"` : '';
+  return `<table${flag}><colgroup>${cols}</colgroup><thead><tr>${cells(head, 'th')}</tr></thead><tbody>${
     body.map((row) => `<tr>${cells(row, 'td')}</tr>`).join('')}</tbody></table>`;
 }
 
-/* Column widths are a view concern, not part of the document: markdown has no
- * place to keep them, so they live for as long as the table is on screen and
- * a drag never changes what gets printed. */
-function decorateTables() {
-  rich().querySelectorAll('table').forEach((table) => {
-    const width = table.querySelector('tr')?.children.length || 0;
-    if (!width) return;
-
-    let group = table.querySelector('colgroup');
-    if (!group || group.children.length !== width) {
-      group?.remove();
-      group = document.createElement('colgroup');
-      for (let i = 0; i < width; i += 1) {
-        const col = document.createElement('col');
-        col.style.width = `${(100 / width).toFixed(4)}%`;
-        group.append(col);
-      }
-      table.prepend(group);
-    }
-
-    Array.from(table.querySelectorAll('th')).forEach((th, index) => {
-      if (index >= width - 1 || th.querySelector('.col-grip')) return;
-      const grip = document.createElement('span');
-      grip.className = 'col-grip';
-      grip.contentEditable = 'false';
-      grip.setAttribute('aria-hidden', 'true');
-      th.append(grip);
-    });
-  });
-}
-
-function initColumnResize() {
-  let drag = null;
-
-  rich().addEventListener('mousedown', (event) => {
-    const grip = event.target.closest?.('.col-grip');
-    if (!grip) return;
-    event.preventDefault();
-
-    const cell = grip.parentElement;
-    const table = cell.closest('table');
-    const index = cellIndex(cell);
-    const cols = Array.from(table.querySelectorAll('col'));
-    const widths = Array.from(table.querySelectorAll('th')).map((th) => th.offsetWidth);
-    cols.forEach((col, i) => { col.style.width = `${widths[i]}px`; });
-
-    drag = { table, cols, index, startX: event.clientX, a: widths[index], b: widths[index + 1] };
-    document.body.style.cursor = 'col-resize';
-  });
-
-  document.addEventListener('mousemove', (event) => {
-    if (!drag) return;
-    // the pair of columns either side of the grip trade width, so the table
-    // itself never changes size
-    const delta = Math.max(-drag.a + 44, Math.min(drag.b - 44, event.clientX - drag.startX));
-    drag.cols[drag.index].style.width = `${drag.a + delta}px`;
-    drag.cols[drag.index + 1].style.width = `${drag.b - delta}px`;
-  });
-
-  document.addEventListener('mouseup', () => {
-    if (!drag) return;
-    drag = null;
-    document.body.style.cursor = '';
-  });
-}
+const cellAlignment = (cell) => {
+  const left = cell.startsWith(':');
+  const right = cell.endsWith(':');
+  if (left && right) return 'center';
+  if (right) return 'right';
+  return 'left';
+};
 
 function mdToHtml(md) {
   const lines = (md || '').replace(/\r\n/g, '\n').split('\n');
   const out = [];
+  let borders = '';
   let i = 0;
 
   while (i < lines.length) {
@@ -314,15 +266,32 @@ function mdToHtml(md) {
 
     if (!trimmed) { i += 1; continue; }
 
+    const directive = /^<!--\s*table\s+(.*?)\s*-->$/.exec(trimmed);
+    if (directive) {
+      borders = (/borders=(\w+)/.exec(directive[1]) || [])[1] || '';
+      i += 1;
+      continue;
+    }
+
     if (/^\s*([-*_]\s*){3,}$/.test(line)) { out.push('<hr>'); i += 1; continue; }
+
+    const picture = /^!\[([^\]]*)\]\(([^)]+)\)$/.exec(trimmed);
+    if (picture) {
+      out.push(`<img src="${picture[2]}" alt="${escapeHtml(picture[1])}">`);
+      i += 1;
+      continue;
+    }
 
     if (isTableLine(line)) {
       const rows = [];
+      let align = [];
       while (i < lines.length && isTableLine(lines[i])) {
-        if (!isSeparatorRow(lines[i])) rows.push(tableCells(lines[i]));
+        if (isSeparatorRow(lines[i])) align = tableCells(lines[i]).map(cellAlignment);
+        else rows.push(tableCells(lines[i]));
         i += 1;
       }
-      out.push(tableToHtml(rows));
+      out.push(tableToHtml(rows, align, borders));
+      borders = '';
       continue;
     }
 
@@ -406,11 +375,23 @@ function blockToMd(node) {
     return Array.from(node.children).map((li, index) =>
       `${name === 'OL' ? `${index + 1}.` : '-'} ${inlineToMd(li).trim()}`);
   }
+  if (name === 'IMG') {
+    return [`![${node.getAttribute('alt') || ''}](${node.getAttribute('src') || ''})`];
+  }
   if (name === 'TABLE') {
     const rows = Array.from(node.querySelectorAll('tr'))
       .map((tr) => Array.from(tr.children).map(cellText));
     if (!rows.length) return [];
-    return formatTable([rows[0], null, ...rows.slice(1)]).split('\n');
+    // alignment rides in the separator row, where any other reader finds it;
+    // the border treatment has no markdown syntax, so it goes in a directive
+    const align = Array.from(node.querySelector('tr')?.children || [])
+      .map((cell) => cell.dataset.align || 'left');
+    const out = formatTable([rows[0], null, ...rows.slice(1)], align).split('\n');
+    const borders = node.dataset.borders;
+    return borders ? [`<!-- table borders=${borders} -->`, ...out] : out;
+  }
+  if (node.querySelector?.('img') && name !== 'IMG') {
+    return Array.from(node.childNodes).flatMap(blockToMd);
   }
   if (name === 'DIV' && node.querySelector('h1,h2,h3,h4,h5,h6,ul,ol,table,blockquote,pre,div,p')) {
     // Chrome sometimes nests blocks inside a wrapper div; walk into it
@@ -436,13 +417,15 @@ function htmlToMd(root) {
 /* -------------------------------------------------------------- the document */
 /* One accessor for the text, whichever surface is in front. */
 function editorMarkdown() {
-  return isRendered() ? htmlToMd(rich()) : $('editor').value;
+  if (!isRendered() || !tt) return $('editor').value;
+  const holder = document.createElement('div');
+  holder.innerHTML = tt.getHTML();
+  return htmlToMd(holder);
 }
 
 function setEditorMarkdown(md) {
   $('editor').value = md;
-  rich().innerHTML = mdToHtml(md);
-  decorateTables();
+  if (tt) tt.commands.setContent(mdToHtml(md), false);
 }
 
 function setEditorMode(mode) {
@@ -450,228 +433,227 @@ function setEditorMode(mode) {
   const raw = mode === 'raw';
   const wasRaw = shell.classList.contains('raw');
 
-  if (raw && !wasRaw) $('editor').value = htmlToMd(rich());
-  if (!raw && wasRaw) { rich().innerHTML = mdToHtml($('editor').value); decorateTables(); }
+  if (raw && !wasRaw) $('editor').value = editorMarkdown();
+  if (!raw && wasRaw && tt) tt.commands.setContent(mdToHtml($('editor').value), false);
 
   shell.classList.toggle('raw', raw);
   $('modeRendered').setAttribute('aria-pressed', String(!raw));
   $('modeRaw').setAttribute('aria-pressed', String(raw));
   localStorage.setItem(EDITOR_MODE_KEY, raw ? 'raw' : 'rendered');
-  (raw ? $('editor') : rich()).focus();
+  if (raw) $('editor').focus();
+  else tt?.commands.focus();
+}
+
+/* --------------------------------------------------------------- the editor */
+/* Markdown has no syntax for how a table is ruled, so that lives on the node
+ * and is written out as a directive comment; column alignment does have a
+ * syntax, and rides in the separator row where any other reader will find it. */
+function tableExtensions() {
+  const { Table, TableCell, TableHeader } = window.TipTap;
+
+  const withAlign = (base) => base.extend({
+    addAttributes() {
+      return {
+        ...this.parent?.(),
+        align: {
+          default: null,
+          parseHTML: (element) => element.dataset.align || null,
+          renderHTML: (attributes) => (attributes.align
+            ? { 'data-align': attributes.align, style: `text-align:${attributes.align}` }
+            : {}),
+        },
+      };
+    },
+  });
+
+  const table = Table.extend({
+    addAttributes() {
+      return {
+        ...this.parent?.(),
+        borders: {
+          default: null,
+          parseHTML: (element) => element.dataset.borders || null,
+          renderHTML: (attributes) => (attributes.borders
+            ? { 'data-borders': attributes.borders } : {}),
+        },
+      };
+    },
+  });
+
+  return [table.configure({ resizable: true }), withAlign(TableCell), withAlign(TableHeader)];
+}
+
+function initRichEditor() {
+  const { Editor, StarterKit, TableRow, Image, Link } = window.TipTap;
+
+  tt = new Editor({
+    element: $('rich'),
+    extensions: [
+      StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
+      ...tableExtensions(),
+      TableRow,
+      Image.configure({ inline: false, allowBase64: false }),
+      Link.configure({ openOnClick: false }),
+    ],
+    content: '<p></p>',
+    onUpdate: () => { schedulePreview(); positionTableTools(); },
+    onSelectionUpdate: positionTableTools,
+    onBlur: () => setTimeout(() => {
+      if (!$('tableTools').contains(document.activeElement)) $('tableTools').hidden = true;
+    }, 150),
+  });
 }
 
 function initEditorModes() {
+  initRichEditor();
   $('modeRendered').addEventListener('click', () => setEditorMode('rendered'));
   $('modeRaw').addEventListener('click', () => setEditorMode('raw'));
-
-  document.execCommand('defaultParagraphSeparator', false, 'p');
-
-  rich().addEventListener('input', () => { decorateTables(); schedulePreview(); });
-  // Tab walks the cells of a table rather than leaving the editor, which is
-  // the one thing that makes a table in a document usable
-  rich().addEventListener('keydown', (event) => {
-    if (event.key !== 'Tab') return;
-    const cell = selectionCell();
-    if (!cell) return;
-    event.preventDefault();
-    moveCell(cell, event.shiftKey ? -1 : 1);
-  });
-
   setEditorMode(localStorage.getItem(EDITOR_MODE_KEY) === 'raw' ? 'raw' : 'rendered');
   initTableTools();
-  initColumnResize();
 }
 
-/* ------------------------------------------------------------ table editing */
-function selectionCell() {
-  const selection = window.getSelection();
-  if (!selection.rangeCount) return null;
-  let node = selection.getRangeAt(0).startContainer;
-  while (node && node !== rich()) {
-    if (node.nodeType === Node.ELEMENT_NODE && /^T[DH]$/.test(node.nodeName)) return node;
-    node = node.parentNode;
-  }
-  return null;
-}
-
-function caretInto(element) {
-  const range = document.createRange();
-  range.selectNodeContents(element);
-  range.collapse(false);
-  const selection = window.getSelection();
-  selection.removeAllRanges();
-  selection.addRange(range);
-}
-
-function moveCell(cell, step) {
-  const table = cell.closest('table');
-  const cells = Array.from(table.querySelectorAll('th,td'));
-  const next = cells[cells.indexOf(cell) + step];
-  if (next) { caretInto(next); return; }
-  if (step > 0) { addTableRow(table); caretInto(table.querySelector('tbody tr:last-child td')); }
-}
-
-/* --------------------------------------------------- table row and column */
-function cellIndex(cell) {
-  return Array.from(cell.parentElement.children).indexOf(cell);
-}
-
-function insertColumn(table, at) {
-  Array.from(table.querySelectorAll('tr')).forEach((row) => {
-    const isHead = row.children[0] && row.children[0].nodeName === 'TH';
-    const cell = document.createElement(isHead ? 'th' : 'td');
-    cell.innerHTML = '<br>';
-    const reference = row.children[at + 1];
-    if (reference) row.insertBefore(cell, reference);
-    else row.append(cell);
-  });
-}
-
-function deleteColumn(table, at) {
-  const rows = Array.from(table.querySelectorAll('tr'));
-  if (rows[0].children.length <= 1) { table.remove(); return; }
-  rows.forEach((row) => row.children[at]?.remove());
-}
-
-const TABLE_TOOLS = {
-  'row-after': (cell, table) => {
-    const row = addTableRow(table, cell.closest('tr'));
-    caretInto(row.children[cellIndex(cell)] || row.children[0]);
-  },
-  'col-after': (cell, table) => {
-    const at = cellIndex(cell);
-    insertColumn(table, at);
-    decorateTables();
-    caretInto(cell.parentElement.children[at + 1]);
-  },
-  'row-delete': (cell, table) => {
-    const row = cell.closest('tr');
-    // the header carries the column names, so removing it takes the table
-    if (row.parentElement.nodeName === 'THEAD' || table.querySelectorAll('tr').length <= 1) {
-      table.remove();
-      return;
+/* ---------------------------------------------------------------- pictures */
+/* The browser has the file and the printer has the paper, so the picture goes
+ * to the server, which keeps it by content hash and hands back a reference the
+ * document can carry. The renderer dithers it at print time. */
+async function insertImage() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.addEventListener('change', async () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    try {
+      const data = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const result = await api('/api/images', { method: 'POST', body: JSON.stringify({ data }) });
+      tt.chain().focus().setImage({ src: result.url, alt: file.name }).run();
+      schedulePreview();
+    } catch (error) {
+      toast(`Could not add that image: ${error.message}`, true);
     }
-    row.remove();
-  },
-  'col-delete': (cell, table) => { deleteColumn(table, cellIndex(cell)); decorateTables(); },
+  });
+  input.click();
+}
+
+/* ------------------------------------------------------------ table controls */
+const TABLE_TOOLS = {
+  'row-after': () => tt.chain().focus().addRowAfter().run(),
+  'col-after': () => tt.chain().focus().addColumnAfter().run(),
+  'row-delete': () => tt.chain().focus().deleteRow().run(),
+  'col-delete': () => tt.chain().focus().deleteColumn().run(),
+  'align-left': () => setCellAlign('left'),
+  'align-center': () => setCellAlign('center'),
+  'align-right': () => setCellAlign('right'),
+  borders: () => cycleBorders(),
+  'table-delete': () => tt.chain().focus().deleteTable().run(),
 };
 
-/* The caret leaves the table the moment a button takes focus, so the cell it
- * was in is remembered on the way out. */
-let lastCell = null;
+/* Alignment is a property of the column, since that is all markdown can say,
+ * so setting it on one cell sets it down the whole column. */
+function setCellAlign(align) {
+  const dom = tt.view.domAtPos(tt.state.selection.from).node;
+  const cell = (dom.nodeType === 1 ? dom : dom.parentElement)?.closest('td,th');
+  const table = cell?.closest('table');
+  if (!cell || !table) return;
 
+  const column = Array.from(cell.parentElement.children).indexOf(cell);
+  Array.from(table.querySelectorAll('tr')).forEach((row) => {
+    const target = row.children[column];
+    if (!target) return;
+    target.dataset.align = align;
+    target.style.textAlign = align;
+  });
+  // the DOM was edited under ProseMirror, so the document is re-read from it
+  tt.commands.setContent(tt.view.dom.innerHTML, false);
+  schedulePreview();
+}
+
+const BORDER_MODES = ['theme', 'all', 'none'];
+
+function cycleBorders() {
+  const table = currentTableElement();
+  if (!table) return;
+  const now = table.dataset.borders || 'theme';
+  const next = BORDER_MODES[(BORDER_MODES.indexOf(now) + 1) % BORDER_MODES.length];
+  if (next === 'theme') delete table.dataset.borders;
+  else table.dataset.borders = next;
+  table.classList.toggle('borders-all', next === 'all');
+  table.classList.toggle('borders-none', next === 'none');
+  tt.commands.setContent(tt.view.dom.innerHTML, false);
+  toast(`Table borders: ${next}`);
+  schedulePreview();
+}
+
+function currentTableElement() {
+  if (!tt || !tt.isActive('table')) return null;
+  const dom = tt.view.domAtPos(tt.state.selection.from).node;
+  const element = dom.nodeType === 1 ? dom : dom.parentElement;
+  return element?.closest('table') || null;
+}
+
+/* Docked to the top of the pane rather than floating over the table: anchored
+ * to the table it covered whatever line sat above it, which is usually the one
+ * being worked on. */
 function positionTableTools() {
   const tools = $('tableTools');
-  const cell = selectionCell() || (document.activeElement === rich() ? lastCell : lastCell);
-  const table = cell && rich().contains(cell) ? cell.closest('table') : null;
-
-  if (!table || !isRendered()) { tools.hidden = true; return; }
-  lastCell = cell;
-
-  const shell = $('editorShell').getBoundingClientRect();
-  const box = table.getBoundingClientRect();
-  tools.hidden = false;
-  tools.style.left = `${Math.max(6, box.left - shell.left)}px`;
-  tools.style.top = `${Math.max(4, box.top - shell.top - tools.offsetHeight - 6)}px`;
+  const table = isRendered() ? currentTableElement() : null;
+  tools.hidden = !table;
 }
 
 function initTableTools() {
-  const tools = $('tableTools');
-  tools.querySelectorAll('[data-table]').forEach((button) => {
-    // mousedown, so the action runs before the caret is lost to the button
+  $('tableTools').querySelectorAll('[data-table]').forEach((button) => {
+    // mousedown, so the command runs before the caret is lost to the button
     button.addEventListener('mousedown', (event) => {
       event.preventDefault();
-      const cell = selectionCell() || lastCell;
-      const table = cell && cell.closest('table');
-      if (!table) return;
-      TABLE_TOOLS[button.dataset.table]?.(cell, table);
-      schedulePreview();
+      TABLE_TOOLS[button.dataset.table]?.();
       positionTableTools();
     });
   });
-
-  document.addEventListener('selectionchange', () => {
-    if (document.activeElement === rich()) positionTableTools();
-  });
-  rich().addEventListener('click', positionTableTools);
-  rich().addEventListener('blur', () => {
-    // keep them up while a control is being clicked, hide otherwise
-    setTimeout(() => {
-      if (!$('tableTools').contains(document.activeElement)) $('tableTools').hidden = true;
-    }, 150);
-  });
-}
-
-function addTableRow(table, after) {
-  const width = table.querySelector('tr').children.length;
-  const body = table.querySelector('tbody') || table;
-  const row = document.createElement('tr');
-  for (let i = 0; i < width; i += 1) {
-    const cell = document.createElement('td');
-    cell.innerHTML = '<br>';
-    row.append(cell);
-  }
-  if (after && after.parentElement === body) after.after(row);
-  else body.append(row);
-  schedulePreview();
-  return row;
-}
-
-function insertRichTable(rows) {
-  const html = tableToHtml(rows && rows.length ? rows : [['Item', 'Qty'], ['tea', '2'], ['jam', '1']]);
-  document.execCommand('insertHTML', false, `${html}<p><br></p>`);
-  decorateTables();
-  const table = rich().querySelector('table:not([data-seen])');
-  if (table) {
-    table.setAttribute('data-seen', '1');
-    caretInto(table.querySelector('th'));
-  }
-  schedulePreview();
 }
 
 /* ---------------------------------------------------------- rich commands */
-function wrapSelection(tag) {
-  const selection = window.getSelection();
-  if (!selection.rangeCount || selection.isCollapsed) return;
-  const range = selection.getRangeAt(0);
-  const element = document.createElement(tag);
-  element.append(range.extractContents());
-  range.insertNode(element);
-  schedulePreview();
-}
-
 const RICH_ACTIONS = {
-  h1: () => document.execCommand('formatBlock', false, 'h1'),
-  h2: () => document.execCommand('formatBlock', false, 'h2'),
-  h3: () => document.execCommand('formatBlock', false, 'h3'),
-  bold: () => document.execCommand('bold'),
-  italic: () => document.execCommand('italic'),
-  strike: () => document.execCommand('strikeThrough'),
-  code: () => wrapSelection('code'),
-  ul: () => document.execCommand('insertUnorderedList'),
-  ol: () => document.execCommand('insertOrderedList'),
-  quote: () => document.execCommand('formatBlock', false, 'blockquote'),
-  rule: () => document.execCommand('insertHorizontalRule'),
-  codeblock: () => document.execCommand('formatBlock', false, 'pre'),
-  math: () => wrapSelection('code'),
+  h1: () => tt.chain().focus().toggleHeading({ level: 1 }).run(),
+  h2: () => tt.chain().focus().toggleHeading({ level: 2 }).run(),
+  h3: () => tt.chain().focus().toggleHeading({ level: 3 }).run(),
+  bold: () => tt.chain().focus().toggleBold().run(),
+  italic: () => tt.chain().focus().toggleItalic().run(),
+  strike: () => tt.chain().focus().toggleStrike().run(),
+  code: () => tt.chain().focus().toggleCode().run(),
+  ul: () => tt.chain().focus().toggleBulletList().run(),
+  ol: () => tt.chain().focus().toggleOrderedList().run(),
+  quote: () => tt.chain().focus().toggleBlockquote().run(),
+  rule: () => tt.chain().focus().setHorizontalRule().run(),
+  codeblock: () => tt.chain().focus().toggleCodeBlock().run(),
+  math: () => tt.chain().focus().toggleCode().run(),
+  image: () => insertImage(),
   link: () => {
     const href = window.prompt('Link address', 'https://');
     if (!href) return;
-    const selection = window.getSelection();
-    if (selection.isCollapsed) document.execCommand('insertHTML', false, `<a href="${href}">${href}</a>`);
-    else document.execCommand('createLink', false, href);
+    tt.chain().focus().extendMarkRange('link').setLink({ href }).run();
   },
   // a selected comma separated list becomes a real table, which is how this
   // data usually arrives
   table: () => {
-    const selected = window.getSelection().toString().trim();
+    const { from, to } = tt.state.selection;
+    const selected = tt.state.doc.textBetween(from, to, '\n').trim();
     const rows = selected
       ? selected.split('\n').map((line) => line.trim()).filter(Boolean).map(splitCells)
-      : null;
-    insertRichTable(rows && rows.length && (rows.length > 1 || rows[0].length > 1) ? rows : null);
+      : [];
+
+    if (rows.length && (rows.length > 1 || rows[0].length > 1)) {
+      tt.chain().focus().deleteSelection().insertContent(tableToHtml(rows)).run();
+    } else {
+      tt.chain().focus().insertTable({ rows: 3, cols: 2, withHeaderRow: true }).run();
+    }
+    schedulePreview();
   },
 };
-
 
 const isWrapped = (text, prefix, suffix) =>
   text.length >= prefix.length + suffix.length &&
@@ -828,7 +810,7 @@ function listToTable(text) {
  * that is what turns pipes and dashes into something you can actually read as
  * a grid: the source stays plain markdown, and it lines up. A null row is the
  * header separator, whose dashes are drawn to the same measured width. */
-function formatTable(rows) {
+function formatTable(rows, align = []) {
   const widths = [];
   rows.filter(Boolean).forEach((row) => {
     row.forEach((cell, i) => {
@@ -836,8 +818,17 @@ function formatTable(rows) {
     });
   });
 
+  // ":---", "---:" and ":---:" are how markdown itself carries alignment, so
+  // another reader of this file gets it too
+  const marker = (width, index) => {
+    const dashes = '-'.repeat(Math.max(1, width - (align[index] === 'center' ? 2 : 1)));
+    if (align[index] === 'center') return `:${dashes}:`;
+    if (align[index] === 'right') return `${dashes}:`;
+    return '-'.repeat(width);
+  };
+
   return rows.map((row) => {
-    if (!row) return `| ${widths.map((w) => '-'.repeat(w)).join(' | ')} |`;
+    if (!row) return `| ${widths.map(marker).join(' | ')} |`;
     return `| ${widths.map((w, i) => String(row[i] ?? '').trim().padEnd(w)).join(' | ')} |`;
   }).join('\n');
 }
