@@ -4,6 +4,8 @@ class SettingsKeys:
         DEVICE_NAME = "printer.device_name"
         WIDTH = "printer.width"
         PROFILE = "printer.profile"
+        DEVICES = "printer.devices"
+        ACTIVE_DEVICE = "printer.active_device"
         RFCOMM_CHANNEL = "printer.rfcomm_channel"
 
     class Text:

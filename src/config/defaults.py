@@ -476,6 +476,8 @@ def get_default_config() -> Dict[str, Any]:
             "device_name": "",
             "width": DEFAULT_PRINTER_WIDTH,
             "profile": DEFAULT_PRINTER_PROFILE,
+            "devices": [],
+            "active_device": "",
             "rfcomm_channel": DEFAULT_RFCOMM_CHANNEL,
         },
         "text": {

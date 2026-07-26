@@ -8,10 +8,19 @@ from ...config.keys import SettingsKeys
 from ...config.settings import get_settings
 from ...utils.validators import validate_mac_address, normalize_mac_address
 from ..widgets.flow_frame import FlowFrame
+from ...core import device_profiles as saved_profiles
+from ..dialogs.device_profile_dialog import DeviceProfileDialog
+from ...core.device_discovery import (
+    list_bluetooth_devices,
+    list_cups_queues,
+    list_usb_devices,
+)
 
 TRANSPORT_BLUETOOTH = "Bluetooth"
 TRANSPORT_USB = "USB"
 TRANSPORT_CUPS = "CUPS"
+
+NEW_PROFILE_LABEL = "+  Create profile..."
 
 if TYPE_CHECKING:
     from ...interfaces import SettingsService
@@ -32,6 +41,8 @@ class ConnectionFrame(ctk.CTkFrame):
         super().__init__(master, **kwargs)
 
         self.printer = printer
+        # label -> connect value for the currently listed transport
+        self._device_map = {}
         self.on_scan_request = on_scan_request
         self.on_status_change = on_status_change
         self.on_bluetooth_check = on_bluetooth_check
@@ -53,31 +64,28 @@ class ConnectionFrame(ctk.CTkFrame):
         row.pack(fill="x", padx=12, pady=10)
 
         row.add(ctk.CTkLabel(
-            row, text="Link:",
+            row, text="Printer:",
             font=label_font
         ), gap=6)
 
-        self.transport_var = ctk.StringVar(value=TRANSPORT_BLUETOOTH)
-        self.transport_dropdown = ctk.CTkOptionMenu(
+        self.profile_var = ctk.StringVar(value="")
+        self.profile_dropdown = ctk.CTkOptionMenu(
             row,
-            values=[TRANSPORT_BLUETOOTH, TRANSPORT_USB, TRANSPORT_CUPS],
-            variable=self.transport_var,
-            width=110, height=36,
+            values=[NEW_PROFILE_LABEL],
+            variable=self.profile_var,
+            width=250, height=36,
             font=entry_font,
             dynamic_resizing=False,
-            command=self._on_transport_change
+            command=self._on_profile_selected
         )
-        row.add(self.transport_dropdown, gap=12)
+        row.add(self.profile_dropdown, gap=8)
 
-        self.mac_label = ctk.CTkLabel(row, text="MAC:", font=label_font)
-        row.add(self.mac_label, gap=10)
-
-        self.mac_entry = ctk.CTkEntry(
-            row, placeholder_text="XX:XX:XX:XX:XX:XX",
-            width=180, height=36,
-            font=entry_font
+        self.edit_profile_button = ctk.CTkButton(
+            row, text="Edit", width=64, height=36,
+            font=entry_font,
+            command=self._edit_profile
         )
-        row.add(self.mac_entry, gap=12)
+        row.add(self.edit_profile_button, gap=12)
 
         btn_width = 100
         btn_height = 36
@@ -130,134 +138,109 @@ class ConnectionFrame(ctk.CTkFrame):
         row.add_trailing(self.status_label, gap=0)
 
     def _load_settings(self) -> None:
-        mac = self._settings.get(SettingsKeys.Printer.MAC_ADDRESS, "")
-        if mac:
-            self.mac_entry.insert(0, mac)
+        self._refresh_profiles()
 
-        device_name = self._settings.get(SettingsKeys.Printer.DEVICE_NAME, "")
-        self._update_device_name(device_name)
+    # -------------------------------------------------------------------------
+    # saved device profiles
+    # -------------------------------------------------------------------------
+    def _refresh_profiles(self, select: str = "") -> None:
+        names = saved_profiles.get_profile_names()
+        values = names + [NEW_PROFILE_LABEL]
+        self.profile_dropdown.configure(values=values)
 
-    def _update_device_name(self, name: str) -> None:
-        if name:
-            self.device_name_label.configure(text=name)
+        target = select or saved_profiles.get_active_name()
+        if target not in names:
+            target = names[0] if names else NEW_PROFILE_LABEL
+
+        self.profile_var.set(target)
+        if target in names:
+            saved_profiles.set_active(target)
+
+        self._update_profile_summary()
+
+    def _update_profile_summary(self) -> None:
+        profile = saved_profiles.find_profile(self.profile_var.get())
+        has_profile = profile is not None
+
+        self.edit_profile_button.configure(state="normal" if has_profile else "disabled")
+        self.connect_button.configure(
+            state="normal" if has_profile and not self.printer.is_connected else "disabled"
+        )
+
+        if profile:
+            self._update_device_name(profile["name"])
+            self._set_status(f"{profile['transport']} - {profile['address']}")
         else:
-            self.device_name_label.configure(text="--")
+            self._update_device_name("--")
 
-    def _save_settings(self, mac: str, device_name: str = "") -> None:
-        self._settings.set(SettingsKeys.Printer.MAC_ADDRESS, mac)
-        self._settings.set(SettingsKeys.Printer.DEVICE_NAME, device_name)
-        self._settings.save()
+    def _on_profile_selected(self, value: str = "") -> None:
+        if value == NEW_PROFILE_LABEL:
+            self._create_profile()
+            return
+        saved_profiles.set_active(value)
+        self._update_profile_summary()
 
+    def _create_profile(self) -> None:
+        dialog = DeviceProfileDialog(self)
+        self.wait_window(dialog)
+        self._refresh_profiles(select=dialog.saved_name or "")
+
+    def _edit_profile(self) -> None:
+        name = self.profile_var.get()
+        if not saved_profiles.find_profile(name):
+            return
+        dialog = DeviceProfileDialog(self, edit_name=name)
+        self.wait_window(dialog)
+        self._refresh_profiles(select=dialog.saved_name or "")
+
+    # -------------------------------------------------------------------------
+    # connect
+    # -------------------------------------------------------------------------
     def _on_scan_click(self) -> None:
-        mode = self.transport_var.get()
-
-        if mode == TRANSPORT_USB:
-            devices = self.printer.list_usb_devices()
-            if not devices:
-                self._show_error(
-                    "No USB printer found at /dev/usb/lp*.\n\n"
-                    "Check the cable and power, and that your user is in the 'lp' group."
-                )
-                return
-            self.mac_entry.delete(0, "end")
-            self.mac_entry.insert(0, devices[0])
-            self._set_status(f"Found {len(devices)} USB printer(s): {devices[0]}")
-            return
-
-        if mode == TRANSPORT_CUPS:
-            queues = self.printer.list_cups_destinations()
-            if not queues:
-                self._show_error("No CUPS queues found. Is cups running?")
-                return
-            self.mac_entry.delete(0, "end")
-            self.mac_entry.insert(0, queues[0])
-            self._set_status(f"Found {len(queues)} queue(s): {', '.join(queues)}")
-            return
-
-        if self.on_scan_request:
-            self.on_scan_request()
-
-    def _on_transport_change(self, value=None) -> None:
-        """Bluetooth needs a MAC; the wired transports take a device or queue."""
-        mode = self.transport_var.get()
-
-        if mode == TRANSPORT_BLUETOOTH:
-            self.mac_label.configure(text="MAC:")
-            self.mac_entry.configure(placeholder_text="XX:XX:XX:XX:XX:XX")
-            self.scan_button.configure(state="normal", text="Scan")
-        elif mode == TRANSPORT_USB:
-            self.mac_label.configure(text="Device:")
-            self.mac_entry.configure(placeholder_text="auto (/dev/usb/lp0)")
-            self.scan_button.configure(state="normal", text="Detect")
-        else:
-            self.mac_label.configure(text="Queue:")
-            self.mac_entry.configure(placeholder_text="CUPS queue name")
-            self.scan_button.configure(state="normal", text="Detect")
-
-        self._set_status(f"Link: {mode}")
-
-    def _connect_wired(self, mode: str) -> None:
-        target = self.mac_entry.get().strip()
-
-        self.connect_button.configure(state="disabled")
-        self.scan_button.configure(state="disabled")
-        self._set_status("Connecting...")
-
-        try:
-            if mode == TRANSPORT_USB:
-                self.printer.connect_usb(target or None)
-            else:
-                if not target:
-                    raise ValueError("Enter a CUPS queue name, or press Detect")
-                self.printer.connect_cups(target)
-        except Exception as e:
-            self._show_error(str(e))
-            self.connect_button.configure(state="normal")
-            self.scan_button.configure(state="normal")
+        self._refresh_profiles()
+        self._set_status("Profile list refreshed")
 
     def _on_connect_click(self) -> None:
-        mode = self.transport_var.get()
-        if mode != TRANSPORT_BLUETOOTH:
-            self._connect_wired(mode)
+        profile = saved_profiles.find_profile(self.profile_var.get())
+        if profile is None:
+            self._show_error("Create a device profile first")
             return
 
-        if self.on_bluetooth_check and not self.on_bluetooth_check():
-            return
+        transport = profile.get("transport", TRANSPORT_BLUETOOTH)
+        address = profile.get("address", "")
 
-        mac = self.mac_entry.get().strip()
-
-        is_valid, error = validate_mac_address(mac)
-        if not is_valid:
-            self._show_error(error or "Invalid MAC address")
-            return
-
-        mac = normalize_mac_address(mac)
-        self.mac_entry.delete(0, "end")
-        self.mac_entry.insert(0, mac)
+        # the capability profile travels with the device, so selecting a
+        # printer also selects its width and feature set
+        capability = profile.get("capability_profile")
+        if capability:
+            self._settings.set(SettingsKeys.Printer.PROFILE, capability)
 
         self.connect_button.configure(state="disabled")
         self.scan_button.configure(state="disabled")
-        self._set_status("Connecting...")
+        self._set_status(f"Connecting to {profile['name']}...")
 
         try:
-            device_name = self._settings.get(SettingsKeys.Printer.DEVICE_NAME, "")
-            self.printer.connect(mac, device_name)
-            self._save_settings(mac, device_name)
-        except Exception as e:
-            self._show_error(str(e))
+            if transport == TRANSPORT_USB:
+                self.printer.connect_usb(address or None)
+            elif transport == TRANSPORT_CUPS:
+                self.printer.connect_cups(address)
+            else:
+                if self.on_bluetooth_check and not self.on_bluetooth_check():
+                    raise ValueError("Bluetooth is off")
+                is_valid, error = validate_mac_address(address)
+                if not is_valid:
+                    raise ValueError(error or "Invalid MAC address")
+                self.printer.connect(normalize_mac_address(address), profile["name"])
+        except Exception as error:
+            self._show_error(str(error))
             self.connect_button.configure(state="normal")
             self.scan_button.configure(state="normal")
 
     def _on_disconnect_click(self) -> None:
-        self.disconnect_button.configure(state="disabled")
-        self._set_status("Disconnecting...")
-
         try:
             self.printer.disconnect()
-        except Exception as e:
-            self._show_error(str(e))
-        finally:
-            self.disconnect_button.configure(state="normal")
+        except Exception as error:
+            self._show_error(str(error))
 
     def _on_connection_state_change(self, state: ConnectionState) -> None:
         # connection state changes control ui button states and visual feedback
@@ -267,7 +250,8 @@ class ConnectionFrame(ctk.CTkFrame):
             self.connect_button.configure(state="disabled")
             self.disconnect_button.configure(state="normal")
             self.scan_button.configure(state="disabled")
-            self.mac_entry.configure(state="disabled")
+            self.profile_dropdown.configure(state="disabled")
+            self.edit_profile_button.configure(state="disabled")
 
             device_name = self.printer.device_name or ""
             self._update_device_name(device_name)
@@ -288,7 +272,8 @@ class ConnectionFrame(ctk.CTkFrame):
             self.connect_button.configure(state="normal")
             self.disconnect_button.configure(state="disabled")
             self.scan_button.configure(state="normal")
-            self.mac_entry.configure(state="normal")
+            self.profile_dropdown.configure(state="normal")
+            self.edit_profile_button.configure(state="normal")
 
             self.device_name_label.configure(text_color=("gray50", "gray50"))
             self.status_label.configure(
@@ -301,7 +286,8 @@ class ConnectionFrame(ctk.CTkFrame):
             self.connect_button.configure(state="normal")
             self.disconnect_button.configure(state="disabled")
             self.scan_button.configure(state="normal")
-            self.mac_entry.configure(state="normal")
+            self.profile_dropdown.configure(state="normal")
+            self.edit_profile_button.configure(state="normal")
 
             self.device_name_label.configure(text_color=("red", "#FF4444"))
             self.status_label.configure(
@@ -321,10 +307,18 @@ class ConnectionFrame(ctk.CTkFrame):
         )
 
     def set_device(self, device: BluetoothDevice) -> None:
-        self.mac_entry.delete(0, "end")
-        self.mac_entry.insert(0, device.mac_address)
-        self._update_device_name(device.name)
-        self._settings.set(SettingsKeys.Printer.DEVICE_NAME, device.name)
+        """Called when a device is picked from the scanner dialog.
+
+        A scanned device is not yet a profile, so store it as one - otherwise
+        the choice would be lost the moment the dialog closed.
+        """
+        name = saved_profiles.save_profile(
+            name=device.name or device.mac_address,
+            transport=TRANSPORT_BLUETOOTH,
+            address=device.mac_address,
+            capability_profile=self._settings.get(SettingsKeys.Printer.PROFILE, ""),
+        )
+        self._refresh_profiles(select=name)
 
     def destroy(self) -> None:
         self.printer.remove_state_callback(self._on_connection_state_change)

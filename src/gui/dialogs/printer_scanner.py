@@ -108,7 +108,7 @@ class PrinterScannerDialog(CenteredDialog):
 
         info_label = ctk.CTkLabel(
             info_frame,
-            text="CTP printers appear as 'CorePrint-XXXX' and are highlighted.",
+            text="Devices that look like printers are listed first.",
             text_color="gray",
             font=AppFonts.normal()
         )
@@ -215,10 +215,10 @@ class PrinterScannerDialog(CenteredDialog):
         error_label.grid(row=0, column=0, pady=20)
 
     def _create_device_entry(self, index: int, device: BluetoothDevice) -> None:
-        if device.is_ctp_printer:
+        if device.is_printer:
             fg_color = BUTTON_CONNECT_FG
             text_color = ("white", "white")
-            indicator = "[CTP]"
+            indicator = "[printer]"
         else:
             fg_color = ("gray90", "gray20")
             text_color = ("gray10", "gray90")

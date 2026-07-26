@@ -48,12 +48,17 @@ class ConnectionState(Enum):
 class BluetoothDevice:
     mac_address: str
     name: str
-    is_ctp_printer: bool = False
+    is_printer: bool = False
 
     @classmethod
     def from_scan_line(cls, mac: str, name: str) -> "BluetoothDevice":
-        is_printer = name.lower().startswith("coreprint")
-        return cls(mac_address=mac, name=name, is_ctp_printer=is_printer)
+        # generic heuristic - any thermal/POS printer, not one vendor's
+        lowered = (name or "").lower()
+        is_printer = any(
+            token in lowered
+            for token in ("print", "pos", "ptr", "thermal", "receipt", "label")
+        )
+        return cls(mac_address=mac, name=name, is_printer=is_printer)
 
 
 class PrinterConnection:
@@ -576,7 +581,7 @@ class PrinterConnection:
             raise ScanError(f"Bluetooth scan failed: {e}")
 
         # put ctp printers first in results
-        devices.sort(key=lambda d: (not d.is_ctp_printer, d.name))
+        devices.sort(key=lambda d: (not d.is_printer, d.name))
         return devices
 
     @staticmethod
