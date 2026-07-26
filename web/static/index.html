@@ -93,14 +93,24 @@
         </div>
 
         <label class="sr-only" for="editor">Markdown source</label>
-        <!-- The highlight layer is a mirror of the textarea, drawn behind it
-             with identical metrics. Keeping a real textarea underneath means
-             selection, undo and the whole toolbar keep working exactly as they
-             do in raw mode; only the paint changes. -->
+        <!-- Two editors over one document. Rendered mode is a real rich text
+             surface: a heading is a heading, a table is a table you can type
+             into. Raw mode is the markdown behind it. Whichever is showing,
+             markdown is what gets saved and printed. -->
         <div class="editor-shell" id="editorShell">
-          <pre class="editor-hl" id="editorHL" aria-hidden="true"></pre>
+          <div id="rich" class="rich" contenteditable="true" spellcheck="false"
+               role="textbox" aria-multiline="true" aria-label="Document"></div>
           <textarea id="editor" class="editor-area" spellcheck="false"
             placeholder="Type here. Markdown works: # heading, **bold**, - list, > quote, | tables |"></textarea>
+
+          <!-- table controls, shown while the caret is in a table. Outside the
+               editable region so clicking them cannot land text in a cell. -->
+          <div class="table-tools" id="tableTools" hidden>
+            <button class="tool" data-table="row-after" title="Add a row below">+ Row</button>
+            <button class="tool" data-table="col-after" title="Add a column after">+ Column</button>
+            <button class="tool" data-table="row-delete" title="Delete this row">&minus; Row</button>
+            <button class="tool" data-table="col-delete" title="Delete this column">&minus; Column</button>
+          </div>
         </div>
       </div>
 

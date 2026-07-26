@@ -41,6 +41,9 @@ DEFAULT_PRINT_STYLE = {
     "quote_bar": 3,              # dots wide; 0 draws no bar
     "quote_italic": True,
     "block_gap": 6,              # blank dots after a paragraph
+    "margin": 6,                 # dots of white around the whole page
+    "list_indent": 14,           # dots the bullet is inset from the margin
+    "heading_gap": 6,            # blank dots between a heading rule and the text
 }
 
 _INLINE_CODE = re.compile(r"`([^`]+)`")
@@ -91,8 +94,8 @@ class MarkdownRenderer:
         self.font_family = font_family
         self.font_size = font_size
         self.line_spacing = line_spacing if line_spacing is not None else DEFAULT_LINE_SPACING
-        self.margin = margin
         self.style = {**DEFAULT_PRINT_STYLE, **(style or {})}
+        self.margin = int(self.style["margin"]) if margin == 6 else margin
         self._fm = get_font_manager()
 
     # -------------------------------------------------------------------------
@@ -380,7 +383,9 @@ class MarkdownRenderer:
             return y + rendered.height + 8
 
         if block.kind == "table":
-            return self._draw_table(draw, block, y, left, width)
+            # a table wants air above it or it reads as part of the paragraph
+            # it follows
+            return self._draw_table(draw, block, y + int(self.style["block_gap"]), left, width)
 
         if block.kind == "heading":
             return self._draw_heading(draw, block, y, left, width)
@@ -395,11 +400,11 @@ class MarkdownRenderer:
                                     force_italic=bool(self.style["quote_italic"]))
             if bar:
                 draw.rectangle([left, top, left + bar, y], fill="black")
-            return y + 6
+            return y + int(self.style["block_gap"])
 
         if block.kind == "list":
             marker = f"{block.index}." if block.ordered else self._bullet(block.level)
-            indent = left + block.level * 16
+            indent = left + int(self.style["list_indent"]) + block.level * 16
             font = self._font(self.font_size)
             try:
                 marker_width = int(font.getlength(marker + " "))
@@ -488,8 +493,8 @@ class MarkdownRenderer:
 
         if block.level <= 2:
             weight = int(self.style["rule_weight"]) if block.level == 1 else 1
-            used = self._draw_rule(draw, left, right, y + 2, weight)
-            y += 6 + used
+            used = self._draw_rule(draw, left, right, y + 4, weight)
+            y += 4 + used + int(self.style["heading_gap"])
         return y + 4
 
     def _draw_line(self, draw, line, y: int, x_start: int, size: int,

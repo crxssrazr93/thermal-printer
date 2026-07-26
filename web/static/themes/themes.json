@@ -22,7 +22,10 @@
           "table_header_rule": 2,
           "quote_bar": 3,
           "quote_italic": true,
-          "block_gap": 6
+          "block_gap": 8,
+          "margin": 20,
+          "list_indent": 14,
+          "heading_gap": 10
         }
       }
     },
@@ -48,7 +51,10 @@
           "table_header_rule": 2,
           "quote_bar": 3,
           "quote_italic": true,
-          "block_gap": 9
+          "block_gap": 10,
+          "margin": 24,
+          "list_indent": 16,
+          "heading_gap": 12
         }
       }
     },
@@ -61,7 +67,7 @@
         "#2563EB"
       ],
       "print": {
-        "font": "NotoSansMono Black",
+        "font": "NotoSansMono",
         "size": 16,
         "line_spacing": 1.26,
         "style": {
@@ -75,7 +81,10 @@
           "table_header_rule": 2,
           "quote_bar": 4,
           "quote_italic": true,
-          "block_gap": 6
+          "block_gap": 8,
+          "margin": 20,
+          "list_indent": 14,
+          "heading_gap": 11
         }
       }
     },
@@ -101,7 +110,10 @@
           "table_header_rule": 2,
           "quote_bar": 3,
           "quote_italic": true,
-          "block_gap": 9
+          "block_gap": 11,
+          "margin": 24,
+          "list_indent": 16,
+          "heading_gap": 12
         }
       }
     }

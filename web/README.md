@@ -87,9 +87,23 @@ follows the theme.
 
 ## Editor modes
 
-Rendered mode is a mirror element drawn behind the textarea, carrying the
-decoration while the textarea carries transparent text and the caret. The thing
-being edited stays plain markdown, so selection, undo, and every toolbar button
-behave identically in both modes. It also means the decoration has to be
-metric neutral: colour, weight and slant are fine, padding and font size are
-not, because they would slide the glyphs out from under the caret.
+Two editors over one document, and markdown is the document.
+
+**Rendered** is a real editing surface. A heading is a heading, a quote has its
+bar, and a table is a table you type into. The toolbar drives the document
+directly, so there is no markup to look at while writing.
+
+**Raw** is the markdown itself, in a plain textarea, for when the source is
+what you want to see. Switching converts, and either way markdown is what gets
+previewed, printed and saved.
+
+### Tables
+
+Put the caret in a table and its controls appear above it: add or remove a row
+or a column. Tab walks the cells and adds a row when it runs off the end. Drag
+a column boundary to trade width with the column beside it.
+
+Column widths are a view concern, not part of the document: markdown has
+nowhere to keep them, so a drag changes what you see and never what prints.
+Row height follows the content for the same reason. What the printer receives
+is the markdown table, laid out to the paper by the renderer.
