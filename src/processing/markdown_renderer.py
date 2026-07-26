@@ -10,7 +10,9 @@ import re
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
-from PIL import Image, ImageDraw
+from pathlib import Path
+
+from PIL import Image, ImageDraw, ImageFont
 
 from ..config.defaults import DEFAULT_LINE_SPACING
 from ..config.printer_profile import get_printer_width
@@ -40,10 +42,20 @@ DEFAULT_PRINT_STYLE = {
     "table_header_rule": 2,
     "quote_bar": 3,              # dots wide; 0 draws no bar
     "quote_italic": True,
-    "block_gap": 6,              # blank dots after a paragraph
-    "margin": 6,                 # dots of white around the whole page
-    "list_indent": 14,           # dots the bullet is inset from the margin
-    "heading_gap": 6,            # blank dots between a heading rule and the text
+    "block_gap": 6,              # blank dots between two paragraphs
+    "margin": 6,                 # dots of white down each side of the page
+    "margin_top": 6,
+    "margin_bottom": 6,
+    "rule_gap_above": 4,         # between heading text and its rule
+    "heading_gap": 8,            # between that rule and whatever follows
+    "list_indent": 14,           # the bullet, inset from the margin
+    "list_gap": 8,               # around a list as a whole
+    "list_item_gap": 3,          # between two items of one list
+    "quote_gap": 10,             # around a quote
+    "quote_pad": 12,             # the text, inset from the bar
+    "table_gap": 12,             # around a table
+    "table_scale": 0.9,          # cell size as a fraction of the body
+    "table_cell_pad": 4,         # above and below the text in a cell
 }
 
 _INLINE_CODE = re.compile(r"`([^`]+)`")
@@ -56,6 +68,22 @@ _ITALIC = re.compile(r"(?<![\w\*_])(?:\*|_)([^\*_\s][^\*_]*?)(?:\*|_)(?![\w\*_])
 _STRIKE = re.compile(r"~~(.+?)~~")
 _LINK = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 _IMAGE = re.compile(r"!\[([^\]]*)\]\(([^)]+)\)")
+_TABLE_DIRECTIVE = re.compile(r"<!--\s*table\s+(.*?)\s*-->")
+
+
+def _parse_directive(body: str) -> dict:
+    return dict(
+        part.split("=", 1) for part in body.split() if "=" in part
+    )
+
+
+def _cell_alignment(cell: str) -> str:
+    left, right = cell.startswith(":"), cell.endswith(":")
+    if left and right:
+        return "center"
+    if right:
+        return "right"
+    return "left"
 
 
 @dataclass
@@ -75,6 +103,8 @@ class Block:
     ordered: bool = False
     index: int = 0                 # ordered list counter
     rows: List[List[str]] = field(default_factory=list)   # table only
+    align: List[str] = field(default_factory=list)        # table only: left|center|right
+    borders: str = ""                                     # table only: all|header|none
     lines: List[str] = field(default_factory=list)        # code only
 
 
@@ -97,6 +127,7 @@ class MarkdownRenderer:
         self.style = {**DEFAULT_PRINT_STYLE, **(style or {})}
         self.margin = int(self.style["margin"]) if margin == 6 else margin
         self._fm = get_font_manager()
+        self._italic_cache = {}
 
     # -------------------------------------------------------------------------
     # TextRenderer-compatible surface
@@ -123,12 +154,45 @@ class MarkdownRenderer:
     # -------------------------------------------------------------------------
     # fonts
     # -------------------------------------------------------------------------
+    ITALIC_FALLBACK = "DejaVuSansMono"   # ships an oblique, which many mono faces do not
+
+    _ITALIC_STYLES = ("BoldItalic", "BoldOblique", "Italic", "Oblique")
+
+    def _slanted_path(self, family: str, bold: bool):
+        """A genuinely slanted face for this family, or None.
+
+        The font manager matches style names loosely and will happily hand back
+        the Bold file when asked for an Italic, so the file name is checked
+        before the result is believed.
+        """
+        styles = self._ITALIC_STYLES if bold else self._ITALIC_STYLES[2:]
+        for style in styles:
+            path = self._fm.get_font_path(family, style, fallback=False)
+            if path and re.search(r"italic|oblique", Path(path).name, re.I):
+                return path
+        return None
+
     def _font(self, size: int, bold: bool = False, italic: bool = False, mono: bool = False):
         family = "DejaVu Sans Mono" if mono else self.font_family
+
+        if italic:
+            key = (family, size, bold)
+            if key not in self._italic_cache:
+                # borrowing an oblique from another mono face keeps a quote
+                # looking like a quote; substituting regular, which is what the
+                # font manager does on its own, silently drops the distinction
+                path = self._slanted_path(family, bold) or self._slanted_path(
+                    self.ITALIC_FALLBACK, bold)
+                try:
+                    self._italic_cache[key] = ImageFont.truetype(path, size) if path else None
+                except OSError:
+                    self._italic_cache[key] = None
+            slanted = self._italic_cache[key]
+            if slanted is not None:
+                return slanted
+
         font = self._fm.load_font(family, size, bold=bold, italic=italic)
         if font is None and (bold or italic):
-            # not every family ships every style - fall back to regular rather
-            # than dropping the text entirely
             font = self._fm.load_font(family, size)
         return font
 
@@ -148,6 +212,7 @@ class MarkdownRenderer:
         lines = text.replace("\r\n", "\n").split("\n")
         i = 0
         ordered_counter = 0
+        pending_directive: dict = {}
 
         while i < len(lines):
             raw = lines[i]
@@ -191,17 +256,34 @@ class MarkdownRenderer:
                 i += 1
                 continue
 
+            # a directive is a comment carrying the choices markdown has no
+            # syntax for, so a table can remember how it was set without the
+            # document stopping being markdown
+            directive = _TABLE_DIRECTIVE.match(stripped)
+            if directive:
+                pending_directive = _parse_directive(directive.group(1))
+                i += 1
+                continue
+
             # table - a header row followed by a separator of dashes
             if "|" in stripped and i + 1 < len(lines) and re.fullmatch(
                 r"\s*\|?[\s:|-]+\|?\s*", lines[i + 1]
             ) and "-" in lines[i + 1]:
                 rows = []
+                align: List[str] = []
                 while i < len(lines) and "|" in lines[i]:
-                    cells = [c.strip() for c in lines[i].strip().strip("|").split("|")]
-                    if not re.fullmatch(r"[\s:|-]+", lines[i].strip().strip("|")):
+                    body = lines[i].strip().strip("|")
+                    cells = [c.strip() for c in body.split("|")]
+                    if re.fullmatch(r"[\s:|-]+", body):
+                        align = [_cell_alignment(c) for c in cells]
+                    else:
                         rows.append(cells)
                     i += 1
-                blocks.append(Block(kind="table", rows=rows))
+                blocks.append(Block(
+                    kind="table", rows=rows, align=align,
+                    borders=pending_directive.get("borders", ""),
+                ))
+                pending_directive = {}
                 continue
 
             # heading
@@ -270,7 +352,8 @@ class MarkdownRenderer:
 
         spans: List[Span] = []
         pattern = re.compile(
-            r"(?P<code>`[^`]+`)|(?P<bold>(?<!\w)(?:\*\*|__).+?(?:\*\*|__)(?!\w))|"
+            r"(?P<code>`[^`]+`)|(?P<both>(?<!\w)\*\*\*.+?\*\*\*(?!\w))|"
+            r"(?P<bold>(?<!\w)(?:\*\*|__).+?(?:\*\*|__)(?!\w))|"
             r"(?P<italic>(?<![\w\*_])[\*_][^\*_\s][^\*_]*?[\*_](?![\w\*_]))"
         )
 
@@ -280,6 +363,8 @@ class MarkdownRenderer:
                 spans.append(Span(text[position:match.start()]))
             if match.group("code"):
                 spans.append(Span(match.group("code")[1:-1], mono=True))
+            elif match.group("both"):
+                spans.append(Span(match.group("both")[3:-3], bold=True, italic=True))
             elif match.group("bold"):
                 spans.append(Span(_BOLD.sub(r"\1", match.group("bold")), bold=True))
             else:
@@ -334,22 +419,43 @@ class MarkdownRenderer:
 
         image = Image.new("RGB", (width, max_height), "white")
         draw = ImageDraw.Draw(image)
-        y = self.margin
+        y = int(self.style["margin_top"])
 
+        previous = None
         for block in blocks:
+            if previous is not None:
+                y += self._gap(previous, block.kind)
             y = self._draw_block(draw, image, block, y, body, width)
+            previous = block.kind
             if y > max_height - 100:
                 break
 
         # trim to content
-        return image.crop((0, 0, width, min(max_height, y + self.margin)))
+        return image.crop(
+            (0, 0, width, min(max_height, y + int(self.style["margin_bottom"])))
+        )
+
+    def _gap(self, previous: str, kind: str) -> int:
+        """White space between two blocks, taken from whichever rule is stronger."""
+        style = self.style
+        if previous == "heading":
+            return int(style["heading_gap"])
+        if "table" in (previous, kind):
+            return int(style["table_gap"])
+        if "quote" in (previous, kind):
+            return int(style["quote_gap"])
+        if previous == "list" and kind == "list":
+            return int(style["list_item_gap"])
+        if "list" in (previous, kind):
+            return int(style["list_gap"])
+        return int(style["block_gap"])
 
     def _draw_block(self, draw, image, block: Block, y: int, left: int, width: int) -> int:
         right_margin = self.margin
 
         if block.kind == "rule":
-            draw.rectangle([left, y + 4, width - right_margin, y + 5], fill="black")
-            return y + 14
+            draw.rectangle([left, y, width - right_margin, y + 1], fill="black")
+            return y + 2
 
         if block.kind == "code":
             font = self._font(max(12, int(self.font_size * 0.8)), mono=True)
@@ -362,7 +468,7 @@ class MarkdownRenderer:
             # a left bar reads as "code" without needing a background fill,
             # which would waste an enormous amount of thermal ink
             draw.rectangle([left, box_top, left + 2, y + 2], fill="black")
-            return y + 8
+            return y + 2
 
         if block.kind == "math":
             expression = block.lines[0] if block.lines else ""
@@ -380,19 +486,17 @@ class MarkdownRenderer:
 
             x = left + max(0, (width - left - right_margin - rendered.width) // 2)
             image.paste(rendered, (x, y))
-            return y + rendered.height + 8
+            return y + rendered.height
 
         if block.kind == "table":
-            # a table wants air above it or it reads as part of the paragraph
-            # it follows
-            return self._draw_table(draw, block, y + int(self.style["block_gap"]), left, width)
+            return self._draw_table(draw, block, y, left, width)
 
         if block.kind == "heading":
             return self._draw_heading(draw, block, y, left, width)
 
         if block.kind == "quote":
             bar = int(self.style["quote_bar"])
-            inner = left + (12 if bar else 8)
+            inner = left + int(self.style["quote_pad"])
             top = y
             lines = self._wrap_spans(block.spans, self.font_size, width - inner - right_margin)
             for line in lines:
@@ -400,7 +504,7 @@ class MarkdownRenderer:
                                     force_italic=bool(self.style["quote_italic"]))
             if bar:
                 draw.rectangle([left, top, left + bar, y], fill="black")
-            return y + int(self.style["block_gap"])
+            return y
 
         if block.kind == "list":
             marker = f"{block.index}." if block.ordered else self._bullet(block.level)
@@ -416,12 +520,12 @@ class MarkdownRenderer:
             )
             for line in lines:
                 y = self._draw_line(draw, line, y, indent + marker_width, self.font_size)
-            return y + 2
+            return y
 
         lines = self._wrap_spans(block.spans, self.font_size, width - left - right_margin)
         for line in lines:
             y = self._draw_line(draw, line, y, left, self.font_size)
-        return y + int(self.style["block_gap"])
+        return y
 
     # ---------------------------------------------------------------- style
     def _bullet(self, level: int) -> str:
@@ -492,10 +596,13 @@ class MarkdownRenderer:
             y = self._draw_line(draw, line, y, x, size, force_bold=True)
 
         if block.level <= 2:
+            # a second level heading takes a hairline, so the two levels read
+            # as a hierarchy rather than as two of the same thing
             weight = int(self.style["rule_weight"]) if block.level == 1 else 1
-            used = self._draw_rule(draw, left, right, y + 4, weight)
-            y += 4 + used + int(self.style["heading_gap"])
-        return y + 4
+            above = int(self.style["rule_gap_above"])
+            used = self._draw_rule(draw, left, right, y + above, weight)
+            y += above + used
+        return y
 
     def _draw_line(self, draw, line, y: int, x_start: int, size: int,
                    force_bold: bool = False, force_italic: bool = False,
@@ -523,46 +630,90 @@ class MarkdownRenderer:
         columns = max(len(row) for row in block.rows)
         usable = width - left - self.margin
         column_width = usable // max(1, columns)
+        right = width - self.margin
 
-        size = max(10, int(self.font_size * 0.9))
+        size = max(10, int(self.font_size * float(self.style["table_scale"])))
         font = self._font(size, mono=True)
         header_font = self._font(size, bold=True, mono=True)
-        pitch = self._line_height(font)
+        pad = int(self.style["table_cell_pad"])
+        pitch = self._line_height(font) + pad
+
+        # "all" draws the full grid, "none" drops every rule, and anything else
+        # is the theme's own treatment: a rule under the header and whatever it
+        # asks for between body rows
+        borders = block.borders or "theme"
+        top = y
 
         for row_index, row in enumerate(block.rows):
             x = left
-            for cell in row[:columns]:
-                cell_font = header_font if row_index == 0 else font
-                # hard truncate: wrapping inside a cell on a narrow strip
-                # produces unreadable ragged columns
-                text = cell
-                while text:
-                    try:
-                        if font.getlength(text) <= column_width - 4:
+            for column, cell in enumerate(row[:columns]):
+                # a cell is text like any other, so **bold** in one has to be
+                # drawn bold rather than printed with its asterisks showing
+                spans = self._parse_inline(cell)
+                drawn = []
+                used = 0
+                for span in spans:
+                    bold = span.bold or row_index == 0
+                    span_font = self._font(size, bold, span.italic, mono=True) \
+                        or (header_font if row_index == 0 else font)
+                    # hard truncate: wrapping inside a cell on a narrow strip
+                    # produces unreadable ragged columns
+                    text = span.text
+                    while text:
+                        try:
+                            if used + span_font.getlength(text) <= column_width - 2 * pad:
+                                break
+                        except (AttributeError, OSError):
                             break
+                        text = text[:-1]
+                    if not text:
+                        continue
+                    try:
+                        span_width = span_font.getlength(text)
                     except (AttributeError, OSError):
-                        break
-                    text = text[:-1]
-                draw.text((x, y), text, font=cell_font or font, fill="black")
+                        span_width = size * len(text) * 0.6
+                    drawn.append((text, span_font, span_width))
+                    used += span_width
+
+                alignment = block.align[column] if column < len(block.align) else "left"
+                if alignment == "right":
+                    cursor = x + column_width - pad - used
+                elif alignment == "center":
+                    cursor = x + (column_width - used) / 2
+                else:
+                    cursor = x + pad
+
+                for text, span_font, span_width in drawn:
+                    draw.text((cursor, y + pad), text, font=span_font, fill="black")
+                    cursor += span_width
                 x += column_width
-            y += pitch
-            right = width - self.margin
+
+            y += pitch + pad
+
+            if borders == "none":
+                continue
             if row_index == 0:
                 weight = max(1, int(self.style["table_header_rule"]))
-                draw.rectangle([left, y, right, y + weight], fill="black")
-                y += 3 + weight
-            elif row_index < len(block.rows) - 1:
-                # separating body rows without turning the page into a grid of
-                # black bars, in whichever way the theme asks for
-                kind = self.style["table_rule"]
+                draw.rectangle([left, y, right, y + weight - 1], fill="black")
+                y += weight
+            elif row_index < len(block.rows) - 1 or borders == "all":
+                kind = "solid" if borders == "all" else self.style["table_rule"]
                 if kind == "dotted":
-                    self._dotted_rule(draw, left, right, y + 3)
-                    y += 8
+                    self._dotted_rule(draw, left, right, y)
+                    y += 1
                 elif kind == "solid":
-                    draw.rectangle([left, y + 3, right, y + 3], fill="black")
-                    y += 8
+                    draw.rectangle([left, y, right, y], fill="black")
+                    y += 1
 
-        return y + 6
+        if borders == "all":
+            # the outer frame and the column rules, drawn once the height of
+            # the whole table is known
+            draw.rectangle([left, top, right, y], outline="black", width=1)
+            for column in range(1, columns):
+                x = left + column * column_width
+                draw.rectangle([x, top, x, y], fill="black")
+
+        return y
 
     @staticmethod
     def _dotted_rule(draw, x0: int, x1: int, y: int, dash: int = 3, gap: int = 4) -> None:
