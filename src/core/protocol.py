@@ -175,6 +175,22 @@ class PrinterProtocol(metaclass=_ProtocolMeta):
         command.extend(image.tobytes())
         return bytes(command)
 
+    # One command for a whole page asks the printer to hold the whole page.
+    # These printers cannot, so the page is handed over a band at a time: each
+    # band is a complete raster command, which the firmware finishes before it
+    # reads the next one. A late or lost byte can then spoil one band rather
+    # than every row below it, and the head is never asked to buffer more than
+    # it can print.
+    BAND_ROWS = 64
+
+    @classmethod
+    def build_raster_bands(cls, image: Image.Image, band_rows: int = 0):
+        """Yield one raster command per horizontal band of the image."""
+        rows = band_rows or cls.BAND_ROWS
+        for top in range(0, image.size[1], rows):
+            band = image.crop((0, top, image.size[0], min(top + rows, image.size[1])))
+            yield cls.build_raster_command(band)
+
     @classmethod
     def calculate_dimensions(cls: Type["PrinterProtocol"], width: int, height: int) -> Tuple[bytes, bytes]:
         w_bytes = width // PRINTER_WIDTH_BITS_PER_BYTE

@@ -58,6 +58,8 @@ DEFAULT_PRINT_STYLE = {
     "table_scale": 0.9,          # cell size as a fraction of the body
     "table_cell_pad": 4,         # above and below the text in a cell
     "image_dither": "floyd-steinberg",   # how a picture becomes ink or nothing
+    "image_threshold": 128,      # the cutoff: how much of it becomes ink at all
+    "image_strength": 1.0,       # how much of the error is diffused, 0 to 1
     # Arabic and Hebrew need a face that carries the script and a shaper that
     # joins it; most mono faces carry neither, so a right to left run is set in
     # this family instead of the theme's.
@@ -854,9 +856,27 @@ class MarkdownRenderer:
         # and which pattern is a matter of taste and of subject: line art wants
         # a hard threshold, a photograph wants error diffusion, and a large flat
         # area wants Atkinson, which keeps less ink on the paper.
-        mode = (block.borders or self.style["image_dither"] or "floyd-steinberg").lower()
-        mode = mode.replace("dither=", "").strip()
-        sheet.paste(dither_image(picture, mode).convert("RGB"), (left, y))
+        # the title slot carries "mode t=<cutoff> s=<amount>", any part of
+        # which may be missing and falls back to the page's own setting
+        parts = (block.borders or "").split()
+        mode = (parts[0] if parts and "=" not in parts[0]
+                else self.style["image_dither"] or "floyd-steinberg").lower()
+        options = dict(part.split("=", 1) for part in parts if "=" in part)
+
+        def number(key, fallback, cast):
+            try:
+                return cast(options[key])
+            except (KeyError, TypeError, ValueError):
+                return cast(fallback)
+
+        sheet.paste(
+            dither_image(
+                picture, mode,
+                threshold=number("t", self.style["image_threshold"], int),
+                strength=number("s", self.style["image_strength"], float),
+            ).convert("RGB"),
+            (left, y),
+        )
         return y + picture.height
 
     def _load_image(self, source: str):

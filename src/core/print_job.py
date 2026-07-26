@@ -175,22 +175,23 @@ class PrintJobManager:
                 return False
 
             self._report_progress(PRINT_PROGRESS_IMAGE, "Processing image...")
-            raster_cmd = PrinterProtocol.build_raster_command(image)
-            total_size = len(raster_cmd)
+            # a band at a time, each one a command in its own right, so the
+            # printer never holds more of the page than it can print
+            bands = list(PrinterProtocol.build_raster_bands(image))
+            total_size = sum(len(band) for band in bands)
 
             if self._cancel_event.is_set():
                 self._complete_job(False, "Print cancelled")
                 return False
 
             sent = 0
-            while sent < total_size:
+            for band in bands:
                 if self._cancel_event.is_set():
                     self._complete_job(False, "Print cancelled")
                     return False
 
-                end = min(sent + config.chunk_size, total_size)
-                self._printer.send_raw(raster_cmd[sent:end])
-                sent = end
+                self._printer.send_raw(band)
+                sent += len(band)
 
                 progress = PRINT_PROGRESS_IMAGE + int((sent / total_size) * PRINT_PROGRESS_IMAGE_RANGE)
                 self._report_progress(

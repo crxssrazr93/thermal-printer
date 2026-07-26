@@ -158,10 +158,24 @@ divisor:
 | Stucki | the finest detail, and the slowest |
 | Atkinson | soft results, and the least ink on the paper |
 
-Settings holds the default. A single picture can override it from the control
-that appears when the picture is selected, and that choice travels in
-markdown's own title slot, `![alt](path "atkinson")`, so it stays with the
-document and any other reader simply ignores it.
+Two sliders sit beside the method. **Cutoff** decides how much of the picture
+becomes ink at all: it moves the whole picture towards paper or towards ink
+before it is screened, so lower prints lighter and higher prints heavier. It is
+applied to the tones rather than to the comparison point, because error
+diffusion hands whatever it takes off one pixel to the next and so conserves
+the average tone almost exactly. Simply moving the comparison point would leave
+the slider doing nothing on nine of the eleven methods.
+
+**Amount** decides how much of each pixel's error reaches its neighbours. At
+100 percent it is the algorithm as published. Lower, the texture thins out and
+the picture posterises into flatter areas, which is often easier to read on
+paper. At zero it is a plain cutoff no matter which method is chosen.
+
+Settings holds the defaults for all three. A single picture can override them
+from the controls that appear when the picture is selected, and those choices
+travel in markdown's own title slot, `![alt](path "atkinson t=200 s=0.6")`, so
+they stay with the document and any other reader simply ignores them. Reset
+puts the picture back on the page defaults.
 
 ## Direction
 

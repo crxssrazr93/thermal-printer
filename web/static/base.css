@@ -77,6 +77,9 @@ button{cursor:pointer;background:none;border:0}
   background:var(--panel-2);border:var(--border) solid var(--line);color:var(--ink);
   border-radius:var(--radius-sm);padding:8px 11px;font-size:13px;min-height:38px;
 }
+/* a select needs room for its own arrow, or a long option runs under it */
+select.control{padding-right:30px}
+select.control.slim{padding-right:26px}
 .control:hover{border-color:var(--line-strong)}
 .grow{flex:1;min-width:0}
 
@@ -283,7 +286,10 @@ button{cursor:pointer;background:none;border:0}
 /* The sheet scrolls inside a frame of its own rather than growing the pane:
    a bigger type size means more paper, and the window should not jump every
    time that number changes. */
-.paper-stage{flex:1;min-height:220px;padding:10px;
+/* The sheet gets a frame of its own and scrolls inside it. A receipt changes
+   height every time the type size or the screening changes, and if that height
+   were the page's height the whole window would jump underneath you each time. */
+.paper-stage{flex:1;min-height:220px;max-height:min(62vh,640px);overflow:auto;padding:10px;
   display:flex;justify-content:center;align-items:flex-start}
 .paper-wrap{background:#fff;border-radius:var(--radius-paper);padding:14px 12px 20px;
   box-shadow:var(--shadow-lift);flex:none}
@@ -423,3 +429,16 @@ button{cursor:pointer;background:none;border:0}
 .toast.err{border-color:var(--danger);color:var(--danger)}
 
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* Sliders. A range with a live readout beside it, so the number is visible
+   while dragging rather than only in the result. In the floating tool strips
+   the label sits inline; in Settings it sits above, like every other field. */
+.slider{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);white-space:nowrap}
+.slider input[type=range]{width:96px}
+.slider-row{display:flex;align-items:center;gap:10px}
+.slider-row input[type=range]{flex:1;min-width:0}
+.slider output,.slider-row output{
+  min-width:44px;text-align:right;font-variant-numeric:tabular-nums;
+  font-size:12px;color:var(--muted)}
+input[type=range]{accent-color:var(--accent);cursor:pointer;height:20px}
+input[type=range]:focus-visible{outline:2px solid var(--accent);outline-offset:3px}

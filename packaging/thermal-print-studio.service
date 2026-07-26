@@ -1,0 +1,28 @@
+# A user service, not a system one: the printer is paired to this user's
+# Bluetooth session and the presets live in this user's data directory, so
+# running it as root would reach neither.
+#
+#   systemctl --user enable --now thermal-print-studio
+#
+# It starts at login. To keep it running when nobody is logged in:
+#
+#   sudo loginctl enable-linger $USER
+
+[Unit]
+Description=Thermal Print Studio print server
+Documentation=https://github.com/crxssrazr93/thermal-print-studio
+After=network.target bluetooth.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/thermal-print-studio
+Restart=on-failure
+RestartSec=3
+
+# Reachable from this machine only by default. Set THERMAL_WEB_HOST=0.0.0.0 to
+# put it on the network, and understand that anyone who can reach it can print.
+Environment=THERMAL_WEB_HOST=127.0.0.1
+Environment=THERMAL_WEB_PORT=8760
+
+[Install]
+WantedBy=default.target

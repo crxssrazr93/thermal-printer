@@ -16,6 +16,7 @@
 
 from typing import Dict, List, Tuple
 
+import numpy as np
 from PIL import Image
 
 from .image_processor import ImageProcessor
@@ -95,15 +96,65 @@ DITHER_LABELS = {
 }
 
 
-def dither_image(image: Image.Image, mode: str = "floyd-steinberg") -> Image.Image:
-    """Reduce an image to one bit using the named algorithm."""
-    grey = image.convert("L")
-    processor = ImageProcessor(auto_resize=False)
+def _shift(grey: Image.Image, threshold: int) -> Image.Image:
+    """Move the whole picture towards paper or towards ink.
 
-    if mode == "none":
-        return grey.point(lambda value: 255 if value > 127 else 0, "1")
+    Simply moving the comparison point is close to useless under error
+    diffusion, which hands whatever it took off one pixel to the next and so
+    conserves the average tone almost exactly. What a cutoff control is
+    expected to do, and what it does under a plain threshold, is decide how
+    much of the picture ends up dark. So the setting is applied to the tones
+    themselves before any screening, which behaves the same way for every
+    method here.
+    """
+    offset = 128 - threshold
+    if not offset:
+        return grey
+    return grey.point(lambda value: max(0, min(255, value + offset)))
+
+
+def _diffuse(grey: Image.Image, matrix, divisor: int, strength: float) -> Image.Image:
+    """Error diffusion with a settable amount.
+
+    The amount decides how much of each pixel's error is handed to its
+    neighbours. At zero it is a plain threshold; at one it is the algorithm as
+    published. Between the two the texture thins out, which on paper reads as
+    a harder, more posterised picture.
+    """
+    pixels = np.asarray(grey, dtype=np.float32).copy()
+    height, width = pixels.shape
+    weights = [(dx, dy, weight / divisor * strength) for dx, dy, weight in matrix]
+
+    for y in range(height):
+        for x in range(width):
+            old = pixels[y, x]
+            new = 255.0 if old > 128.0 else 0.0
+            pixels[y, x] = new
+            error = old - new
+            if not error:
+                continue
+            for dx, dy, weight in weights:
+                nx, ny = x + dx, y + dy
+                if 0 <= nx < width and 0 <= ny < height:
+                    pixels[ny, nx] += error * weight
+
+    return Image.fromarray(np.clip(pixels, 0, 255).astype(np.uint8)).convert("1")
+
+
+def dither_image(image: Image.Image, mode: str = "floyd-steinberg",
+                 threshold: int = 128, strength: float = 1.0) -> Image.Image:
+    """Reduce an image to one bit using the named algorithm."""
+    threshold = max(0, min(255, int(threshold)))
+    strength = max(0.0, min(1.0, float(strength)))
+    grey = _shift(image.convert("L"), threshold)
+
+    if mode == "none" or strength == 0:
+        return grey.point(lambda value: 255 if value > 128 else 0, "1")
     if mode == "ordered":
-        return processor._ordered_dither(grey)
+        return ImageProcessor(auto_resize=False)._ordered_dither(grey)
 
     matrix, divisor = DIFFUSION_MAPS.get(mode, DIFFUSION_MAPS["floyd-steinberg"])
-    return processor._error_diffusion_dither(grey, matrix, divisor)
+    if strength == 1.0:
+        # the fast path in ImageProcessor, which is this same arithmetic
+        return ImageProcessor(auto_resize=False)._error_diffusion_dither(grey, matrix, divisor)
+    return _diffuse(grey, matrix, divisor, strength)

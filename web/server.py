@@ -296,7 +296,8 @@ class Session:
             try:
                 self.printer.initialize()
                 self.printer.start_print()
-                self.printer.send_image(PrinterProtocol.build_raster_command(image))
+                for band in PrinterProtocol.build_raster_bands(image):
+                    self.printer.send_image(band)
                 if gap_mm:
                     self.printer.send_raw(
                         PrinterProtocol.build_feed_dots(mm_to_dots(gap_mm))

@@ -766,7 +766,39 @@ async function loadDitherModes() {
 }
 
 const DITHER_KEY = 'tp.dither';
+const THRESHOLD_KEY = 'tp.ditherThreshold';
+const STRENGTH_KEY = 'tp.ditherStrength';
+const DEFAULT_THRESHOLD = 128;
+const DEFAULT_STRENGTH = 100;
+
 const currentDither = () => localStorage.getItem(DITHER_KEY) || 'floyd-steinberg';
+const currentThreshold = () => Number(localStorage.getItem(THRESHOLD_KEY) ?? DEFAULT_THRESHOLD);
+const currentStrength = () => Number(localStorage.getItem(STRENGTH_KEY) ?? DEFAULT_STRENGTH);
+
+/* An image's screening rides in markdown's title slot as "mode t=<cutoff>
+ * s=<amount>". Anything the picture does not say falls back to the page
+ * setting, so a document written before these controls existed still reads. */
+function parseScreen(title) {
+  const parts = String(title || '').trim().split(/\s+/).filter(Boolean);
+  const mode = parts[0] && !parts[0].includes('=') ? parts[0] : currentDither();
+  const options = {};
+  parts.filter((part) => part.includes('=')).forEach((part) => {
+    const [key, value] = part.split('=');
+    options[key] = Number(value);
+  });
+  return {
+    mode,
+    threshold: Number.isFinite(options.t) ? options.t : currentThreshold(),
+    strength: Number.isFinite(options.s) ? Math.round(options.s * 100) : currentStrength(),
+  };
+}
+
+function screenTitle({ mode, threshold, strength }) {
+  const parts = [mode];
+  if (threshold !== currentThreshold()) parts.push(`t=${threshold}`);
+  if (strength !== currentStrength()) parts.push(`s=${(strength / 100).toFixed(2)}`);
+  return parts.join(' ');
+}
 
 /* Ask the document, not the DOM: a node selection is a fact about the editor
  * state, while the selected-node class is a rendering detail that is not
@@ -779,21 +811,71 @@ function positionImageTools() {
   const showing = isRendered() && imageSelected();
   tools.hidden = !showing;
   if (showing) {
-    $('imageDither').value = tt.getAttributes('image').title || currentDither();
+    const screen = parseScreen(tt.getAttributes('image').title);
+    $('imageDither').value = screen.mode;
+    setSlider('imageThreshold', screen.threshold);
+    setSlider('imageStrength', screen.strength, '%');
   }
+}
+
+/* A range and its readout move together, and the readout is the only place the
+ * number appears, so they are set as a pair everywhere. */
+function setSlider(id, value, suffix = '') {
+  const input = $(id);
+  if (!input) return;
+  input.value = value;
+  const readout = $(`${id}Out`);
+  if (readout) readout.value = `${value}${suffix}`;
+}
+
+function applyScreenToImage() {
+  if (!tt.isActive('image')) return;
+  const title = screenTitle({
+    mode: $('imageDither').value,
+    threshold: Number($('imageThreshold').value),
+    strength: Number($('imageStrength').value),
+  });
+  tt.chain().focus().updateAttributes('image', { title }).run();
+  schedulePreview();
 }
 
 function initImageTools() {
   const select = $('imageDither');
   if (!select) return;
-  select.addEventListener('change', () => {
+  select.addEventListener('change', applyScreenToImage);
+  ['imageThreshold', 'imageStrength'].forEach((id) => {
+    const suffix = id === 'imageStrength' ? '%' : '';
+    $(id)?.addEventListener('input', () => setSlider(id, Number($(id).value), suffix));
+    $(id)?.addEventListener('change', applyScreenToImage);
+  });
+  document.querySelector('[data-image="reset"]')?.addEventListener('click', () => {
     if (!tt.isActive('image')) return;
-    tt.chain().focus().updateAttributes('image', { title: select.value }).run();
+    setSlider('imageThreshold', currentThreshold());
+    setSlider('imageStrength', currentStrength(), '%');
+    $('imageDither').value = currentDither();
+    tt.chain().focus().updateAttributes('image', { title: null }).run();
     schedulePreview();
   });
+
   $('defaultDither')?.addEventListener('change', () => {
     localStorage.setItem(DITHER_KEY, $('defaultDither').value);
     refreshPreview();
+  });
+  const defaults = [
+    ['defaultThreshold', THRESHOLD_KEY, '', DEFAULT_THRESHOLD],
+    ['defaultStrength', STRENGTH_KEY, '%', DEFAULT_STRENGTH],
+  ];
+  defaults.forEach(([id, key, suffix, fallback]) => {
+    const input = $(id);
+    if (!input) return;
+    setSlider(id, Number(localStorage.getItem(key) ?? fallback), suffix);
+    input.addEventListener('input', () => setSlider(id, Number(input.value), suffix));
+    // written on release rather than on every pixel of the drag, so the
+    // preview is asked for once per adjustment
+    input.addEventListener('change', () => {
+      localStorage.setItem(key, input.value);
+      refreshPreview();
+    });
   });
 }
 
@@ -1313,7 +1395,12 @@ function themeStyle() {
   const print = themePrint(document.documentElement.dataset.theme);
   // the theme sets the page, the user sets how pictures are screened onto it
   return {
-    style: { ...(print.style || {}), image_dither: currentDither() },
+    style: {
+      ...(print.style || {}),
+      image_dither: currentDither(),
+      image_threshold: currentThreshold(),
+      image_strength: currentStrength() / 100,
+    },
     line_spacing: print.line_spacing,
   };
 }

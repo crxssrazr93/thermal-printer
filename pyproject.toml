@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "thermal-print-studio"
+version = "0.2.0"
+description = "A browser front end and print server for 58 mm thermal printers"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "AGPL-3.0-or-later" }
+authors = [{ name = "crxssrazr93" }]
+keywords = ["thermal", "printer", "escpos", "receipt", "bluetooth"]
+
+# The server and the renderer need only these. CustomTkinter is not here: the
+# legacy desktop app is an extra, so a web install does not pull in a GUI
+# toolkit it will never open.
+dependencies = [
+    "pillow>=10.0.0",
+    "PyYAML>=6.0",
+    "numpy>=1.24.0",
+]
+
+[project.optional-dependencies]
+desktop = ["customtkinter>=5.2.0"]
+
+[project.scripts]
+thermal-print-studio = "web.server:main"
+thermal-print-studio-desktop = "src.main:main"
+
+[project.urls]
+Homepage = "https://github.com/crxssrazr93/thermal-print-studio"
+
+[tool.setuptools]
+packages = ["src", "web"]
+include-package-data = true
+
+[tool.setuptools.package-data]
+web = ["static/**/*"]

@@ -126,6 +126,15 @@
           <div class="table-tools" id="imageTools" hidden>
             <label class="sr-only" for="imageDither">Dithering for this picture</label>
             <select id="imageDither" class="control slim"></select>
+            <label class="slider" for="imageThreshold">Cutoff
+              <input id="imageThreshold" type="range" min="0" max="255" step="1" value="128">
+              <output id="imageThresholdOut">128</output>
+            </label>
+            <label class="slider" for="imageStrength">Amount
+              <input id="imageStrength" type="range" min="0" max="100" step="5" value="100">
+              <output id="imageStrengthOut">100%</output>
+            </label>
+            <button class="tool" data-image="reset" title="Back to the page default">Reset</button>
           </div>
 
           <div class="table-tools" id="tableTools" hidden>
@@ -286,6 +295,26 @@
           <select id="defaultDither" class="control"></select>
           <p class="hint">How a picture is reduced to ink or nothing. A single
             picture can override this from its own controls.</p>
+        </div>
+
+        <div class="field">
+          <label for="defaultThreshold">Cutoff</label>
+          <div class="slider-row">
+            <input id="defaultThreshold" class="control" type="range" min="0" max="255" step="1" value="128">
+            <output id="defaultThresholdOut">128</output>
+          </div>
+          <p class="hint">Where grey stops being paper and starts being ink. Lower
+            prints lighter, higher prints heavier.</p>
+        </div>
+
+        <div class="field">
+          <label for="defaultStrength">Amount</label>
+          <div class="slider-row">
+            <input id="defaultStrength" class="control" type="range" min="0" max="100" step="5" value="100">
+            <output id="defaultStrengthOut">100%</output>
+          </div>
+          <p class="hint">How much of the dithering is applied. At zero it is a
+            plain cutoff, at full it is the algorithm as published.</p>
         </div>
 
         <div class="field">

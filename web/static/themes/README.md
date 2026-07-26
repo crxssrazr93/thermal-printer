@@ -122,6 +122,26 @@ be as light a touch as one different bullet.
 | `quote_bar` | dots | width of the bar beside a quote, 0 for none |
 | `quote_italic` | `true`, `false` | sets quotes in italic |
 | `block_gap` | dots | space after a paragraph |
+| `margin` | dots | side margins on the strip |
+| `margin_top` | dots | space above the first block |
+| `margin_bottom` | dots | space below the last block, before the tear |
+| `heading_gap` | dots | space above a heading |
+| `rule_gap_above` | dots | space between a heading and its rule |
+| `list_gap` | dots | space above a list |
+| `list_indent` | dots | how far list text is set in from the margin |
+| `list_item_gap` | dots | space between items in a list |
+| `quote_gap` | dots | space above a quote |
+| `quote_pad` | dots | space between the quote bar and its text |
+| `table_gap` | dots | space above a table |
+| `table_scale` | number | multiplier on the table's type size |
+| `table_cell_pad` | dots | padding inside a table cell |
+| `rtl_font` | family name | face used for right to left text, if the body face lacks it |
+| `image_dither` | method id | how pictures are screened when they do not say |
+| `image_threshold` | 0 to 255 | the cutoff: how much of a picture becomes ink |
+| `image_strength` | 0 to 1 | how much of the dithering is applied |
+
+The three image keys are only defaults. A picture that carries its own
+settings in markdown's title slot overrides all of them.
 
 Pick glyphs the font actually carries. A thermal head at 203 dpi also loses
 hairlines, so anything meant to read as a rule wants at least two dots.

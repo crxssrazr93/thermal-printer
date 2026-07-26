@@ -1,95 +1,126 @@
-# Thermal Printer
+# Thermal Print Studio
 
-> **This is a fork** of [n3m0-22/thermal-printer](https://github.com/n3m0-22/thermal-printer).
+> **A fork that changed shape.** It began as
+> [n3m0-22/thermal-printer](https://github.com/n3m0-22/thermal-printer), a
+> CustomTkinter desktop app for the Core Innovation CTP-500. What it is now is a
+> **print server with a browser front end**: you install it once, it runs in the
+> background, and you use it from a tab, from a phone on the same network, or as
+> an installed web app with its own window.
 >
-> It generalises the app beyond the Core Innovation CTP-500: printer capability
-> profiles in the [escpos-printer-db](https://github.com/receipt-print-hq/escpos-printer-db)
-> schema, USB and CUPS transports alongside Bluetooth, native QR/barcode/paper-cut,
-> and a responsive layout that no longer clips controls when the window is narrow.
+> The desktop GUI is still here and still works, but it is no longer where the
+> work happens. New features land in the web app.
 >
-> Full list: [`doc/FORK-CHANGES.md`](doc/FORK-CHANGES.md) ·
+> Also generalised well beyond the CTP-500: capability profiles in the
+> [escpos-printer-db](https://github.com/receipt-print-hq/escpos-printer-db)
+> schema, USB and CUPS transports alongside Bluetooth, and native
+> QR, barcode and paper cut.
+>
+> Fork history: [`doc/FORK-CHANGES.md`](doc/FORK-CHANGES.md) ·
 > Attribution: [`doc/CREDITS.md`](doc/CREDITS.md)
 >
-> Tested on a 58mm MPT-II over both Bluetooth RFCOMM and USB.
-
-
-
-A GUI app for controlling Bluetooth thermal printers on Linux. Currently supports the Core Innovation CTP-500, with more printers planned.
+> Tested on a 58 mm MPT-II over both Bluetooth RFCOMM and USB.
 
 ![License](https://img.shields.io/badge/license-AGPL--3.0-blue)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20WSL-blue)
-![Python](https://img.shields.io/badge/python-3.10%2B-yellow)
+![Python](https://img.shields.io/badge/python-3.9%2B-yellow)
 
-## Table of Contents
+Write in a real editor, watch the exact bitmap the print head will receive, and
+print it. Markdown, tables you can type into, checklists, pictures with eleven
+screening methods, right to left scripts, four themes that change the paper as
+well as the screen, presets that fill in today's date, and a to-do list that
+prints.
 
-- [Features](#features)
-- [Screenshots](#screenshots)
-- [Quick Start](#quick-start)
-- [Requirements](#requirements)
-- [Installation](#installation)
-- [Usage](#usage)
-- [Templates](#templates)
-- [Configuration](#configuration)
-- [Troubleshooting](#troubleshooting)
-- [Unicode Font Support](#unicode-font-support)
-- [Credits and Acknowledgments](#credits-and-acknowledgments)
-- [License](#license)
-- [Contributing](#contributing)
-- [Related Projects](#related-projects)
+## Install
 
-## Features
+```bash
+git clone https://github.com/crxssrazr93/thermal-print-studio.git
+cd thermal-print-studio
+./install.sh
+```
 
-### Printing Modes
+That installs the app for your user (using `uv`, `pipx` or `pip`, whichever it
+finds), registers a **systemd user service**, and starts it. The server comes
+back on its own after a reboot, so there is nothing to launch: it is simply
+there, at
 
-- **Text** - fonts, sizes, darkness, optional date stamp, with the editor and
-  live preview side by side (stacking automatically on a narrow window).
-  Markdown is accepted in the same box with no mode to switch: plain
-  prose prints exactly as typed (every newline is a line break), while
-  headings, bold/italic, lists, tables, code blocks, quotes, rules and links
-  render when you use them. A formatting toolbar writes the syntax for you
-  (wrapping a selection, prefixing lines, dropping in a table or code block).
-  Display math via `$$...$$` when matplotlib is installed
-- **Banner** - large vertical text rotated for the paper roll
-- **Template** - drag-and-drop text areas over a background image
-- **Image** - seven dithering algorithms, brightness/contrast, rotation, invert,
-  and a Fit control (fit to width, shrink to fit, original size)
-- **Calendar** - weekly, monthly and yearly
+**<http://127.0.0.1:8760>**
 
-### Connection and Hardware
+Chrome and Edge offer **Install** in the address bar, which gives it its own
+window, its own icon and no browser chrome. That is the desktop app, and it
+stays up to date with the server on its own.
 
-Three transports, selectable per saved device profile:
+A user service, not a system one, deliberately: the printer is paired to your
+Bluetooth session and your presets live in your home directory, so a root
+service would reach neither. It starts when you log in. To keep it running when
+nobody is logged in:
 
-- **Bluetooth** - RFCOMM/SPP, with channel auto-discovery
-- **USB** - direct writes to `/dev/usb/lp*`
-- **CUPS** - spools to any configured queue, so network and driver-backed
-  printers work too
+```bash
+sudo loginctl enable-linger $USER
+```
 
-Printers are stored as **device profiles**. A profile bundles the transport,
-address, capability profile and calibrated tear-off gap, so switching printers
-is one choice rather than four. Profiles can be created, renamed and deleted
-from the connection bar, and devices are listed by name rather than by MAC
-address or `/dev` path.
+### From your phone, or another machine
 
-Printer capabilities come from `src/config/data/printer_profiles.json`, which
-follows the [escpos-printer-db](https://github.com/receipt-print-hq/escpos-printer-db)
-schema, so profiles are portable to python-escpos and escpos-php. Ships
-profiles for generic 58mm, generic 80mm, NT-5890K and the Core Innovation
-CTP-500.
+The server listens on localhost only, so nothing outside this machine can print
+without being invited. To open it to the network:
 
-### User Interface
+```bash
+systemctl --user edit --full thermal-print-studio     # THERMAL_WEB_HOST=0.0.0.0
+systemctl --user restart thermal-print-studio
+```
 
-- **Dark/Light Mode** - Follows system theme or manual selection
-- **Print Preview** - Real-time preview with adjustable scaling (0.5x - 3x zoom)
-- **Font Selection** - Choose from any font installed on your system
-- **Symbol Picker** - Insert from 860+ Unicode symbols across 63 categories (math, Greek, arrows, shapes, and more)
-- **Template Gallery** - Browse saved templates with thumbnail previews in 4 adjustable sizes
-- **Wayland Compatible** - Full support for Wayland compositors including COSMIC, GNOME, KDE, Sway, and wlroots-based
+Then use `http://<this machine>:8760` from anything on the same network, and
+install it there too. There is no authentication, so whoever can reach it can
+print.
 
-### Text and Unicode
+### Managing it
 
-- **Unicode Support** - Automatic font fallback for special characters (math and logic symbols, Greek letters, etc...)
-- **Date Insertion** - Optionally add formatted timestamps to prints
-- **Feed Line Control** - Configurable blank lines before and after prints
+```bash
+systemctl --user status thermal-print-studio      # is it running
+systemctl --user restart thermal-print-studio     # after changing settings
+journalctl --user -u thermal-print-studio -f      # what it is doing
+./uninstall.sh                              # remove it, keeping your data
+```
+
+Your presets, to-dos, images and themes live in
+`~/.local/share/thermal-printer/` and are never touched by installing,
+updating or removing the app.
+
+### Without systemd
+
+`./install.sh` still installs the app; run `thermal-print-studio` yourself, or use
+`./web/run-web.sh` from a checkout.
+
+## The web app
+
+Full documentation: [web/README.md](web/README.md). In short:
+
+- **Compose** in a rich editor, or in raw markdown, with the preview showing the
+  actual print bitmap rather than a CSS impression of it
+- **Tables** you type into, with rows, columns, alignment and borders
+- **Pictures**, by button, paste or drop, screened with any of eleven methods
+- **Checklists**, highlight, underline, superscript, subscript
+- **Right to left scripts** shaped and set from the right, mixed freely with
+  English
+- **Presets** that remember their own font and size and fill in `{{date}}`
+- **To-dos** with their own preview and one tap to print
+- **Four themes**, each with light and dark, each setting the paper as well as
+  the screen, and all of them replaceable: see
+  [web/static/themes/README.md](web/static/themes/README.md)
+- **Along the roll** printing, for banners and labels
+
+## The desktop app (legacy)
+
+The original GUI is still in the repository and still runs:
+
+```bash
+pip install -e '.[desktop]'
+thermal-print-studio-desktop
+```
+
+It keeps a few things the web app has not yet been given: the banner and
+template composers, the calendar, the symbol picker, and the tear-off
+calibration wizard. It shares `config.yaml` with the server, so a device saved
+in one appears in the other.
 
 ## Screenshots
 
@@ -106,34 +137,15 @@ CTP-500.
 
 </details>
 
-## Quick Start
+## Running from a checkout
 
 ```bash
-# Clone and enter directory
-git clone https://github.com/n3m0-22/thermal-printer.git
-cd thermal-printer
-
-# Create virtual environment and install dependencies
 python3 -m venv .venv_print
 source .venv_print/bin/activate
 pip install -r requirements.txt
-
-# Run the application
-./run.sh
+./web/run-web.sh          # the server
+./run.sh                  # the legacy desktop app
 ```
-
-## Web UI
-
-A browser front end is included, so the desktop app does not have to be running:
-
-```
-./web/run-web.sh
-```
-
-Open <http://127.0.0.1:8760> and install it from Chrome's address bar for its
-own window. It shares printer configuration with the desktop app, adds
-persistent presets and to-dos, and offers four themes each with light and dark
-modes. Details in [web/README.md](web/README.md).
 
 ## Requirements
 
@@ -546,8 +558,14 @@ Contributions are welcome! Please feel free to submit issues or pull requests.
 - [x] LaTeX math support (via matplotlib mathtext; MathML deliberately out of
       scope - no usable pure-Python renderer exists)
 - [x] Various bug fixes - see `doc/FORK-CHANGES.md`
-- [ ] Refactor out duplicate code (render/process/print paths still repeat
-      across the text, image, template and calendar frames)
 - [x] Browser front end (PWA) with presets, to-dos and switchable themes
-- [ ] Create executable binary
+- [x] Rich editor with real tables, pictures and checklists
+- [x] Install as a background service, reachable at a fixed address
+- [ ] Port the remaining desktop tabs to the web app: banner, template,
+      calendar, symbol picker, tear-off calibration
+- [ ] Retire the desktop GUI once those land
+- [ ] Windows and macOS transports (the Bluetooth and USB paths are Linux only;
+      CUPS already works anywhere CUPS does)
+- [ ] Refactor out duplicate code (render/process/print paths still repeat
+      across the desktop text, image, template and calendar frames)
 - [ ] Verify the CTP-500 vendor command sequences on real CTP-500 hardware

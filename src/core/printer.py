@@ -432,12 +432,28 @@ class PrinterConnection:
         except socket.error as e:
             raise StatusError(f"Failed to get printer status: {e}")
 
+    # A socket send is allowed to take less than it was given, and on an RFCOMM
+    # link to a printer with a small buffer it usually does. Whatever is not
+    # taken is not resent by anyone, so a page loses a run of bytes in the
+    # middle and every row after it lands shifted: the tail of the receipt
+    # comes out as vertical streaks. So every write goes out in full, in pieces
+    # small enough that the head can keep up with them.
+    _WRITE_CHUNK = 1024
+    _WRITE_PAUSE = 0.01
+
+    def _write(self, data: bytes) -> None:
+        view = memoryview(data)
+        for start in range(0, len(view), self._WRITE_CHUNK):
+            self._socket.sendall(view[start:start + self._WRITE_CHUNK])
+            if len(view) > self._WRITE_CHUNK:
+                time.sleep(self._WRITE_PAUSE)
+
     def send_raw(self, data: bytes, reconnect_on_failure: bool = False) -> None:
         if not self._socket:
             raise NotConnectedError("Not connected to printer")
 
         try:
-            self._socket.send(data)
+            self._write(data)
             self._last_successful_connection = time.time()
         except socket.error as e:
             should_reconnect = reconnect_on_failure or self._auto_reconnect
@@ -447,7 +463,7 @@ class PrinterConnection:
 
                 if self.reconnect():
                     try:
-                        self._socket.send(data)
+                        self._write(data)
                         self._last_successful_connection = time.time()
                         return
                     except socket.error as retry_error:
