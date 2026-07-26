@@ -4,23 +4,25 @@
       "id": "1",
       "name": "Theme 1",
       "stylesheet": "01.css",
-      "swatch": ["#1B5CFF", "#0C0C0D"],
+      "swatch": [
+        "#1B5CFF",
+        "#0C0C0D"
+      ],
       "print": {
         "font": "NotoSansMono Medium",
-        "size": 24,
-        "line_spacing": 1.05,
+        "size": 16,
+        "line_spacing": 1.3,
         "style": {
-          "heading_case": "upper",
           "heading_align": "left",
-          "heading_scale": 0.92,
+          "heading_banner": false,
           "rule_style": "solid",
-          "rule_weight": 1,
-          "bullet": "-",
-          "table_rule": "solid",
-          "table_header_rule": 1,
-          "quote_bar": 2,
-          "quote_italic": false,
-          "block_gap": 4
+          "rule_weight": 2,
+          "bullet": "•",
+          "table_rule": "dotted",
+          "table_header_rule": 2,
+          "quote_bar": 3,
+          "quote_italic": true,
+          "block_gap": 6
         }
       }
     },
@@ -28,18 +30,23 @@
       "id": "2",
       "name": "Theme 2",
       "stylesheet": "02.css",
-      "swatch": ["#8A5A2B", "#EFEAE0"],
+      "swatch": [
+        "#8A5A2B",
+        "#EFEAE0"
+      ],
       "print": {
         "font": "NimbusMonoPS",
-        "size": 25,
-        "line_spacing": 1.22,
+        "size": 16,
+        "line_spacing": 1.4,
         "style": {
-          "heading_align": "center",
-          "rule_style": "double",
+          "heading_align": "left",
+          "heading_banner": false,
+          "rule_style": "solid",
+          "rule_weight": 2,
           "bullet": "•",
           "table_rule": "dotted",
-          "table_header_rule": 1,
-          "quote_bar": 0,
+          "table_header_rule": 2,
+          "quote_bar": 3,
           "quote_italic": true,
           "block_gap": 9
         }
@@ -49,23 +56,26 @@
       "id": "3",
       "name": "Theme 3",
       "stylesheet": "03.css",
-      "swatch": ["#FFD400", "#2563EB"],
+      "swatch": [
+        "#FFD400",
+        "#2563EB"
+      ],
       "print": {
         "font": "NotoSansMono Black",
-        "size": 24,
-        "line_spacing": 1.08,
+        "size": 16,
+        "line_spacing": 1.26,
         "style": {
-          "heading_case": "upper",
-          "heading_banner": true,
           "heading_align": "left",
+          "heading_banner": false,
+          "heading_case": "upper",
           "rule_style": "solid",
-          "rule_weight": 4,
-          "bullet": "▪",
-          "table_rule": "solid",
-          "table_header_rule": 3,
-          "quote_bar": 6,
-          "quote_italic": false,
-          "block_gap": 7
+          "rule_weight": 3,
+          "bullet": "•",
+          "table_rule": "dotted",
+          "table_header_rule": 2,
+          "quote_bar": 4,
+          "quote_italic": true,
+          "block_gap": 6
         }
       }
     },
@@ -73,21 +83,25 @@
       "id": "4",
       "name": "Theme 4",
       "stylesheet": "04.css",
-      "swatch": ["#FFFFFF", "#0A0A0B"],
+      "swatch": [
+        "#FFFFFF",
+        "#0A0A0B"
+      ],
       "print": {
         "font": "AdwaitaMono",
-        "size": 24,
-        "line_spacing": 1.28,
+        "size": 15,
+        "line_spacing": 1.38,
         "style": {
-          "heading_align": "center",
-          "heading_scale": 1.05,
-          "rule_style": "dotted",
-          "bullet": "·",
-          "table_rule": "none",
-          "table_header_rule": 1,
-          "quote_bar": 0,
+          "heading_align": "left",
+          "heading_banner": false,
+          "rule_style": "solid",
+          "rule_weight": 2,
+          "bullet": "•",
+          "table_rule": "dotted",
+          "table_header_rule": 2,
+          "quote_bar": 3,
           "quote_italic": true,
-          "block_gap": 10
+          "block_gap": 9
         }
       }
     }

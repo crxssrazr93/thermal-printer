@@ -62,7 +62,7 @@
 /* The mockup's editor is the theme at its loudest: the heading sits in yellow,
    bold sits in blue, the quote carries the red. Backgrounds only, since a
    border or padding here would slide the glyphs out from under the caret. */
-:root[data-theme="3"]{--md-h-bg:#FFD400;--md-strong-bg:#2563EB;--md-quote-bg:rgba(239,62,54,.18)}
+:root[data-theme="3"]{--md-h-bg:#FFD400;--md-strong-bg:#2563EB;--md-quote-bg:transparent;--md-quote-bar:#EF3E36}
 :root[data-theme="3"] .md-h{color:#0A0A0A}
 :root[data-theme="3"] .md-strong{color:#FFFFFF}
 :root[data-theme="3"] .md-quote{color:var(--danger);font-style:normal;font-weight:700}
@@ -70,3 +70,29 @@
 :root[data-theme="3"] .md-code{background:#0A0A0A;color:#FFD400}
 :root[data-theme="3"] .segmented{border-width:2px;border-radius:0}
 :root[data-theme="3"] .seg{text-transform:uppercase;letter-spacing:.03em}
+
+/* The mockup sets every region as its own block floating on the desk, with a
+   hard border and an offset shadow, rather than as flush bands. That spacing
+   is what makes the theme read as blocks you could pick up. */
+:root[data-theme="3"] .app{padding:16px;gap:14px}
+:root[data-theme="3"] .main{padding:0}
+:root[data-theme="3"] .topbar,
+:root[data-theme="3"] .statusbar{border:3px solid var(--line);box-shadow:5px 5px 0 var(--line-strong)}
+:root[data-theme="3"] .statusbar{font-family:var(--font-mono);text-transform:uppercase;
+  letter-spacing:.04em;background:var(--panel);color:var(--ink);padding:10px 16px}
+:root[data-theme="3"] .status-right{color:var(--muted)}
+:root[data-theme="3"] .tabs{background:transparent;border:0;padding:0;gap:9px}
+:root[data-theme="3"] .tab{
+  border:3px solid var(--line);background:var(--panel);box-shadow:3px 3px 0 var(--line-strong);
+  padding:9px 17px;margin:0;font-weight:700;font-size:12.5px;text-transform:uppercase;
+  letter-spacing:.02em;
+}
+:root[data-theme="3"] .tab:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--line-strong)}
+:root[data-theme="3"] .tool{text-transform:uppercase;font-size:11.5px;letter-spacing:.02em}
+:root[data-theme="3"]{--md-table-bg:rgba(10,10,10,.05)}
+:root[data-theme="3"][data-mode="dark"]{--md-table-bg:rgba(245,245,245,.07)}
+:root[data-theme="3"] .item{border-width:2px;box-shadow:3px 3px 0 var(--line-strong)}
+:root[data-theme="3"] .item:hover{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--line-strong)}
+:root[data-theme="3"] .item .iconbtn{border-width:2px;font-weight:700;text-transform:uppercase;
+  font-size:11px}
+:root[data-theme="3"] .item .sub{font-family:var(--font-mono)}

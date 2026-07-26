@@ -209,10 +209,21 @@ function highlightInline(text) {
       (m) => `<span class="md-em">${m}</span>`);
 }
 
-function highlightLine(line, inFence) {
+/* A pipe table is drawn as a grid: the pipes become rules, the header row is
+ * set bold, and the separator row is drawn as one continuous line. The text
+ * underneath is still ordinary markdown, and because the columns have been
+ * padded to equal width the rules land in a straight line. */
+function highlightTableLine(line, role) {
+  const pipes = escapeHtml(line).replace(/\|/g, '<span class="md-pipe">|</span>');
+  if (role === 'sep') return `<span class="md-trow md-tsep">${pipes}</span>`;
+  const inner = role === 'head' ? `<b>${pipes}</b>` : pipes;
+  return `<span class="md-trow md-t${role}">${inner}</span>`;
+}
+
+function highlightLine(line, inFence, tableRole) {
   if (inFence || /^\s*```/.test(line)) return `<span class="md-code">${escapeHtml(line)}</span>`;
   if (/^\s*([-*_]\s*){3,}$/.test(line)) return `<span class="md-rule">${escapeHtml(line)}</span>`;
-  if (line.includes('|')) return `<span class="md-table">${escapeHtml(line)}</span>`;
+  if (tableRole) return highlightTableLine(line, tableRole);
 
   let match = /^(\s*)(#{1,6}\s)(.*)$/.exec(line);
   if (match) return `${match[1]}<span class="md-h">${match[2]}${highlightInline(match[3])}</span>`;
@@ -228,9 +239,22 @@ function highlightLine(line, inFence) {
 
 function highlightMarkdown(text) {
   let inFence = false;
-  return text.split('\n').map((line) => {
+  const lines = text.split('\n');
+
+  // a line only counts as a table row when it has neighbours; a stray pipe in
+  // prose should stay prose
+  const roles = lines.map((line, i) => {
+    if (!isTableLine(line)) return null;
+    const prev = i > 0 && isTableLine(lines[i - 1]);
+    const next = i + 1 < lines.length && isTableLine(lines[i + 1]);
+    if (!prev && !next) return null;
+    if (isSeparatorRow(line)) return 'sep';
+    return prev ? 'body' : 'head';
+  });
+
+  return lines.map((line, i) => {
     const fence = /^\s*```/.test(line);
-    const html = highlightLine(line, inFence && !fence);
+    const html = highlightLine(line, inFence && !fence, roles[i]);
     if (fence) inFence = !inFence;
     return html;
   }).join('\n');
@@ -411,8 +435,87 @@ function listToTable(text) {
   const header = padded[0];
   const body = padded.length > 1 ? padded.slice(1) : [new Array(width).fill(' ')];
 
-  const line = (cells) => `| ${cells.join(' | ')} |`;
-  return [line(header), `|${' --- |'.repeat(width)}`, ...body.map(line)].join('\n');
+  return formatTable([header, null, ...body]);
+}
+
+/* Markdown tables are only as readable as their columns are straight, so a
+ * table is written back out padded to its widest cell. In a monospace editor
+ * that is what turns pipes and dashes into something you can actually read as
+ * a grid: the source stays plain markdown, and it lines up. A null row is the
+ * header separator, whose dashes are drawn to the same measured width. */
+function formatTable(rows) {
+  const widths = [];
+  rows.filter(Boolean).forEach((row) => {
+    row.forEach((cell, i) => {
+      widths[i] = Math.max(widths[i] || 0, String(cell).trim().length, 3);
+    });
+  });
+
+  return rows.map((row) => {
+    if (!row) return `| ${widths.map((w) => '-'.repeat(w)).join(' | ')} |`;
+    return `| ${widths.map((w, i) => String(row[i] ?? '').trim().padEnd(w)).join(' | ')} |`;
+  }).join('\n');
+}
+
+const isTableLine = (line) => /^\s*\|/.test(line) && line.trim().endsWith('|');
+const isSeparatorRow = (line) => /^\s*\|[\s:|-]+\|\s*$/.test(line) && line.includes('-');
+const tableCells = (line) => line.trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
+
+/* Re-align every table in the document. Cheap enough to run on each edit, and
+ * it keeps a table straight while it is being typed into rather than only at
+ * the moment it is inserted. */
+function realignTables(text) {
+  const lines = text.split('\n');
+  const out = [];
+  let block = [];
+
+  const flush = () => {
+    if (!block.length) return;
+    if (block.length > 1) {
+      const rows = block.map((line) => (isSeparatorRow(line) ? null : tableCells(line)));
+      out.push(...formatTable(rows).split('\n'));
+    } else {
+      out.push(...block);
+    }
+    block = [];
+  };
+
+  lines.forEach((line) => {
+    if (isTableLine(line)) { block.push(line); return; }
+    flush();
+    out.push(line);
+  });
+  flush();
+  return out.join('\n');
+}
+
+/* Applied on a pause rather than on every keystroke, since re-padding under
+ * the caret while someone is mid-word would fight their typing. */
+function alignTablesInEditor() {
+  const el = $('editor');
+  const next = realignTables(el.value);
+  if (next === el.value) return;
+
+  // keep the caret on the same cell by counting pipes rather than characters,
+  // which move as the padding changes
+  const before = el.value.slice(0, el.selectionStart);
+  const pipes = (before.match(/\|/g) || []).length;
+  const lineIndex = before.split('\n').length - 1;
+
+  el.value = next;
+  const lines = next.split('\n');
+  if (lineIndex < lines.length) {
+    let offset = lines.slice(0, lineIndex).reduce((n, l) => n + l.length + 1, 0);
+    const line = lines[lineIndex];
+    let seen = (next.slice(0, offset).match(/\|/g) || []).length;
+    let at = 0;
+    while (at < line.length && seen < pipes) {
+      if (line[at] === '|') seen += 1;
+      at += 1;
+    }
+    el.setSelectionRange(offset + at, offset + at);
+  }
+  syncHighlight();
 }
 
 function insertTable() {
@@ -427,7 +530,7 @@ function insertTable() {
       return;
     }
   }
-  insertBlock('| Item | Qty |\n|---|---|\n| tea | 2 |\n| jam | 1 |');
+  insertBlock(formatTable([['Item', 'Qty'], null, ['tea', '2'], ['jam', '1']]));
 }
 
 const BLOCK_MARKER = /^(#{1,6}\s+|>\s*|[-*+]\s+|\d+[.)]\s+)/;
@@ -1170,7 +1273,11 @@ async function boot() {
   initPresetEditor();
   initShortcuts();
 
-  editor().addEventListener('input', () => { syncHighlight(); schedulePreview(); });
+  editor().addEventListener('input', () => {
+    syncHighlight();
+    schedulePreview();
+    debounce('align', alignTablesInEditor, 700);
+  });
   $('printBtn').addEventListener('click', () => printText(editor().value));
   $('savePresetBtn').addEventListener('click', () => openPresetEditor(null));
 

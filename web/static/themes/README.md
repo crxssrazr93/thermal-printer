@@ -71,12 +71,12 @@ both if you want the toggle to work.
 | Depth | `--shadow` `--shadow-lift` `--panel-blur` `--press` |
 | Type | `--font-ui` `--font-head` `--font-mono` |
 | Spacing | `--gap` `--pad` |
-| Editor | `--md-h-bg` `--md-strong-bg` `--md-quote-bg` |
+| Editor | `--md-h-bg` `--md-strong-bg` `--md-quote-bg` `--md-quote-bar` `--md-table-bg` |
 
 The editor variables tint the rendered editing mode. Only tint them, and only
-with colour: the rendered editor lays a decorated mirror behind the textarea,
-so a rule that changes size, padding or spacing moves the glyphs out from
-under the caret.
+with colour or an inset `box-shadow`, which is how the quote bar is drawn: the
+rendered editor lays a decorated mirror behind the textarea, so anything that
+changes size, padding or spacing moves the glyphs out from under the caret.
 
 ## The print block
 

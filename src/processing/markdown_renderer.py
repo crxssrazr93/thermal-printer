@@ -519,7 +519,7 @@ class MarkdownRenderer:
         usable = width - left - self.margin
         column_width = usable // max(1, columns)
 
-        size = max(10, int(self.font_size * 0.8))
+        size = max(10, int(self.font_size * 0.9))
         font = self._font(size, mono=True)
         header_font = self._font(size, bold=True, mono=True)
         pitch = self._line_height(font)
