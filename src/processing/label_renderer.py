@@ -9,7 +9,6 @@ from ..config.defaults import (
     DEFAULT_FONT_SIZE,
     DEFAULT_FONT_FAMILY,
     DEFAULT_TEXT_ALIGN,
-    DEFAULT_PRINTER_WIDTH,
 )
 from ..config.printer_profile import get_printer_width
 from ..utils.font_manager import get_font_manager

@@ -5,7 +5,7 @@ workarounds for dialog positioning and window management
 """
 
 import os
-from typing import Dict, Optional
+from typing import Dict
 
 
 def is_wayland() -> bool:

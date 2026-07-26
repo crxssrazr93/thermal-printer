@@ -15,7 +15,6 @@ from ...config.defaults import (
     DEFAULT_ROTATION,
     DITHER_MODES,
     ROTATION_OPTIONS,
-    SUPPORTED_IMAGE_FORMATS,
 )
 
 # image downsampling constants to reduce memory usage
@@ -26,7 +25,7 @@ from ...config.settings import get_settings
 from ...processing.image_processor import ImageProcessor
 from ..widgets.preview_canvas import PreviewCanvas
 from ..widgets.flow_frame import FlowFrame
-from ...utils.file_dialogs import open_file_dialog, save_file_dialog
+from ...utils.file_dialogs import save_file_dialog
 from ..dialogs.template_gallery import TemplateGallery
 
 # service interfaces

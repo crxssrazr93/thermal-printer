@@ -11,7 +11,6 @@ from PIL import Image
 
 from ..core.printer import PrinterConnection
 from ..core.print_job import PrintJobManager, PrintJobConfig, PrintProgress
-from ..core.exceptions import NotConnectedError
 
 logger = logging.getLogger(__name__)
 

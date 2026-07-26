@@ -164,10 +164,12 @@ class PrinterScannerDialog(CenteredDialog):
             try:
                 devices = PrinterConnection.scan_for_printers(timeout=scan_timeout)
                 self.after(0, lambda: self._on_scan_complete(devices))
-            except ScanError as e:
-                self.after(0, lambda: self._on_scan_error(str(e)))
-            except Exception as e:
-                self.after(0, lambda: self._on_scan_error(str(e)))
+            except (ScanError, Exception) as error:
+                # Bind the text now: Python clears the exception variable when
+                # the except block ends, and this lambda runs later on the Tk
+                # thread, so capturing `error` by closure raises NameError.
+                message = str(error)
+                self.after(0, lambda: self._on_scan_error(message))
 
         thread = threading.Thread(target=scan_thread, daemon=True)
         thread.start()

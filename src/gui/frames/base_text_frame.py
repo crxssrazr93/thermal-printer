@@ -15,7 +15,6 @@ from ...config.defaults import (
     TEXT_ALIGN_LEFT,
     TEXT_ALIGN_CENTER,
     TEXT_ALIGN_RIGHT,
-    SUPPORTED_TEXT_FORMATS,
     DEFAULT_UNICODE_FONT,
     DEFAULT_LINE_SPACING,
 )
@@ -27,7 +26,7 @@ from ...processing.image_processor import ImageProcessor
 from ..widgets.preview_canvas import PreviewCanvas
 from ..widgets.font_selector import FontSelector
 from ..widgets.flow_frame import FlowFrame
-from ...utils.file_dialogs import open_file_dialog, save_file_dialog
+from ...utils.file_dialogs import save_file_dialog
 from ..dialogs.template_gallery import TemplateGallery
 from ...utils.unicode_detect import contains_special_unicode, find_unicode_font
 from ..dialogs.font_install_dialog import FontInstallDialog, FontSwitchNotification

@@ -1,7 +1,6 @@
 # template frame for creating templates with draggable text areas
 
 from typing import Optional, Callable, List, TYPE_CHECKING
-import json
 import os
 import customtkinter as ctk
 from tkinter import PanedWindow, VERTICAL
@@ -9,16 +8,12 @@ from PIL import Image
 
 from ...config.defaults import (
     DEFAULT_FONT_SIZE,
-    DEFAULT_FONT_FAMILY,
-    DEFAULT_TEXT_ALIGN,
     MIN_FONT_SIZE,
     MAX_FONT_SIZE,
     TEXT_ALIGN_LEFT,
     TEXT_ALIGN_CENTER,
     TEXT_ALIGN_RIGHT,
-    SUPPORTED_IMAGE_FORMATS,
 )
-from ...config.keys import SettingsKeys
 from ...config.settings import get_settings
 from ...processing.label_renderer import (
     LabelRenderer,
@@ -29,7 +24,7 @@ from ..widgets.interactive_canvas import InteractiveCanvas
 from ..widgets.font_selector import FontSelector
 from ..dialogs.template_gallery import TemplateGallery
 from ..dialogs.calendar_dialog import CalendarDialog
-from ...utils.file_dialogs import open_file_dialog, save_file_dialog
+from ...utils.file_dialogs import save_file_dialog
 from ...utils.font_manager import get_font_manager
 from ...utils.shortcuts import bind_text_shortcuts
 from ..managers.text_area_manager import TextAreaManager, TextAreaUIState

@@ -1,12 +1,11 @@
 # banner text input and formatting frame for banner printing
 
-from typing import Optional, Callable, List, Tuple
+from typing import List, Tuple
 
 from PIL import Image
 
 from .base_text_frame import BaseTextFrame
 from ...config.defaults import (
-    DEFAULT_PRINTER_WIDTH,
     TEXT_ALIGN_LEFT,
     TEXT_ALIGN_CENTER,
     TEXT_ALIGN_RIGHT,

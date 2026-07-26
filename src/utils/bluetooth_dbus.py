@@ -10,7 +10,6 @@ from dataclasses import dataclass
 from typing import List, Callable, Optional, Dict, Any
 from threading import Thread, Event
 
-from ..config.defaults import BLUETOOTH_COMMAND_TIMEOUT
 
 # try to import dbus and fall back gracefully if not available
 try:
@@ -264,7 +263,6 @@ def scan_for_printers(timeout: int = 10) -> List[Dict[str, Any]]:
     """synchronous scan using dbus if available falls back to subprocess"""
     if not HAS_DBUS:
         logger.info("D-Bus not available, falling back to subprocess method")
-        from . import bluetooth
         # this would call the subprocess version
         # for now return empty list as fallback will be in bluetooth py
         return []

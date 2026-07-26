@@ -1,10 +1,12 @@
+import logging
+
+logger = logging.getLogger(__name__)
+
 # native file dialog utilities using xdg-desktop-portal, zenity, kdialog or tkinter fallback
 
 import subprocess
 import shutil
 import os
-import tempfile
-import json
 from typing import Optional, List, Tuple
 from pathlib import Path
 
@@ -34,7 +36,6 @@ def _has_portal() -> bool:
 
 def _has_python_dbus() -> bool:
     try:
-        import dbus
         return True
     except ImportError:
         return False
@@ -138,7 +139,7 @@ class PortalFileDialog:
                 path_keyword="path"
             )
 
-            request_path = file_chooser.OpenFile(
+            _request_path = file_chooser.OpenFile(
                 "",
                 title,
                 options
@@ -151,7 +152,8 @@ class PortalFileDialog:
 
             return result_uri.get("value")
 
-        except Exception as e:
+        except Exception as error:
+            logger.debug("Portal file dialog unavailable: %s", error)
             return None
 
     @staticmethod
@@ -212,7 +214,7 @@ class PortalFileDialog:
                 path_keyword="path"
             )
 
-            request_path = file_chooser.SaveFile(
+            _request_path = file_chooser.SaveFile(
                 "",
                 title,
                 options
@@ -224,7 +226,8 @@ class PortalFileDialog:
 
             return result_uri.get("value")
 
-        except Exception as e:
+        except Exception as error:
+            logger.debug("Portal file dialog unavailable: %s", error)
             return None
 
     @classmethod

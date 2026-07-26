@@ -6,7 +6,6 @@ from datetime import datetime, timedelta
 import calendar
 from PIL import Image, ImageDraw, ImageFont
 
-from ..core.protocol import PrinterProtocol
 from ..config.printer_profile import get_printer_width
 from ..utils.font_manager import get_font_manager
 

@@ -1,13 +1,8 @@
 from typing import Dict, Any, List, Tuple, Optional, Callable
 
 from .defaults import (
-    MIN_FONT_SIZE,
-    MAX_FONT_SIZE,
-    DITHER_MODES,
-    ROTATION_OPTIONS,
     APPEARANCE_MODES,
     COLOR_THEMES,
-    DEFAULT_PRINTER_WIDTH,
     VALIDATOR_MIN_PRINTER_WIDTH,
     VALIDATOR_MAX_PRINTER_WIDTH,
     VALIDATOR_MIN_RFCOMM_CHANNEL,

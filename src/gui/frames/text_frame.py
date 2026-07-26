@@ -1,6 +1,5 @@
 # text input and formatting frame for text printing
 
-from typing import Optional, Callable
 
 from .base_text_frame import BaseTextFrame
 

@@ -10,11 +10,6 @@ from ...utils.validators import validate_mac_address, normalize_mac_address
 from ..widgets.flow_frame import FlowFrame
 from ...core import device_profiles as saved_profiles
 from ..dialogs.device_profile_dialog import DeviceProfileDialog
-from ...core.device_discovery import (
-    list_bluetooth_devices,
-    list_cups_queues,
-    list_usb_devices,
-)
 
 TRANSPORT_BLUETOOTH = "Bluetooth"
 TRANSPORT_USB = "USB"

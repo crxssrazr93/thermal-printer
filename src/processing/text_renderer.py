@@ -11,7 +11,6 @@ from ..config.defaults import (
     TEXT_ALIGN_CENTER,
     TEXT_ALIGN_RIGHT,
 )
-from ..core.protocol import PrinterProtocol
 from ..config.printer_profile import get_printer_width
 from ..config.defaults import DEFAULT_LINE_SPACING
 from ..utils.font_manager import get_font_manager

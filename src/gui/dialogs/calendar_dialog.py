@@ -8,6 +8,7 @@ from PIL import Image
 
 from .centered_dialog import CenteredDialog
 from ...processing.calendar_renderer import CalendarRenderer
+from ...config.printer_profile import get_printer_width
 
 
 class CalendarDialog(CenteredDialog):
@@ -212,7 +213,7 @@ class CalendarDialog(CenteredDialog):
 
     def _combine_images(self, images: List[Image.Image], spacing: int = 20) -> Image.Image:
         if not images:
-            return Image.new('RGB', (384, 100), color=(255, 255, 255))
+            return Image.new('RGB', (get_printer_width(), 100), color=(255, 255, 255))
 
         if len(images) == 1:
             return images[0]

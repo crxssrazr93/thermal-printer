@@ -3,7 +3,7 @@
 from typing import Optional, Callable
 import customtkinter as ctk
 
-from ..config.defaults import FEEDBACK_COPY_RESET_MS, CLIPBOARD_TIMEOUT
+from ..config.defaults import FEEDBACK_COPY_RESET_MS
 
 
 def copy_to_clipboard(
