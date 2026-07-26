@@ -659,9 +659,8 @@ function initEditorModes() {
   tt.on('focus', positionSelectionMenus);
   tt.on('blur', () => {
     setTimeout(() => {
-      const menus = [$('bubbleMenu'), $('floatingMenu')];
-      if (menus.some((menu) => menu.contains(document.activeElement))) return;
-      menus.forEach((menu) => { menu.hidden = true; });
+      const menu = $('floatingMenu');
+      if (!menu.contains(document.activeElement)) menu.hidden = true;
     }, 150);
   });
   syncToolbarState();
@@ -715,49 +714,28 @@ let lastPaperMm = 0;
 /* Formatting where the selection is, and block choices on an empty line, so
  * the common moves do not need a trip to the toolbar. */
 function positionSelectionMenus() {
-  const bubble = $('bubbleMenu');
   const floating = $('floatingMenu');
-  if (!bubble || !floating || !tt) return;
+  if (!floating || !tt) return;
 
-  const shell = $('editorShell').getBoundingClientRect();
   const { state } = tt;
   const { empty, from } = state.selection;
-  const inTable = tt.isActive('table');
 
-  const place = (element, coords) => {
-    element.hidden = false;
-    element.style.left = `${Math.max(6, Math.min(coords.left - shell.left,
-      shell.width - element.offsetWidth - 10))}px`;
-    element.style.top = `${Math.max(4, coords.top - shell.top)}px`;
-  };
-
-  // the blur handler is what takes them away; asking the editor whether it is
-  // focused right now answers "no" during the very transitions that should
-  // show them
-  if (isRawMode()) {
-    bubble.hidden = true;
-    floating.hidden = true;
-    return;
-  }
-
-  if (!empty) {
-    const start = tt.view.coordsAtPos(from);
-    place(bubble, { left: start.left, top: start.top - 46 });
-    floating.hidden = true;
-    return;
-  }
-
-  bubble.hidden = true;
-
-  // an empty paragraph is an invitation to choose a block
+  // An empty paragraph is an invitation to choose a block, which is worth a
+  // menu. A selection is not: the toolbar is right there and already says
+  // which of its toggles are on.
   const node = state.selection.$from.parent;
   const emptyBlock = node.type.name === 'paragraph' && node.content.size === 0;
-  if (emptyBlock && !inTable) {
-    const at = tt.view.coordsAtPos(from);
-    place(floating, { left: at.left, top: at.top - 2 });
-  } else {
+  if (isRawMode() || !empty || !emptyBlock || tt.isActive('table')) {
     floating.hidden = true;
+    return;
   }
+
+  const shell = $('editorShell').getBoundingClientRect();
+  const at = tt.view.coordsAtPos(from);
+  floating.hidden = false;
+  floating.style.left = `${Math.max(6, Math.min(at.left - shell.left,
+    shell.width - floating.offsetWidth - 10))}px`;
+  floating.style.top = `${Math.max(4, at.top - shell.top - 2)}px`;
 }
 
 const isRawMode = () => !isRendered();

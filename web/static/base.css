@@ -231,7 +231,7 @@ button{cursor:pointer;background:none;border:0}
   content:attr(data-placeholder);color:var(--faint);float:left;height:0;pointer-events:none;
 }
 
-.bubble-menu,.floating-menu{
+.floating-menu{
   position:absolute;display:flex;gap:3px;padding:4px;z-index:40;
   background:var(--panel);border:var(--border) solid var(--line-strong);
   border-radius:var(--radius-sm);box-shadow:var(--shadow-lift);
@@ -360,8 +360,7 @@ button{cursor:pointer;background:none;border:0}
 .swatch.s4{background:linear-gradient(135deg,#FFFFFF 50%,#0A0A0B 50%)}
 
 /* display:flex below would otherwise beat the [hidden] attribute */
-.theme-menu[hidden],.toast[hidden],.view[hidden],
-.bubble-menu[hidden],.floating-menu[hidden]{display:none}
+.theme-menu[hidden],.toast[hidden],.view[hidden],.floating-menu[hidden]{display:none}
 .theme-menu{
   position:absolute;right:0;bottom:calc(100% + 9px);min-width:186px;padding:6px;
   background:var(--panel);border:var(--border) solid var(--line-strong);border-radius:var(--radius);
