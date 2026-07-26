@@ -38,7 +38,19 @@ QR codes rather than as pictures of QR codes, which is both sharper and much
 faster.
 
 The shipped set covers generic 58 mm and 80 mm printers, the Core Innovation
-CTP-500 and the NT-5890K. Adding one is an entry in the same JSON.
+CTP-500 and the NT-5890K.
+
+A printer nobody has written down can be described instead: **Describe one**,
+beside the printer type in Add a device, takes a name, a vendor, the head width
+in dots, the resolution and the feature flags. Editing a shipped type copies
+it; editing one of your own edits it. What you write is kept in
+`~/.local/share/thermal-printer/printer-profiles.json` in the same schema and
+merged over the shipped table, so a bundled entry can be corrected the same way
+and nothing is lost when the app is updated.
+
+The head width is the part that has to be right. Everything else degrades
+gracefully: a QR code on a printer with no QR command is drawn into the picture
+instead, which is slower and softer but always prints.
 
 ## The tear-off gap
 

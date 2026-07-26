@@ -27,6 +27,8 @@ print it.
   </tr>
 </table>
 
+![The four themes, each setting the paper as well as the screen](docs/images/themes.jpg)
+
 ## Install
 
 ```bash
@@ -57,12 +59,12 @@ window and icon. Network access, updating and removal are covered in
 - **Right to left scripts** shaped and set from the right, mixed freely with
   English
 - **Along the roll** printing, for banners and tickets that run down the paper
-- **Labels** composed onto printed backgrounds, and **calendars** by month or
-  week
+- **Labels** composed onto printed backgrounds, your own pictures included, and
+  saved whole to print again; **calendars** by month or week
 - **Presets** that carry their own font, size and direction and fill in
   `{{date}}`, and a **to-do list** that prints
 - **Four themes**, light and dark, each setting the paper as well as the
-  screen, and all of them replaceable
+  screen, remembered between visits, and all of them replaceable
 
 ## Documentation
 
@@ -70,7 +72,7 @@ window and icon. Network access, updating and removal are covered in
 |----------|---------------|
 | [Install](docs/install.md) | Installing, the service, network access, updating, removing |
 | [Using it](docs/usage.md) | The editor, tables, pictures, direction, languages, labels, calendars, presets |
-| [Printers](docs/printers.md) | Transports, device profiles, the tear-off gap, capability profiles |
+| [Printers](docs/printers.md) | Transports, device profiles, the tear-off gap, describing your own printer |
 | [Themes](web/static/themes/README.md) | Writing your own theme, on screen and on paper |
 | [Platforms](docs/platforms.md) | What runs where, and what a Windows or macOS contributor would need |
 | [Development](docs/development.md) | Layout, running from a checkout, the HTTP API, the editor bundle |

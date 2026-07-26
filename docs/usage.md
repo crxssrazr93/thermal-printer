@@ -171,11 +171,24 @@ sideways is no use to anyone.
 ![Composing a label](images/labels.jpg)
 
 A label is a printed background with your words placed on it. Choose a
-background, click where the text should go, and type; drag a block to move it.
+background, click where the text should go, and type. Every block you place
+carries a handle over the picture: it lights up under the pointer, along with
+the line of the form it belongs to, and dragging it moves the block.
 Coordinates are in the background's own pixels, so the same label prints the
 same way whatever size the preview happens to be drawn at.
 
-Backgrounds live in `gallery/templates/`. Any 1-bit friendly PNG can go there.
+**Your own background.** Use a picture takes any image and keeps it beside the
+three that ship, where it can be chosen like any of them and removed again. It
+is used at its own size, so a background drawn at the head's width is one dot
+to one pixel.
+
+**Saving one.** A background and the blocks placed on it can be saved under a
+name and opened again whole, which is what a label you print every week wants
+to be. Saving over a name replaces it.
+
+Shipped backgrounds live in `gallery/templates/`; your own go in
+`~/.local/share/thermal-printer/labels/`, and saved labels in `labels.json`
+beside them.
 
 ## Calendars
 
@@ -193,14 +206,18 @@ and direction, so a banner opens as a banner and a receipt opens as a receipt.
 
 ## Themes
 
+![The four themes, in light mode](images/themes.jpg)
+
 Four themes, each with light and dark, chosen from the switcher at the bottom
-right. A theme sets the paper as much as the screen: the printing font, the
+right. The choice is remembered, so the app comes back the way you left it. A theme sets the paper as much as the screen: the printing font, the
 line spacing, and a set of typographic choices (headings in capitals, the
 weight and style of rules, the bullet glyph, how table rows are separated, how
 quotes are marked).
 
 Choosing a font by hand pins it, and from then on theme changes leave the font
 alone while the rest of the setting still follows the theme.
+
+![The same four in dark mode](images/themes-dark.jpg)
 
 Your own themes go in `~/.local/share/thermal-printer/themes/`; see
 [the theme guide](../web/static/themes/README.md).
