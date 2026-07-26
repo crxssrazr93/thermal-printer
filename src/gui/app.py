@@ -330,6 +330,7 @@ class PrinterApp(ctk.CTk):
         config = PrintJobConfig(
             feed_before=self.settings_frame.get_feed_lines_before(),
             feed_after=self.settings_frame.get_feed_lines_after(),
+            feed_after_dots=self.settings_frame.get_feed_after_dots(),
             command_delay=self.settings_frame.get_command_delay()
         )
 

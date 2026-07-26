@@ -13,6 +13,8 @@ from ...config.defaults import (
     DEFAULT_FEED_LINES_AFTER,
     MIN_FEED_LINES,
     MAX_FEED_LINES,
+    DEFAULT_FEED_AFTER_DOTS,
+    MAX_FEED_DOTS,
     DATE_FORMATS,
     DEFAULT_DATE_FORMAT,
     DEFAULT_PREVIEW_SCALE,
@@ -278,6 +280,25 @@ class SettingsFrame(ctk.CTkScrollableFrame):
         self.feed_after_entry.bind("<Return>", self._on_feed_after_entry_change)
         self.feed_after_entry.bind("<FocusOut>", self._on_feed_after_entry_change)
 
+        ctk.CTkLabel(self, text="Feed After (dots):", font=label_font).grid(
+            row=11, column=3, pady=8, padx=(20, 10), sticky="w")
+
+        self.feed_dots_var = ctk.IntVar(value=DEFAULT_FEED_AFTER_DOTS)
+        self.feed_dots_slider = ctk.CTkSlider(
+            self, from_=0, to=MAX_FEED_DOTS,
+            variable=self.feed_dots_var,
+            width=180, height=20,
+            command=self._on_feed_dots_change
+        )
+        self.feed_dots_slider.grid(row=11, column=4, pady=8, padx=10, sticky="w")
+
+        self.feed_dots_value = ctk.CTkLabel(self, text="0", width=40, font=label_font)
+        self.feed_dots_value.grid(row=11, column=5, pady=8, padx=5, sticky="w")
+
+        self.feed_dots_hint = ctk.CTkLabel(self, text="0.0mm  (using lines)",
+                                           font=label_font, text_color="gray")
+        self.feed_dots_hint.grid(row=11, column=6, pady=8, padx=5, sticky="w")
+
         ctk.CTkLabel(
             self, text="Unicode",
             font=section_font
@@ -386,6 +407,10 @@ class SettingsFrame(ctk.CTkScrollableFrame):
         self.delay_var.set(self._settings.get(SettingsKeys.Timing.COMMAND_DELAY, DEFAULT_COMMAND_DELAY))
         self.feed_before_var.set(self._settings.get(SettingsKeys.Printing.FEED_LINES_BEFORE, DEFAULT_FEED_LINES_BEFORE))
         self.feed_after_var.set(self._settings.get(SettingsKeys.Printing.FEED_LINES_AFTER, DEFAULT_FEED_LINES_AFTER))
+        self.feed_dots_var.set(
+            self._settings.get(SettingsKeys.Printing.FEED_AFTER_DOTS, DEFAULT_FEED_AFTER_DOTS)
+        )
+        self._on_feed_dots_change()
         self.date_format_var.set(self._settings.get(SettingsKeys.Text.DATE_FORMAT, DEFAULT_DATE_FORMAT))
         self.unicode_popup_var.set(self._settings.get(SettingsKeys.Unicode.SHOW_FONT_SWITCH_POPUP, True))
         saved_unicode_font = self._settings.get(SettingsKeys.Unicode.PREFERRED_FONT, DEFAULT_UNICODE_FONT)
@@ -453,6 +478,19 @@ class SettingsFrame(ctk.CTkScrollableFrame):
         self._settings.set(SettingsKeys.Text.LINE_SPACING, spacing)
         self._settings.save()
         self._set_status(f"Line spacing: {spacing:.2f} (reopen the tab to re-render)")
+
+    def get_feed_after_dots(self) -> int:
+        return int(self.feed_dots_var.get())
+
+    def _on_feed_dots_change(self, value=None) -> None:
+        dots = int(self.feed_dots_var.get())
+        mm = dots * 25.4 / 203
+        self.feed_dots_value.configure(text=f"{dots}")
+        self.feed_dots_hint.configure(
+            text=f"{mm:.1f}mm" + ("  (using lines)" if dots == 0 else "  (overrides lines)")
+        )
+        self._settings.set(SettingsKeys.Printing.FEED_AFTER_DOTS, dots)
+        self._settings.save()
 
     def _on_appearance_change(self, value=None) -> None:
         self._apply_appearance()

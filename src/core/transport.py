@@ -10,12 +10,19 @@ import logging
 import os
 import socket
 import subprocess
+import time
 from typing import List, Optional
 
 logger = logging.getLogger(__name__)
 
 # usblp character devices exposed by the kernel for USB class-7 printers
 USB_PRINTER_GLOB = "/dev/usb/lp*"
+
+# Rough consumption rate of a 203 dpi thermal head, used only to size the drain
+# pause before closing. Deliberately conservative - overshooting costs a moment,
+# undershooting truncates the print.
+USB_DRAIN_BYTES_PER_SECOND = 12000
+MAX_DRAIN_SECONDS = 8.0
 
 
 class TransportError(Exception):
@@ -34,12 +41,16 @@ class UsbTransport:
         self.device_path = device_path
         self._read_timeout = read_timeout
         self._fd: Optional[int] = None
+        self._bytes_written = 0
 
     # -- lifecycle ------------------------------------------------------------
     def connect(self, _address=None) -> None:
         try:
-            # non-blocking so a printer that never answers cannot wedge a read
-            self._fd = os.open(self.device_path, os.O_RDWR | os.O_NONBLOCK)
+            # Blocking writes. With O_NONBLOCK the kernel accepts only what fits
+            # in the usblp buffer and the rest has to be retried; closing before
+            # the device has drained silently truncates the job mid-raster.
+            self._fd = os.open(self.device_path, os.O_RDWR)
+            self._bytes_written = 0
         except PermissionError as error:
             raise TransportError(
                 f"No permission to open {self.device_path}. Add your user to the "
@@ -54,12 +65,27 @@ class UsbTransport:
             raise TransportError(f"Could not open {self.device_path}: {error}")
 
     def close(self) -> None:
-        if self._fd is not None:
-            try:
-                os.close(self._fd)
-            except OSError:
-                pass
-            self._fd = None
+        if self._fd is None:
+            return
+
+        # Let the printer consume what is still buffered. Closing immediately
+        # after the final write drops the tail of the job - the last raster
+        # rows and any trailing feeds simply never appear.
+        try:
+            os.fsync(self._fd)
+        except OSError:
+            pass
+
+        if self._bytes_written:
+            time.sleep(min(MAX_DRAIN_SECONDS,
+                           self._bytes_written / USB_DRAIN_BYTES_PER_SECOND))
+
+        try:
+            os.close(self._fd)
+        except OSError:
+            pass
+        self._fd = None
+        self._bytes_written = 0
 
     def shutdown(self, _how=None) -> None:
         # nothing to half-close on a character device
@@ -75,10 +101,11 @@ class UsbTransport:
             try:
                 total += os.write(self._fd, data[total:])
             except BlockingIOError:
-                # kernel buffer full - the printer is still consuming
+                # only reachable if the fd was reopened non-blocking
                 continue
             except OSError as error:
                 raise socket.error(f"USB write failed: {error}")
+        self._bytes_written += total
         return total
 
     def recv(self, size: int) -> bytes:

@@ -55,6 +55,7 @@ class SettingsKeys:
     class Printing:
         FEED_LINES_BEFORE = "printing.feed_lines_before"
         FEED_LINES_AFTER = "printing.feed_lines_after"
+        FEED_AFTER_DOTS = "printing.feed_after_dots"
 
     class Label:
         DARKNESS = "label.darkness"

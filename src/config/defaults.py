@@ -244,6 +244,13 @@ DEFAULT_FEED_LINES_AFTER = 3
 MIN_FEED_LINES = 0
 MAX_FEED_LINES = 20
 
+# Dot-precise tear-off gap. When non-zero this replaces feed_lines_after, since
+# a whole line feed (1/6 inch) is too coarse to line a tear-off up with the
+# tear bar. 0 keeps the legacy line-based behaviour.
+DEFAULT_FEED_AFTER_DOTS = 0
+MAX_FEED_DOTS = 600
+FEED_MAX_DOTS = 2040
+
 PRINTER_WIDTH_BITS_PER_BYTE = 8
 PROTOCOL_STATUS_RESPONSE_LENGTH = 38
 PROTOCOL_LITTLE_ENDIAN_BYTE_COUNT = 2
@@ -498,6 +505,7 @@ def get_default_config() -> Dict[str, Any]:
         "printing": {
             "feed_lines_before": DEFAULT_FEED_LINES_BEFORE,
             "feed_lines_after": DEFAULT_FEED_LINES_AFTER,
+            "feed_after_dots": DEFAULT_FEED_AFTER_DOTS,
         },
         "banner": {
             "font_family": DEFAULT_FONT_FAMILY,

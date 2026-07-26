@@ -37,6 +37,7 @@ class JobState(Enum):
 class PrintJobConfig:
     feed_before: int = 0
     feed_after: int = 0
+    feed_after_dots: int = 0   # non-zero overrides feed_after with ESC J
     command_delay: float = 0.1
     chunk_size: int = DEFAULT_CHUNK_SIZE
 
@@ -197,7 +198,13 @@ class PrintJobManager:
                     total_bytes=total_size
                 )
 
-            if config.feed_after > 0:
+            # Dot feed wins when set - a whole line feed is too coarse to line
+            # a tear-off up with the tear bar.
+            if config.feed_after_dots > 0:
+                self._printer.send_raw(
+                    PrinterProtocol.build_feed_dots(config.feed_after_dots)
+                )
+            elif config.feed_after > 0:
                 self._printer.send_raw(
                     PrinterProtocol.get_line_feeds(config.feed_after)
                 )

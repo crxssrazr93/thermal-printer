@@ -6,6 +6,7 @@ from typing import Tuple, Type
 from PIL import Image
 
 from ..config.defaults import (
+    FEED_MAX_DOTS,
     PRINTER_WIDTH_BITS_PER_BYTE,
     PROTOCOL_STATUS_RESPONSE_LENGTH,
     PROTOCOL_MODULO,
@@ -58,6 +59,25 @@ class PrinterProtocol(metaclass=_ProtocolMeta):
 
     # GS k - barcode. 73 = CODE128
     _BARCODE_CODE128 = 73
+
+    @classmethod
+    def build_feed_dots(cls, dots: int) -> bytes:
+        """ESC J - advance the paper by n dot rows.
+
+        A bare LF only ever advances a whole line (1/6 inch by default), which
+        is too coarse to align a tear-off against the tear bar. ESC J takes a
+        single byte, so longer feeds are split into repeats.
+        """
+        if dots <= 0:
+            return b""
+
+        command = b""
+        remaining = min(dots, FEED_MAX_DOTS)
+        while remaining > 0:
+            step = min(255, remaining)
+            command += b"\x1b\x4a" + bytes([step])
+            remaining -= step
+        return command
 
     @classmethod
     def supports_cut(cls) -> bool:
