@@ -13,6 +13,7 @@ from ..config.defaults import (
 )
 from ..core.protocol import PrinterProtocol
 from ..config.printer_profile import get_printer_width
+from ..config.defaults import DEFAULT_LINE_SPACING
 from ..utils.font_manager import get_font_manager
 
 
@@ -20,6 +21,7 @@ class TextRenderer:
     def __init__(
         self,
         width: Optional[int] = None,
+        line_spacing: Optional[float] = None,
         font_family: str = DEFAULT_FONT_FAMILY,
         font_size: int = DEFAULT_FONT_SIZE,
         bold: bool = False,
@@ -28,6 +30,9 @@ class TextRenderer:
         wrap: bool = True,
     ):
         self.width = width if width is not None else get_printer_width()
+        self.line_spacing = (
+            line_spacing if line_spacing is not None else DEFAULT_LINE_SPACING
+        )
         self.font_family = font_family
         self.font_size = font_size
         self.bold = bold
@@ -108,6 +113,23 @@ class TextRenderer:
 
         return '\n'.join(lines)
 
+    def _line_height(self) -> int:
+        """Line pitch from the font's own metrics rather than the nominal size.
+
+        PIL's font_size is an em size, not a line height - ascent + descent is
+        usually larger. Deriving the pitch from metrics keeps leading consistent
+        across fonts instead of clipping descenders on tall faces.
+        """
+        if self._font:
+            try:
+                ascent, descent = self._font.getmetrics()
+                base = ascent + descent
+            except (AttributeError, OSError):
+                base = int(self.font_size * 1.2)
+        else:
+            base = int(self.font_size * 1.2)
+        return max(1, int(base * self.line_spacing))
+
     def render(self, text: str, max_height: int = 5000) -> Image.Image:
         if not text.strip():
             return Image.new('RGB', (self.width, 10), color=(255, 255, 255))
@@ -134,7 +156,7 @@ class TextRenderer:
         draw = ImageDraw.Draw(img)
 
         y_position = 0
-        line_spacing = int(self.font_size * 1.2)
+        line_spacing = self._line_height()
 
         for line in render_text.split('\n'):
             if not line:

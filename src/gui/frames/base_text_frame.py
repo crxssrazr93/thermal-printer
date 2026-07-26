@@ -17,6 +17,7 @@ from ...config.defaults import (
     TEXT_ALIGN_RIGHT,
     SUPPORTED_TEXT_FORMATS,
     DEFAULT_UNICODE_FONT,
+    DEFAULT_LINE_SPACING,
 )
 from ...config.keys import SettingsKeys
 from ...config.settings import get_settings
@@ -560,7 +561,10 @@ class BaseTextFrame(ctk.CTkFrame):
             bold=self.bold_var.get(),
             italic=self.italic_var.get(),
             alignment=self.align_var.get(),
-            wrap=self._renderer_wrap
+            wrap=self._renderer_wrap,
+            line_spacing=self._settings.get(
+                SettingsKeys.Text.LINE_SPACING, DEFAULT_LINE_SPACING
+            )
         )
         darkness = self.darkness_var.get()
         self._image_processor = ImageProcessor(

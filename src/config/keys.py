@@ -9,6 +9,7 @@ class SettingsKeys:
     class Text:
         FONT_FAMILY = "text.font_family"
         FONT_SIZE = "text.font_size"
+        LINE_SPACING = "text.line_spacing"
         ALIGNMENT = "text.alignment"
         BOLD = "text.bold"
         ITALIC = "text.italic"

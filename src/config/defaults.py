@@ -17,6 +17,13 @@ FIT_MODE_FILL = "Fit to width"      # scale up or down so the image spans the pa
 FIT_MODE_NONE = "Original size"     # no scaling - pad or crop
 FIT_MODES = [FIT_MODE_FILL, FIT_MODE_SHRINK, FIT_MODE_NONE]
 DEFAULT_FIT_MODE = FIT_MODE_SHRINK
+
+# Multiplier applied to the font's real line height (ascent + descent).
+# Thermal output at 203 DPI needs more leading than a screen to stay legible;
+# 1.0 packs lines so tightly that descenders nearly touch the next cap line.
+DEFAULT_LINE_SPACING = 1.3
+MIN_LINE_SPACING = 0.8
+MAX_LINE_SPACING = 2.5
 DEFAULT_RFCOMM_CHANNEL = 1
 
 # fonts
@@ -460,6 +467,7 @@ def get_default_config() -> Dict[str, Any]:
             "bold": False,
             "italic": False,
             "darkness": 1.0,
+            "line_spacing": DEFAULT_LINE_SPACING,
             "add_date": False,
             "date_format": DEFAULT_DATE_FORMAT,
         },
@@ -498,6 +506,7 @@ def get_default_config() -> Dict[str, Any]:
             "bold": False,
             "italic": False,
             "darkness": 1.5,
+            "line_spacing": DEFAULT_LINE_SPACING,
             "add_date": False,
             "date_format": DEFAULT_DATE_FORMAT,
         },

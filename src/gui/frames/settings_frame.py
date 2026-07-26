@@ -19,6 +19,9 @@ from ...config.defaults import (
     PREVIEW_MIN_SCALE,
     PREVIEW_MAX_SCALE,
     DEFAULT_UNICODE_FONT,
+    DEFAULT_LINE_SPACING,
+    MIN_LINE_SPACING,
+    MAX_LINE_SPACING,
     RECOMMENDED_UNICODE_FONTS,
 )
 from ...utils.font_manager import get_font_manager
@@ -188,6 +191,23 @@ class SettingsFrame(ctk.CTkScrollableFrame):
             command=self._on_date_format_change
         )
         self.date_format_dropdown.grid(row=6, column=1, pady=8, padx=10, sticky="w")
+
+        ctk.CTkLabel(self, text="Line Spacing:", font=label_font).grid(
+            row=6, column=2, pady=8, padx=(20, 10), sticky="w")
+
+        self.line_spacing_var = ctk.DoubleVar(value=DEFAULT_LINE_SPACING)
+        self.line_spacing_slider = ctk.CTkSlider(
+            self,
+            from_=MIN_LINE_SPACING, to=MAX_LINE_SPACING,
+            variable=self.line_spacing_var,
+            width=160, height=20,
+            command=self._on_line_spacing_change
+        )
+        self.line_spacing_slider.grid(row=6, column=3, pady=8, padx=10, sticky="w")
+
+        self.line_spacing_value = ctk.CTkLabel(self, text=f"{DEFAULT_LINE_SPACING:.2f}",
+                                               width=45, font=label_font)
+        self.line_spacing_value.grid(row=6, column=4, pady=8, padx=5, sticky="w")
 
         ctk.CTkLabel(
             self, text="Timing",
@@ -426,6 +446,13 @@ class SettingsFrame(ctk.CTkScrollableFrame):
         self.profile_info_label.configure(
             text=f"{width} dots / {mm_text} - {qr}, {cut}"
         )
+
+    def _on_line_spacing_change(self, value=None) -> None:
+        spacing = round(self.line_spacing_var.get(), 2)
+        self.line_spacing_value.configure(text=f"{spacing:.2f}")
+        self._settings.set(SettingsKeys.Text.LINE_SPACING, spacing)
+        self._settings.save()
+        self._set_status(f"Line spacing: {spacing:.2f} (reopen the tab to re-render)")
 
     def _on_appearance_change(self, value=None) -> None:
         self._apply_appearance()
