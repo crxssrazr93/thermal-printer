@@ -334,6 +334,34 @@ RECOMMENDED_UNICODE_FONTS = [
     "Noto",
 ]
 
+# Faces to fall back to for a right to left run whose own font cannot draw all
+# of it. A joining script has to be set in one face, since the shape of a
+# letter depends on its neighbours, so these are whole-run substitutes rather
+# than per-character ones. Naskh first: it is what Arabic is usually read in,
+# and it carries the Quranic annotation marks that the mono faces leave out.
+RTL_FALLBACK_FONTS = [
+    "NotoNaskhArabic",
+    "NotoSansArabic",
+    "NotoKufiArabic",
+    "NotoSansHebrew",
+    "DejaVuSans",
+    "FreeSerif",
+]
+
+# Faces to borrow a single character from when the page's own font has no
+# glyph for it. Left to right text does not join, so one character can come
+# from another face without disturbing the letters beside it, which is what
+# keeps a symbol from printing as an empty box.
+SYMBOL_FALLBACK_FONTS = [
+    "Catrinity",
+    "FreeSerif",
+    "DejaVuSans",
+    "NotoSansSymbols2",
+    "NotoSansMath",
+    "Symbola",
+    "NotoEmoji",
+]
+
 UNICODE_FALLBACK_FONTS = [
     "Catrinity",
     "Noto Sans Math",

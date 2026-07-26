@@ -151,6 +151,19 @@ Most monospaced faces carry no Arabic at all, so a right to left run is set in
 a face that does. The theme's `rtl_font` chooses which; it defaults to DejaVu
 Sans Mono.
 
+**When that face is not enough**, the whole run moves to one that is. Quranic
+annotation marks are the usual reason: the mono faces carry Arabic letters and
+vowel marks but stop short of the pause marks, so a verse would otherwise print
+with an empty box in the middle of it. The substitution is by run rather than
+by character, since a joining script has to be set in one face, and it is
+decided across the whole document so that two verses on a page never come out
+in two different faces.
+
+Left to right text is different: it does not join, so a character the page's
+font has no glyph for is borrowed from another face on its own. That is what
+keeps the symbol picker honest, since about a quarter of what it offers is
+missing from the default printing font.
+
 ## Size
 
 The font size in Settings and on the toolbar is the size of the *page*, not of

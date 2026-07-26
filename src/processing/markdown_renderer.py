@@ -14,7 +14,11 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-from ..config.defaults import DEFAULT_LINE_SPACING
+from ..config.defaults import (
+    DEFAULT_LINE_SPACING,
+    RTL_FALLBACK_FONTS,
+    SYMBOL_FALLBACK_FONTS,
+)
 from ..config.printer_profile import get_printer_width
 from ..utils.font_manager import get_font_manager
 from .image_dither import dither_image
@@ -476,10 +480,7 @@ class MarkdownRenderer:
             for word in re.findall(r"\s+|\S+", span.text) or []:
                 if word.isspace() and not lines[-1]:
                     continue  # no leading space at the start of a wrapped line
-                try:
-                    word_width = font.getlength(word)
-                except (AttributeError, OSError):
-                    word_width = font_size * len(word) * 0.6
+                word_width = self._text_width(word, font, font_size)
 
                 if x + word_width > available and lines[-1]:
                     lines.append([])
@@ -487,10 +488,7 @@ class MarkdownRenderer:
                     word = word.lstrip()
                     if not word:
                         continue
-                    try:
-                        word_width = font.getlength(word)
-                    except (AttributeError, OSError):
-                        pass
+                    word_width = self._text_width(word, font, font_size)
 
                 lines[-1].append((span, word, font))
                 x += word_width
@@ -501,6 +499,16 @@ class MarkdownRenderer:
         blocks = self.parse(text)
         width = self.width
         body = self.margin
+
+        # Every right to left run in the document is set in one face, chosen
+        # against all of them together: a page where one verse is in the mono
+        # face and the next in Naskh, because only the second happens to carry
+        # a pause mark, reads as a mistake.
+        self._rtl_corpus = "".join(
+            "".join(span.text for span in block.spans)
+            for block in blocks
+            if block.spans and is_rtl("".join(span.text for span in block.spans))
+        )
 
         image = Image.new("RGB", (width, max_height), "white")
         draw = ImageDraw.Draw(image)
@@ -537,15 +545,65 @@ class MarkdownRenderer:
             return int(style["list_gap"])
         return int(style["block_gap"])
 
-    def _rtl_font(self, size: int, bold: bool = False, italic: bool = False):
+    def _rtl_font(self, size: int, bold: bool = False, italic: bool = False,
+                  text: str = ""):
+        """The face for a right to left run, chosen by what it has to draw.
+
+        The theme names one, and it is used whenever it can set the whole run.
+        Quranic annotation marks are the common case where it cannot: the mono
+        faces carry Arabic letters and vowel marks but stop short of them, so a
+        verse comes out with an empty box where the pause mark should be. When
+        that happens the whole run moves to a face that has everything, rather
+        than one character doing so, because a joining script sets as a piece:
+        swapping a single glyph would break the shapes on either side of it.
+        """
         family = self.style["rtl_font"] or self.font_family
-        return self._fm.load_font(family, size, bold=bold, italic=italic)
+        wanted = getattr(self, "_rtl_corpus", "") or text
+        if not wanted:
+            return self._fm.load_font(family, size, bold=bold, italic=italic)
+        return self._fm.font_for_text(
+            [family, *RTL_FALLBACK_FONTS], size, wanted, bold=bold, italic=italic)
+
+    def _segments(self, word: str, font):
+        """Split a word where the font runs out of glyphs.
+
+        A face that has no glyph for a character draws the empty box, and a
+        page of boxes is worse than a page in two faces. Left to right text
+        does not join, so a character can be borrowed from another font on its
+        own without disturbing its neighbours. The common case is one segment,
+        and coverage answers are cached, so this costs almost nothing when the
+        font has everything.
+        """
+        if not word or self._fm.font_covers(font, word):
+            return [(word, font)]
+
+        size = getattr(font, "size", self.font_size)
+        segments = []
+        for char in word:
+            chosen = font
+            if not self._fm.font_has_glyph(font, char):
+                chosen = self._fm.font_for_text(SYMBOL_FALLBACK_FONTS, size, char) or font
+            if segments and segments[-1][1] is chosen:
+                segments[-1] = (segments[-1][0] + char, chosen)
+            else:
+                segments.append((char, chosen))
+        return segments
+
+    def _text_width(self, word: str, font, size: int) -> float:
+        total = 0.0
+        for text, face in self._segments(word, font):
+            try:
+                total += face.getlength(text)
+            except (AttributeError, OSError):
+                total += size * len(text) * 0.6
+        return total
 
     def _draw_rtl(self, draw, block: Block, y: int, left: int, width: int,
                   size: int, bold: bool = False, italic: bool = False) -> int:
         """Draw a right to left block: shaped, ordered, and set from the right."""
         text = "".join(span.text for span in block.spans)
-        font = self._rtl_font(size, bold, italic) or self._font(size, bold, italic)
+        font = (self._rtl_font(size, bold, italic, text)
+                or self._font(size, bold, italic))
         right = width - self.margin
         available = right - left
 
@@ -815,10 +873,7 @@ class MarkdownRenderer:
                 font = self._font(max(8, int(size * 0.7)), span.bold or force_bold,
                                   span.italic or force_italic, span.mono) or font
 
-            try:
-                word_width = font.getlength(word)
-            except (AttributeError, OSError):
-                word_width = size * len(word) * 0.6
+            word_width = self._text_width(word, font, size)
 
             line_height = self._line_height(font)
             offset = 0
@@ -833,9 +888,9 @@ class MarkdownRenderer:
                 draw.rectangle(
                     [x - 1, y, x + word_width + 1, y + line_height - 2], fill="black"
                 )
-                draw.text((x, y + offset), word, font=font, fill="white")
+                self._paint(draw, x, y + offset, word, font, "white", size)
             else:
-                draw.text((x, y + offset), word, font=font, fill=fill)
+                self._paint(draw, x, y + offset, word, font, fill, size)
 
             if span.underline:
                 baseline = y + int(line_height * 0.82)
@@ -845,6 +900,15 @@ class MarkdownRenderer:
             height = max(height, self._line_height(font) if not span.raise_
                          else int(size * 1.2))
         return y + (height or int(size * 1.2))
+
+    def _paint(self, draw, x: float, y: int, word: str, font, fill: str, size: int):
+        """Draw a word, borrowing a face for any character this one lacks."""
+        for text, face in self._segments(word, font):
+            draw.text((x, y), text, font=face, fill=fill)
+            try:
+                x += face.getlength(text)
+            except (AttributeError, OSError):
+                x += size * len(text) * 0.6
 
     def _draw_image(self, sheet, block: Block, y: int, left: int, width: int) -> int:
         """Place a picture, scaled to the paper and reduced to ink or nothing.

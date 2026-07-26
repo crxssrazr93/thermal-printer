@@ -36,6 +36,10 @@ from ..core.exceptions import FontNotFoundError
 
 logger = logging.getLogger(__name__)
 
+# A codepoint in a private use plane that nothing maps, used to render the
+# empty box a font draws when it is asked for something it does not have.
+NOTDEF_PROBE = chr(0x0FFFFD)
+
 
 # additional font paths for various systems
 EXTRA_FONT_PATHS = [
@@ -80,6 +84,10 @@ class FontManager:
         self._fallback_fonts: List[ImageFont.FreeTypeFont] = []
         self._fallback_font_cache: Dict[int, Dict[str, ImageFont.FreeTypeFont]] = {}
         self._glyph_cache: Dict[str, Dict[str, bool]] = {}
+        # one unshaped copy of each font, and the empty box it draws, so a
+        # coverage question costs a dictionary lookup after the first time
+        self._probe_cache: Dict[str, Optional[ImageFont.FreeTypeFont]] = {}
+        self._notdef_cache: Dict[str, Tuple[Tuple[int, int], bytes]] = {}
         # cache loaded fonts to avoid repeated disk access
         self._font_cache: Dict[Tuple[str, int, bool, bool], ImageFont.FreeTypeFont] = {}
         self._scan_fonts()
@@ -275,28 +283,98 @@ class FontManager:
 
         return None
 
+    def _probe_font(self, path: str) -> Optional[ImageFont.FreeTypeFont]:
+        """A copy of a font laid out without shaping, for asking what it has.
+
+        Shaping is what makes a font look right and what makes it lie about
+        coverage: with it on, a lone combining mark comes back as a mark on a
+        dotted circle, which is two glyphs and no longer comparable to
+        anything. Turned off, one character is one glyph, so a missing one
+        looks exactly like every other missing one.
+        """
+        if path in self._probe_cache:
+            return self._probe_cache[path]
+        probe = None
+        try:
+            probe = ImageFont.truetype(path, 24, layout_engine=ImageFont.Layout.BASIC)
+        except (OSError, IOError, AttributeError, ValueError):
+            probe = None
+        self._probe_cache[path] = probe
+        return probe
+
     def font_has_glyph(self, font: ImageFont.FreeTypeFont, char: str) -> bool:
-        """Check if a font has a glyph for a character using PIL's getmask."""
-        if not char or char == ' ':
+        """True if the font can actually draw this character.
+
+        A font asked for a character it does not have draws .notdef, the empty
+        box, rather than nothing: measuring the result only says the box has a
+        size. So the box itself is rendered once, from a codepoint no font will
+        ever map, and anything that comes back identical to it is missing.
+        """
+        if not char or char.isspace():
             return True
 
-        # cache check using font path and character
-        font_path = getattr(font, 'path', str(id(font)))
-        if font_path not in self._glyph_cache:
-            self._glyph_cache[font_path] = {}
-        if char in self._glyph_cache[font_path]:
-            return self._glyph_cache[font_path][char]
+        font_path = getattr(font, 'path', None)
+        cache_key = font_path or str(id(font))
+        if cache_key not in self._glyph_cache:
+            self._glyph_cache[cache_key] = {}
+        cached = self._glyph_cache[cache_key].get(char)
+        if cached is not None:
+            return cached
 
+        has_glyph = True
         try:
-            # getmask returns empty mask for missing glyphs
-            mask = font.getmask(char)
-            has_glyph = mask.size[0] > 0 and mask.size[1] > 0
-            self._glyph_cache[font_path][char] = has_glyph
-            return has_glyph
-        except (OSError, AttributeError, ValueError) as e:
-            logger.debug(f"error checking glyph for {char}: {e}")
-            self._glyph_cache[font_path][char] = False
-            return False
+            probe = self._probe_font(font_path) if font_path else None
+            if probe is None:
+                # nothing to compare against; an empty mask is still an answer
+                mask = font.getmask(char)
+                has_glyph = mask.size[0] > 0 and mask.size[1] > 0
+            else:
+                notdef = self._notdef_cache.get(font_path)
+                if notdef is None:
+                    reference = probe.getmask(NOTDEF_PROBE)
+                    notdef = (reference.size, bytes(reference))
+                    self._notdef_cache[font_path] = notdef
+                mask = probe.getmask(char)
+                if mask.size[0] == 0 or mask.size[1] == 0:
+                    has_glyph = False
+                else:
+                    has_glyph = not (mask.size == notdef[0] and bytes(mask) == notdef[1])
+        except (OSError, AttributeError, ValueError) as error:
+            logger.debug("error checking glyph for %r: %s", char, error)
+            has_glyph = False
+
+        self._glyph_cache[cache_key][char] = has_glyph
+        return has_glyph
+
+    def font_covers(self, font: ImageFont.FreeTypeFont, text: str) -> bool:
+        """True if every character in the text has a glyph in this font."""
+        return all(self.font_has_glyph(font, char) for char in set(text))
+
+    def font_for_text(self, families, size: int, text: str,
+                      bold: bool = False, italic: bool = False):
+        """The first of these families that can draw all of the text.
+
+        Falling back a character at a time is wrong for a script that joins:
+        the shape of a letter depends on its neighbours, so a run has to be set
+        in one face. Whichever covers the most is used when none covers it all,
+        which at least keeps the boxes down to the rarest characters.
+        """
+        best, best_score = None, -1
+        for family in families:
+            if not family:
+                continue
+            try:
+                font = self.load_font(family, size, bold=bold, italic=italic)
+            except FontNotFoundError:
+                continue
+            if font is None:
+                continue
+            if self.font_covers(font, text):
+                return font
+            score = sum(1 for char in set(text) if self.font_has_glyph(font, char))
+            if score > best_score:
+                best, best_score = font, score
+        return best
 
     def get_unicode_fallback_fonts(self, size: int) -> List[ImageFont.FreeTypeFont]:
         if size in self._fallback_font_cache:
