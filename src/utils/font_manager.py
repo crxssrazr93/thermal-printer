@@ -90,19 +90,53 @@ class FontManager:
         self._notdef_cache: Dict[str, Tuple[Tuple[int, int], bytes]] = {}
         # cache loaded fonts to avoid repeated disk access
         self._font_cache: Dict[Tuple[str, int, bool, bool], ImageFont.FreeTypeFont] = {}
+        self._dir_stamp_at_scan: Tuple[Tuple[str, float], ...] = ()
         self._scan_fonts()
+
+    def _font_dirs(self) -> List[str]:
+        paths = []
+        if PROJECT_FONTS_DIR.is_dir():
+            paths.append(str(PROJECT_FONTS_DIR))
+        paths.extend(LINUX_FONT_PATHS)
+        paths.extend(EXTRA_FONT_PATHS)
+        return paths
+
+    def _dir_stamp(self) -> Tuple[Tuple[str, float], ...]:
+        """When each font directory last changed, for noticing an install.
+
+        A font installed while the app is running is invisible until something
+        looks again, and nobody expects to restart a print server because they
+        added a typeface. Stat is cheap; the scan behind it is not, so it only
+        runs when one of these has moved.
+        """
+        stamps = []
+        for directory in self._font_dirs():
+            try:
+                stamps.append((directory, os.path.getmtime(directory)))
+            except OSError:
+                continue
+        return tuple(stamps)
+
+    def refresh_if_changed(self) -> bool:
+        """Rescan if a font directory has changed since the last look."""
+        stamp = self._dir_stamp()
+        if stamp == self._dir_stamp_at_scan:
+            return False
+        self._fonts.clear()
+        self._font_families.clear()
+        self._font_cache.clear()
+        self._fallback_font_cache.clear()
+        self._glyph_cache.clear()
+        self._probe_cache.clear()
+        self._notdef_cache.clear()
+        self._scan_fonts()
+        logger.info("Font directories changed; rescanned")
+        return True
 
     def _scan_fonts(self) -> None:
         font_extensions = ['*.ttf', '*.otf', '*.TTF', '*.OTF', '*.ttc', '*.TTC']
 
-        # include project fonts directory first (higher priority)
-        all_paths = []
-        if PROJECT_FONTS_DIR.is_dir():
-            all_paths.append(str(PROJECT_FONTS_DIR))
-        all_paths.extend(LINUX_FONT_PATHS)
-        all_paths.extend(EXTRA_FONT_PATHS)
-
-        for font_dir in all_paths:
+        for font_dir in self._font_dirs():
             if not os.path.isdir(font_dir):
                 continue
 
@@ -110,6 +144,8 @@ class FontManager:
                 pattern = os.path.join(font_dir, '**', ext)
                 for font_path in glob.glob(pattern, recursive=True):
                     self._register_font(font_path)
+
+        self._dir_stamp_at_scan = self._dir_stamp()
 
     def _register_font(self, path: str) -> None:
         try:

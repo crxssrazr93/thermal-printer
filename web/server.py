@@ -559,7 +559,11 @@ def api_state(handler, match, body):
 
 @route("GET", "/api/fonts")
 def api_fonts(handler, match, body):
-    families = get_font_manager().get_available_families() or [DEFAULT_FONT]
+    # a font installed while this is running should turn up in the list the
+    # next time the list is asked for, not the next time the app is restarted
+    manager = get_font_manager()
+    manager.refresh_if_changed()
+    families = manager.get_available_families() or [DEFAULT_FONT]
     return 200, {"fonts": families, "default": DEFAULT_FONT}
 
 
