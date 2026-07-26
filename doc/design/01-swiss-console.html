@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Thermal Printer - 01 Swiss Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#FFFFFF; --panel:#FFFFFF; --sunken:#F5F5F5;
+  --ink:#0A0A0A; --muted:#5A5A5A; --line:#D8D8D8; --line-strong:#0A0A0A;
+  --accent:#1B5CFF; --ok:#0B7A33; --warn:#B45309;
+  --radius:0px; --gap:1px;
+}
+[data-theme="dark"]{
+  --bg:#0C0C0D; --panel:#141416; --sunken:#0A0A0B;
+  --ink:#F2F2F3; --muted:#9A9AA0; --line:#2A2A2E; --line-strong:#3A3A40;
+  --accent:#5B8BFF; --ok:#3DD16C; --warn:#E0A340;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:Inter,system-ui,sans-serif; font-size:14px; line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+}
+.mono{font-family:"JetBrains Mono",ui-monospace,monospace}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* ---------- shell: 12 column swiss grid ---------- */
+.app{height:100vh;display:grid;grid-template-rows:auto auto 1fr auto}
+
+.topbar{
+  display:flex;align-items:center;gap:24px;
+  padding:14px 24px;border-bottom:1px solid var(--line);background:var(--panel);
+}
+.brand{display:flex;align-items:baseline;gap:10px}
+.brand b{font-size:15px;font-weight:700;letter-spacing:-0.02em}
+.brand span{font-size:11px;color:var(--muted);letter-spacing:0.12em;text-transform:uppercase}
+
+.device{display:flex;align-items:center;gap:10px;margin-left:auto}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--ok);flex:none}
+.dot.off{background:var(--muted)}
+.device .name{font-size:12.5px}
+.device .addr{font-size:11.5px;color:var(--muted)}
+
+.btn{
+  border:1px solid var(--line-strong);background:transparent;padding:7px 14px;
+  border-radius:var(--radius);font-size:12.5px;font-weight:500;
+  transition:background 180ms ease,color 180ms ease;
+}
+.btn:hover{background:var(--ink);color:var(--bg)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{background:var(--ink);border-color:var(--ink)}
+.icon-btn{border:1px solid var(--line);background:transparent;padding:6px;line-height:0;border-radius:0}
+.icon-btn:hover{border-color:var(--line-strong)}
+
+/* ---------- section nav ---------- */
+.nav{display:flex;gap:0;border-bottom:1px solid var(--line);background:var(--panel);padding:0 24px}
+.nav button{
+  border:0;background:transparent;padding:12px 18px;font-size:13px;font-weight:500;
+  color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;
+  transition:color 180ms ease,border-color 180ms ease;
+}
+.nav button:hover{color:var(--ink)}
+.nav button[aria-current="page"]{color:var(--ink);border-bottom-color:var(--ink)}
+.nav .spacer{flex:1}
+.nav .badge{
+  align-self:center;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--muted);border:1px solid var(--line);padding:3px 8px;
+}
+
+/* ---------- workspace ---------- */
+.work{display:grid;grid-template-columns:200px 1fr 380px;gap:var(--gap);background:var(--line);overflow:hidden}
+.col{background:var(--bg);overflow:auto;min-width:0}
+
+.side{padding:18px 16px}
+.side h3{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 10px}
+.preset{
+  display:flex;align-items:center;gap:8px;padding:8px 10px;margin:0 -10px;
+  border-left:2px solid transparent;transition:background 160ms ease;
+}
+.preset:hover{background:var(--sunken);border-left-color:var(--accent)}
+.preset .k{font-size:12.5px}
+.preset .c{margin-left:auto;font-size:11px;color:var(--muted)}
+.side hr{border:0;border-top:1px solid var(--line);margin:18px 0}
+
+/* editor */
+.editor{display:flex;flex-direction:column;height:100%}
+.toolbar{
+  display:flex;flex-wrap:wrap;gap:4px;padding:10px 14px;border-bottom:1px solid var(--line);
+}
+.tool{
+  border:1px solid transparent;background:transparent;padding:5px 9px;font-size:12px;
+  color:var(--muted);border-radius:0;transition:all 160ms ease;
+}
+.tool:hover{color:var(--ink);border-color:var(--line);background:var(--sunken)}
+.tool.mono{font-family:"JetBrains Mono",monospace;font-weight:700}
+.tool-sep{width:1px;background:var(--line);margin:4px 6px}
+
+.doc{padding:18px 22px;font-family:"JetBrains Mono",monospace;font-size:13px;line-height:1.8;white-space:pre-wrap;flex:1}
+.doc .h{color:var(--accent)}
+.doc .b{font-weight:700}
+.doc .q{color:var(--muted)}
+
+/* preview */
+.pv{padding:22px;display:flex;flex-direction:column;gap:14px;align-items:center}
+.pv-meta{width:100%;display:flex;justify-content:space-between;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.paper{
+  width:288px;background:#fff;color:#000;padding:18px 16px 26px;
+  font-family:"JetBrains Mono",monospace;font-size:12px;line-height:1.65;
+  box-shadow:0 1px 0 var(--line),0 12px 28px rgba(0,0,0,.18);
+}
+.paper h1{font-size:19px;margin:0 0 6px;letter-spacing:-.01em}
+.paper .rule{border-top:2px solid #000;margin:6px 0 12px}
+.paper ul{margin:8px 0;padding-left:16px}
+.paper li{margin:3px 0}
+.paper blockquote{margin:10px 0;padding-left:10px;border-left:3px solid #000;font-style:italic}
+.paper table{width:100%;border-collapse:collapse;margin-top:12px;font-size:11.5px}
+.paper th{text-align:left;border-bottom:1.5px solid #000;padding:4px 0}
+.paper td{border-bottom:1px dotted #999;padding:4px 0}
+.tear{
+  width:288px;height:10px;
+  background:repeating-linear-gradient(90deg,#fff 0 6px,transparent 6px 12px);
+  filter:drop-shadow(0 3px 5px rgba(0,0,0,.15));
+}
+
+/* status */
+.status{
+  display:flex;align-items:center;gap:18px;padding:8px 24px;border-top:1px solid var(--line);
+  background:var(--panel);font-size:11.5px;color:var(--muted);
+}
+.status .r{margin-left:auto;display:flex;gap:18px}
+.kbd{border:1px solid var(--line);padding:1px 5px;font-size:10.5px;font-family:"JetBrains Mono",monospace}
+
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+@media (max-width:1100px){.work{grid-template-columns:1fr 340px}.side{display:none}}
+@media (max-width:820px){.work{grid-template-columns:1fr;grid-template-rows:1fr auto}}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="topbar">
+    <div class="brand"><b>Thermal Printer</b><span>Swiss Console</span></div>
+    <div class="device">
+      <span class="dot" aria-hidden="true"></span>
+      <span class="name">MPT-II Bluetooth</span>
+      <span class="addr mono">04:7F:0E:11:17:B5</span>
+      <button class="btn">Disconnect</button>
+      <button class="icon-btn" id="themeBtn" aria-label="Toggle colour theme">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <nav class="nav" aria-label="Sections">
+    <button aria-current="page">Text</button>
+    <button>Banner</button>
+    <button>Template</button>
+    <button>Image</button>
+    <button>Settings</button>
+    <span class="spacer"></span>
+    <span class="badge">58mm &middot; 384px &middot; 203dpi</span>
+  </nav>
+
+  <div class="work">
+    <aside class="col side">
+      <h3>Presets</h3>
+      <div class="preset"><span class="k">Daily to-do</span><span class="c mono">3</span></div>
+      <div class="preset"><span class="k">Shopping list</span><span class="c mono">8</span></div>
+      <div class="preset"><span class="k">Label 40x20</span><span class="c mono">1</span></div>
+      <div class="preset"><span class="k">Receipt header</span><span class="c mono">2</span></div>
+      <hr>
+      <h3>Recent</h3>
+      <div class="preset"><span class="k">Groceries</span><span class="c">2m</span></div>
+      <div class="preset"><span class="k">Meeting notes</span><span class="c">1h</span></div>
+      <hr>
+      <h3>Queue</h3>
+      <div class="preset"><span class="k">Idle</span><span class="c">0 jobs</span></div>
+    </aside>
+
+    <main class="col editor">
+      <div class="toolbar" role="toolbar" aria-label="Markdown formatting">
+        <button class="tool">H1</button><button class="tool">H2</button><button class="tool">H3</button>
+        <span class="tool-sep" aria-hidden="true"></span>
+        <button class="tool mono">B</button><button class="tool mono"><i>I</i></button>
+        <button class="tool mono">S</button><button class="tool mono">&lt;/&gt;</button>
+        <span class="tool-sep" aria-hidden="true"></span>
+        <button class="tool">List</button><button class="tool">1.</button><button class="tool">Quote</button>
+        <span class="tool-sep" aria-hidden="true"></span>
+        <button class="tool">Link</button><button class="tool">Table</button>
+        <button class="tool">Rule</button><button class="tool">Math</button>
+      </div>
+      <div class="doc" contenteditable="false" spellcheck="false"><span class="h"># Groceries</span>
+Milk and eggs.
+- <span class="b">**bread**</span>
+- butter
+<span class="q">&gt; dont forget the receipt</span>
+
+| Item | Qty |
+|------|-----|
+| tea  | 2   |
+| jam  | 1   |</div>
+    </main>
+
+    <section class="col pv" aria-label="Print preview">
+      <div class="pv-meta"><span>Preview</span><span>384 &times; 512 px</span></div>
+      <div class="paper">
+        <h1>Groceries</h1>
+        <div class="rule"></div>
+        <div>Milk and eggs.</div>
+        <ul><li><b>bread</b></li><li>butter</li></ul>
+        <blockquote>dont forget the receipt</blockquote>
+        <table><thead><tr><th>Item</th><th>Qty</th></tr></thead>
+        <tbody><tr><td>tea</td><td>2</td></tr><tr><td>jam</td><td>1</td></tr></tbody></table>
+      </div>
+      <div class="tear" aria-hidden="true"></div>
+      <div style="display:flex;gap:8px;width:288px">
+        <button class="btn" style="flex:1">Save preset</button>
+        <button class="btn primary" style="flex:1">Print</button>
+      </div>
+    </section>
+  </div>
+
+  <footer class="status">
+    <span>BT ON</span><span>Tear gap 8.5 mm</span><span>Profile: Generic 58mm ESC/POS</span>
+    <span class="r">
+      <span><span class="kbd">Ctrl</span> <span class="kbd">P</span> print</span>
+      <span><span class="kbd">Ctrl</span> <span class="kbd">S</span> save preset</span>
+    </span>
+  </footer>
+</div>
+
+<script>
+  const root = document.documentElement;
+  document.getElementById('themeBtn').addEventListener('click', () => {
+    root.dataset.theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
+  });
+</script>
+</body>
+</html>

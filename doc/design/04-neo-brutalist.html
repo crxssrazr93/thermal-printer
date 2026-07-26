@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Thermal Printer - 04 Neo-Brutalist</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F4F1E8; --card:#FFFFFF; --ink:#0A0A0A; --muted:#4A4A4A; --line:#0A0A0A;
+  --yellow:#FFD400; --blue:#2563EB; --red:#EF3E36; --green:#22C55E;
+  --shadow:5px 5px 0 var(--line);
+}
+[data-theme="dark"]{
+  --bg:#121212; --card:#1C1C1C; --ink:#F5F5F5; --muted:#B0B0B0; --line:#F5F5F5;
+  --yellow:#FFD400; --blue:#5B8BFF; --red:#FF6B62; --green:#4ADE80;
+  --shadow:5px 5px 0 var(--line);
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;background:var(--bg);color:var(--ink);
+  font-family:"Space Grotesk",system-ui,sans-serif;font-size:14px;line-height:1.5;
+}
+.mono{font-family:"Space Mono",monospace}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+
+.app{min-height:100vh;display:flex;flex-direction:column;padding:16px;gap:14px}
+
+/* ---------- header block ---------- */
+.head{
+  border:3px solid var(--line);background:var(--yellow);color:#0A0A0A;
+  box-shadow:var(--shadow);padding:14px 18px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+}
+.head h1{margin:0;font-size:21px;font-weight:700;letter-spacing:-.03em;text-transform:uppercase}
+.head .tag{
+  font-family:"Space Mono",monospace;font-size:11px;border:2px solid #0A0A0A;padding:3px 8px;
+  background:#fff;
+}
+.head .right{margin-left:auto;display:flex;gap:9px;align-items:center}
+.stat{
+  display:inline-flex;align-items:center;gap:7px;border:2px solid #0A0A0A;background:#fff;
+  padding:6px 11px;font-family:"Space Mono",monospace;font-size:11.5px;
+}
+.stat .led{width:9px;height:9px;background:var(--green);border:1.5px solid #0A0A0A}
+.hbtn{
+  border:2px solid #0A0A0A;background:#fff;color:#0A0A0A;padding:7px 13px;font-weight:700;font-size:12px;
+  text-transform:uppercase;letter-spacing:.03em;box-shadow:3px 3px 0 #0A0A0A;
+  transition:transform 150ms ease,box-shadow 150ms ease;
+}
+.hbtn:hover{transform:translate(2px,2px);box-shadow:1px 1px 0 #0A0A0A}
+
+/* ---------- nav strip ---------- */
+.strip{display:flex;gap:9px;flex-wrap:wrap}
+.strip button{
+  border:3px solid var(--line);background:var(--card);padding:9px 17px;font-weight:700;font-size:13px;
+  text-transform:uppercase;letter-spacing:.02em;box-shadow:3px 3px 0 var(--line);
+  transition:transform 150ms ease,box-shadow 150ms ease,background 150ms ease;
+}
+.strip button:hover{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--line)}
+.strip button[aria-current="page"]{background:var(--blue);color:#fff}
+
+/* ---------- main grid ---------- */
+.grid{flex:1;display:grid;grid-template-columns:1fr 340px;gap:14px;align-items:start}
+
+.block{border:3px solid var(--line);background:var(--card);box-shadow:var(--shadow)}
+.block > h2{
+  margin:0;padding:9px 14px;border-bottom:3px solid var(--line);background:var(--line);color:var(--bg);
+  font-size:12px;text-transform:uppercase;letter-spacing:.1em;font-weight:700;
+}
+
+.tools{display:flex;flex-wrap:wrap;gap:6px;padding:12px 14px;border-bottom:3px solid var(--line)}
+.tools button{
+  border:2px solid var(--line);background:var(--bg);padding:5px 10px;font-family:"Space Mono",monospace;
+  font-size:12px;font-weight:700;box-shadow:2px 2px 0 var(--line);
+  transition:transform 150ms ease,box-shadow 150ms ease,background 150ms ease;
+}
+.tools button:hover{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--line);background:var(--yellow);color:#0A0A0A}
+.tools .g1{background:var(--red);color:#fff}
+.tools .g2{background:var(--blue);color:#fff}
+
+.text{
+  padding:18px;font-family:"Space Mono",monospace;font-size:13px;line-height:1.9;white-space:pre-wrap;
+  min-height:290px;
+}
+.text .hh{background:var(--yellow);color:#0A0A0A;padding:0 4px;font-weight:700}
+.text .bb{background:var(--blue);color:#fff;padding:0 4px}
+.text .qq{border-left:4px solid var(--red);padding-left:8px;display:inline-block}
+
+/* preview */
+.paperwrap{padding:16px;display:flex;flex-direction:column;align-items:center;gap:14px}
+.paper{
+  width:284px;background:#fff;color:#000;border:3px solid #0A0A0A;padding:16px 14px 22px;
+  font-family:"Space Mono",monospace;font-size:11.5px;line-height:1.65;box-shadow:5px 5px 0 #0A0A0A;
+}
+.paper h3{font-size:19px;margin:0 0 5px;text-transform:uppercase;letter-spacing:-.02em}
+.paper .hr{border-top:3px solid #000;margin:5px 0 11px}
+.paper ul{margin:8px 0;padding-left:16px}
+.paper blockquote{margin:10px 0;padding-left:9px;border-left:4px solid #000;font-style:italic}
+.paper table{width:100%;border-collapse:collapse;margin-top:11px;font-size:11px}
+.paper th{text-align:left;border-bottom:2px solid #000;padding:3px 0}
+.paper td{border-bottom:1px dashed #666;padding:3px 0}
+
+.bigbtn{
+  width:100%;border:3px solid var(--line);background:var(--green);color:#0A0A0A;
+  padding:14px;font-size:16px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;
+  box-shadow:4px 4px 0 var(--line);transition:transform 150ms ease,box-shadow 150ms ease;
+}
+.bigbtn:hover{transform:translate(2px,2px);box-shadow:2px 2px 0 var(--line)}
+.altbtn{
+  width:100%;border:3px solid var(--line);background:var(--card);padding:11px;font-weight:700;
+  font-size:13px;text-transform:uppercase;box-shadow:4px 4px 0 var(--line);
+  transition:transform 150ms ease,box-shadow 150ms ease;
+}
+.altbtn:hover{transform:translate(2px,2px);box-shadow:2px 2px 0 var(--line)}
+
+/* presets */
+.plist{padding:12px;display:flex;flex-direction:column;gap:9px}
+.p{
+  border:2px solid var(--line);background:var(--bg);padding:10px 12px;display:flex;align-items:center;gap:10px;
+  box-shadow:3px 3px 0 var(--line);cursor:pointer;
+  transition:transform 150ms ease,box-shadow 150ms ease;
+}
+.p:hover{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--line)}
+.p .n{font-weight:700;font-size:13px}
+.p .c{margin-left:auto;font-family:"Space Mono",monospace;font-size:11px;border:2px solid var(--line);padding:1px 6px}
+
+.foot{
+  border:3px solid var(--line);background:var(--card);box-shadow:var(--shadow);padding:10px 16px;
+  display:flex;gap:20px;flex-wrap:wrap;font-family:"Space Mono",monospace;font-size:11.5px;
+}
+.foot .r{margin-left:auto}
+
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+@media (max-width:980px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="head">
+    <h1>Thermal Printer</h1>
+    <span class="tag">NEO-BRUTALIST</span>
+    <div class="right">
+      <span class="stat"><span class="led" aria-hidden="true"></span> MPT-II</span>
+      <button class="hbtn">Devices</button>
+      <button class="hbtn" id="themeBtn">Theme</button>
+    </div>
+  </header>
+
+  <nav class="strip" aria-label="Sections">
+    <button aria-current="page">Text</button>
+    <button>Banner</button>
+    <button>Template</button>
+    <button>Image</button>
+    <button>Settings</button>
+  </nav>
+
+  <div class="grid">
+    <section class="block">
+      <h2>Compose</h2>
+      <div class="tools" role="toolbar" aria-label="Markdown formatting">
+        <button class="g1">H1</button><button>H2</button><button>H3</button>
+        <button class="g2">B</button><button><i>I</i></button><button>S</button><button>&lt;/&gt;</button>
+        <button>LIST</button><button>1.</button><button>QUOTE</button>
+        <button>LINK</button><button>TABLE</button><button>RULE</button><button>MATH</button>
+      </div>
+      <div class="text"><span class="hh"># Groceries</span>
+Milk and eggs.
+- <span class="bb">**bread**</span>
+- butter
+<span class="qq">&gt; dont forget the receipt</span>
+
+| Item | Qty |
+| tea  | 2   |
+| jam  | 1   |</div>
+    </section>
+
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <section class="block">
+        <h2>Output</h2>
+        <div class="paperwrap">
+          <div class="paper">
+            <h3>Groceries</h3>
+            <div class="hr"></div>
+            <div>Milk and eggs.</div>
+            <ul><li><b>bread</b></li><li>butter</li></ul>
+            <blockquote>dont forget the receipt</blockquote>
+            <table><thead><tr><th>Item</th><th>Qty</th></tr></thead>
+              <tbody><tr><td>tea</td><td>2</td></tr><tr><td>jam</td><td>1</td></tr></tbody></table>
+          </div>
+          <button class="bigbtn">Print</button>
+          <button class="altbtn">Save as preset</button>
+        </div>
+      </section>
+
+      <section class="block">
+        <h2>Presets</h2>
+        <div class="plist">
+          <div class="p"><span class="n">Daily to-do</span><span class="c">3</span></div>
+          <div class="p"><span class="n">Shopping list</span><span class="c">8</span></div>
+          <div class="p"><span class="n">Label 40&times;20</span><span class="c">1</span></div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <footer class="foot">
+    <span>GENERIC 58MM</span><span>384 PX</span><span>TEAR 8.5MM</span><span>BT ON</span>
+    <span class="r">04:7F:0E:11:17:B5</span>
+  </footer>
+</div>
+
+<script>
+  const root = document.documentElement;
+  document.getElementById('themeBtn').addEventListener('click', () => {
+    root.dataset.theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
+  });
+</script>
+</body>
+</html>

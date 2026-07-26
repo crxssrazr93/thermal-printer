@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Thermal Printer - Design Directions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0C0C0D;--card:#141416;--ink:#F2F2F3;--muted:#9A9AA0;--line:#2A2A2E;--accent:#5B8BFF}
+[data-theme="light"]{--bg:#FAFAFB;--card:#FFFFFF;--ink:#0F172A;--muted:#475569;--line:#E2E2E8;--accent:#1B5CFF}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,sans-serif;line-height:1.6}
+.mono{font-family:"JetBrains Mono",monospace}
+a{color:inherit;text-decoration:none}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+
+header{max-width:1200px;margin:0 auto;padding:44px 24px 26px;display:flex;align-items:flex-end;gap:20px;flex-wrap:wrap}
+h1{margin:0;font-size:27px;letter-spacing:-.02em}
+header p{margin:6px 0 0;color:var(--muted);max-width:62ch}
+header button{margin-left:auto;border:1px solid var(--line);background:var(--card);border-radius:999px;padding:8px 16px;font-size:13px}
+
+.grid{max-width:1200px;margin:0 auto;padding:0 24px 60px;display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:20px}
+.card{
+  background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;
+  display:flex;flex-direction:column;transition:border-color 220ms ease,transform 220ms ease;
+}
+.card:hover{border-color:var(--accent);transform:translateY(-3px)}
+.swatches{display:flex;height:76px}
+.swatches span{flex:1}
+.body{padding:16px 18px 18px}
+.n{font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--muted);letter-spacing:.14em}
+.body h2{margin:5px 0 7px;font-size:17px;letter-spacing:-.01em}
+.body p{margin:0 0 12px;font-size:13.5px;color:var(--muted)}
+.meta{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+.tag{font-size:11px;border:1px solid var(--line);border-radius:999px;padding:3px 9px;color:var(--muted)}
+.open{display:inline-block;border:1px solid var(--line);border-radius:9px;padding:8px 14px;font-size:13px;font-weight:500;transition:background 200ms ease,border-color 200ms ease}
+.card:hover .open{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent)}
+footer{max-width:1200px;margin:0 auto;padding:0 24px 50px;color:var(--muted);font-size:13px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>UI/UX design directions</h1>
+    <p>Five visual directions for the thermal printer app. Static mockups only, nothing is wired up. Each has a light/dark toggle in its own header. Same screen in every one, so they can be compared like for like.</p>
+  </div>
+  <button id="themeBtn">Toggle theme</button>
+</header>
+
+<div class="grid">
+  <a class="card" href="01-swiss-console.html">
+    <div class="swatches"><span style="background:#0C0C0D"></span><span style="background:#F5F5F5"></span><span style="background:#1B5CFF"></span><span style="background:#0B7A33"></span></div>
+    <div class="body">
+      <div class="n">01</div><h2>Swiss Console</h2>
+      <p>Hairline 12-column grid, monochrome with one blue accent, dense and quiet. Closest to a professional instrument.</p>
+      <div class="meta"><span class="tag">Inter</span><span class="tag">WCAG AAA</span><span class="tag">3-pane</span></div>
+      <span class="open">Open</span>
+    </div>
+  </a>
+
+  <a class="card" href="02-paper-ink.html">
+    <div class="swatches"><span style="background:#EFEAE0"></span><span style="background:#FDFBF7"></span><span style="background:#8A5A2B"></span><span style="background:#1A1A1A"></span></div>
+    <div class="body">
+      <div class="n">02</div><h2>Paper &amp; Ink</h2>
+      <p>E-ink warmth. The receipt is a physical object on a desk, torn edge and all. Serif headings, calm and tactile.</p>
+      <div class="meta"><span class="tag">IBM Plex</span><span class="tag">WCAG AAA</span><span class="tag">split</span></div>
+      <span class="open">Open</span>
+    </div>
+  </a>
+
+  <a class="card" href="03-terminal.html">
+    <div class="swatches"><span style="background:#000000"></span><span style="background:#131317"></span><span style="background:#4CC9F0"></span><span style="background:#5BD98A"></span></div>
+    <div class="body">
+      <div class="n">03</div><h2>Terminal</h2>
+      <p>OLED black, monospace everywhere, command line and tmux status bar. Keyboard-first, numbered tabs, job log.</p>
+      <div class="meta"><span class="tag">JetBrains Mono</span><span class="tag">WCAG AAA</span><span class="tag">panes</span></div>
+      <span class="open">Open</span>
+    </div>
+  </a>
+
+  <a class="card" href="04-neo-brutalist.html">
+    <div class="swatches"><span style="background:#F4F1E8"></span><span style="background:#FFD400"></span><span style="background:#2563EB"></span><span style="background:#EF3E36"></span></div>
+    <div class="body">
+      <div class="n">04</div><h2>Neo-Brutalist</h2>
+      <p>Hard 3px borders, offset shadows, primary colour blocks. Loud, tactile, everything obviously pressable.</p>
+      <div class="meta"><span class="tag">Space Grotesk</span><span class="tag">WCAG AAA</span><span class="tag">blocks</span></div>
+      <span class="open">Open</span>
+    </div>
+  </a>
+
+  <a class="card" href="05-soft-glass.html">
+    <div class="swatches"><span style="background:#0B1020"></span><span style="background:#312E81"></span><span style="background:#818CF8"></span><span style="background:#38BDF8"></span></div>
+    <div class="body">
+      <div class="n">05</div><h2>Soft Glass</h2>
+      <p>Floating frosted panels over a colour wash, pill controls, gradient CTA. The most PWA-native of the five.</p>
+      <div class="meta"><span class="tag">Inter</span><span class="tag">high-opacity glass</span><span class="tag">cards</span></div>
+      <span class="open">Open</span>
+    </div>
+  </a>
+</div>
+
+<footer>
+  Same content in every mockup: connection state, section nav, markdown toolbar, editor beside a live receipt preview, presets, and a status line.
+</footer>
+
+<script>
+  const root = document.documentElement;
+  document.getElementById('themeBtn').addEventListener('click', () => {
+    root.dataset.theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
+  });
+</script>
+</body>
+</html>
