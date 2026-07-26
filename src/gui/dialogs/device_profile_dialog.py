@@ -108,14 +108,17 @@ class DeviceProfileDialog(CenteredDialog):
         if self._existing:
             self.name_entry.insert(0, self._existing.get("name", ""))
 
-        self.status_label = ctk.CTkLabel(
-            self.content_frame, text="", font=body_font, text_color="gray"
-        )
-        self.status_label.pack(anchor="w", pady=(0, 8))
-
         # --- actions ---
+        # packed bottom-up before the status line so that a window too short for
+        # the form clips the fields, never the buttons that dismiss it
         actions = ctk.CTkFrame(self.content_frame, fg_color="transparent")
-        actions.pack(fill="x")
+        actions.pack(fill="x", side="bottom")
+
+        self.status_label = ctk.CTkLabel(
+            self.content_frame, text="", font=body_font, text_color="gray",
+            anchor="w"  # the label fills the width, so left-align its text
+        )
+        self.status_label.pack(pady=(0, 8), side="bottom", fill="x")
 
         if self._edit_name:
             ctk.CTkButton(

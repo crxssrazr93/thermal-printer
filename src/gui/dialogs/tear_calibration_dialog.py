@@ -117,10 +117,20 @@ class TearCalibrationDialog(CenteredDialog):
         )
         self.no_button.pack(side="left", expand=True, fill="x", padx=(6, 0))
 
+        # bottom-up: the splash window type gives no titlebar, so the wizard
+        # needs a dismiss of its own rather than relying on Escape alone
+        ctk.CTkButton(
+            self.content_frame, text="Close", height=34,
+            fg_color="transparent", border_width=1,
+            text_color=("gray10", "gray90"),
+            command=self._on_close
+        ).pack(fill="x", side="bottom", pady=(12, 0))
+
         self.status_label = ctk.CTkLabel(
-            self.content_frame, text="", font=body_font, text_color="gray"
+            self.content_frame, text="", font=body_font, text_color="gray",
+            anchor="w"
         )
-        self.status_label.pack(anchor="w", pady=(12, 0))
+        self.status_label.pack(fill="x", side="bottom", pady=(12, 0))
 
         self._refresh()
 

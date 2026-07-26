@@ -60,6 +60,10 @@ class CenteredDialog(ctk.CTkToplevel):
         # handle WM close button
         self.protocol("WM_DELETE_WINDOW", self._handle_close)
 
+        # the splash window type drops the WM titlebar, so Escape is the only
+        # dismissal that cannot be clipped or covered
+        self.bind("<Escape>", lambda _event: self._handle_close())
+
         # build UI structure
         self._build_dialog_frame()
         self._build_content_area()
@@ -89,10 +93,32 @@ class CenteredDialog(ctk.CTkToplevel):
         # override to add content to self.content_frame
         pass
 
+    def _fit_to_content(self) -> None:
+        """Grow the dialog to whatever the built content actually needs.
+
+        The width/height passed in are a starting hint, not a limit. Honouring
+        them literally clips the bottom of a taller form, and since the splash
+        window type gives no titlebar, clipping the action row leaves a dialog
+        with no visible way to dismiss it.
+        """
+        self.update_idletasks()
+
+        needed_width = self._main_frame.winfo_reqwidth()
+        needed_height = self._main_frame.winfo_reqheight()
+
+        # never outgrow the screen; the frame scrolls or clips before that
+        max_width = int(self.winfo_screenwidth() * 0.9)
+        max_height = int(self.winfo_screenheight() * 0.9)
+
+        self._dialog_width = max(self._dialog_width, min(needed_width, max_width))
+        self._dialog_height = max(self._dialog_height, min(needed_height, max_height))
+
     def _center_and_show(self) -> None:
         # update_idletasks required for accurate dimensions before centering
         self._parent.update_idletasks()
         self.update_idletasks()
+
+        self._fit_to_content()
 
         parent_x = self._parent.winfo_x()
         parent_y = self._parent.winfo_y()
