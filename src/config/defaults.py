@@ -60,6 +60,15 @@ DEFAULT_WINDOW_WIDTH = 1100
 DEFAULT_WINDOW_HEIGHT = 800
 MIN_WINDOW_WIDTH = 600
 
+# editor/preview split - side by side while there is room for it, stacked
+# below that, since two half-width panes are worse than two full-width ones.
+# The hysteresis band stops the layout flipping while a window edge is dragged
+# across the threshold.
+SIDE_BY_SIDE_MIN_WIDTH = 820
+SIDE_BY_SIDE_HYSTERESIS = 60
+EDITOR_SPLIT_RATIO_H = 0.55
+EDITOR_SPLIT_RATIO_V = 0.62
+
 # flow layout - horizontal/vertical gaps between wrapped controls
 FLOW_DEFAULT_HGAP = 8
 FLOW_DEFAULT_VGAP = 6

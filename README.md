@@ -41,8 +41,9 @@ A GUI app for controlling Bluetooth thermal printers on Linux. Currently support
 
 ### Printing Modes
 
-- **Text** - fonts, sizes, bold/italic, alignment, darkness, optional date
-  stamp. Markdown is accepted in the same box with no mode to switch: plain
+- **Text** - fonts, sizes, darkness, optional date stamp, with the editor and
+  live preview side by side (stacking automatically on a narrow window).
+  Markdown is accepted in the same box with no mode to switch: plain
   prose prints exactly as typed (every newline is a line break), while
   headings, bold/italic, lists, tables, code blocks, quotes, rules and links
   render when you use them. A formatting toolbar writes the syntax for you

@@ -143,7 +143,23 @@ MathML is deliberately unsupported - no usable pure-Python renderer exists, and
 the alternatives are an external Java toolchain or a hand-written
 MathML-to-LaTeX converter.
 
-## 9. Bug fixes
+## 9. Editor and preview side by side
+
+A receipt preview is a tall narrow strip, so stacking it under the editor gave
+it a wide short box that showed only a few lines while taking height away from
+the text. The two now sit side by side, which lets the preview use the full
+window height and roughly triples how much of the output is visible at once.
+
+That only holds while the window is wide enough. `AdaptivePaned` re-orients
+itself as the window resizes: side by side above 820px, stacked below it, with
+a 60px hysteresis band so the layout does not flip back and forth while a
+window edge is dragged across the threshold. Dragging the sash pins it, and the
+automatic placement stops overriding the choice until the orientation changes.
+
+The Text, Banner and Template tabs all share the one widget rather than
+repeating the splitter logic three times.
+
+## 10. Bug fixes
 
 - **USB jobs truncated.** `UsbTransport` opened the device `O_NONBLOCK` and
   closed immediately after the last write, dropping whatever the kernel had not

@@ -3,7 +3,6 @@
 from typing import Optional, Callable, List, TYPE_CHECKING
 import os
 import customtkinter as ctk
-from tkinter import PanedWindow, VERTICAL
 from PIL import Image
 
 from ...config.defaults import (
@@ -20,6 +19,7 @@ from ...processing.label_renderer import (
     TextAreaConfig,
 )
 from ...processing.image_processor import ImageProcessor
+from ..widgets.adaptive_paned import AdaptivePaned
 from ..widgets.interactive_canvas import InteractiveCanvas
 from ..widgets.font_selector import FontSelector
 from ..dialogs.template_gallery import TemplateGallery
@@ -428,12 +428,9 @@ class TemplateFrame(ctk.CTkFrame):
         paned_container.grid_columnconfigure(0, weight=1)
         paned_container.grid_rowconfigure(0, weight=1)
 
-        # use mode-appropriate background color for paned window
-        paned_bg = "#3B3B3B" if ctk.get_appearance_mode() == "Dark" else "#DBDBDB"
-        self.paned = PanedWindow(
-            paned_container, orient=VERTICAL,
-            sashwidth=8, sashrelief="raised",
-            bg=paned_bg
+        # editor beside the canvas while the window is wide enough for it
+        self.paned = AdaptivePaned(
+            paned_container, primary_minsize=60, secondary_minsize=100
         )
         self.paned.grid(row=0, column=0, sticky="nsew")
 
@@ -451,8 +448,6 @@ class TemplateFrame(ctk.CTkFrame):
         # bind keyboard shortcuts ctrl+c ctrl+v ctrl+x ctrl+a ctrl+z ctrl+y
         bind_text_shortcuts(self, self.text_input._textbox, self._on_text_change)
 
-        self.paned.add(text_container, minsize=60, height=100)
-
         # interactive preview canvas with drag-and-drop
         preview_container = ctk.CTkFrame(self.paned)
         self.preview_canvas = InteractiveCanvas(
@@ -463,7 +458,7 @@ class TemplateFrame(ctk.CTkFrame):
         )
         self.preview_canvas.pack(fill="both", expand=True, padx=2, pady=2)
 
-        self.paned.add(preview_container, minsize=100, height=200)
+        self.paned.set_panes(text_container, preview_container)
 
     def _setup_shortcuts(self) -> None:
         # bind keyboard shortcuts to the interactive canvas

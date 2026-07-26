@@ -89,6 +89,17 @@ class PrinterApp(ctk.CTk):
         ctk.set_appearance_mode(appearance)
         ctk.set_default_color_theme(theme)
 
+        # The stock theme paints button text #DCE4EE, which reads as grey once
+        # it sits on a saturated fill. Every filled button in the app is blue,
+        # green or red, so white is correct in both appearance modes. The
+        # transparent buttons all set their own text colour explicitly and are
+        # untouched by this, which is what keeps light mode from ending up
+        # white on white. Must run before any widget is built.
+        button_theme = ctk.ThemeManager.theme.get("CTkButton", {})
+        button_theme["text_color"] = ["#FFFFFF", "#FFFFFF"]
+        # still visibly muted, but legible rather than lost against the fill
+        button_theme["text_color_disabled"] = ["gray80", "gray65"]
+
     def _setup_window(self) -> None:
         self.title(APP_NAME)
         self.tk.call('wm', 'iconname', self._w, 'thermal-printer')

@@ -5,7 +5,6 @@ from datetime import datetime
 import json
 import os
 import customtkinter as ctk
-from tkinter import PanedWindow, VERTICAL
 
 from ...utils.shortcuts import bind_text_shortcuts
 from ...config.defaults import (
@@ -23,6 +22,7 @@ from ...config.settings import get_settings
 from ...utils.font_manager import get_font_manager
 from ...processing.text_renderer import TextRenderer
 from ...processing.image_processor import ImageProcessor
+from ..widgets.adaptive_paned import AdaptivePaned
 from ..widgets.preview_canvas import PreviewCanvas
 from ..widgets.font_selector import FontSelector
 from ..widgets.flow_frame import FlowFrame
@@ -169,12 +169,9 @@ class BaseTextFrame(ctk.CTkFrame):
         paned_container.grid_columnconfigure(0, weight=1)
         paned_container.grid_rowconfigure(0, weight=1)
 
-        # paned window needs tk background matching appearance mode
-        paned_bg = "#3B3B3B" if ctk.get_appearance_mode() == "Dark" else "#DBDBDB"
-        self.paned = PanedWindow(
-            paned_container, orient=VERTICAL,
-            sashwidth=8, sashrelief="raised",
-            bg=paned_bg
+        # editor beside the preview while the window is wide enough for it
+        self.paned = AdaptivePaned(
+            paned_container, primary_minsize=100, secondary_minsize=80
         )
         self.paned.grid(row=0, column=0, sticky="nsew")
 
@@ -192,8 +189,6 @@ class BaseTextFrame(ctk.CTkFrame):
         self.text_input.bind("<KeyRelease>", self._on_text_change)
         self._bind_shortcuts()
 
-        self.paned.add(text_container, minsize=100, height=200)
-
         preview_container = ctk.CTkFrame(self.paned)
         self.preview_canvas = PreviewCanvas(
             preview_container,
@@ -202,7 +197,7 @@ class BaseTextFrame(ctk.CTkFrame):
         )
         self.preview_canvas.pack(fill="both", expand=True, padx=2, pady=2)
 
-        self.paned.add(preview_container, minsize=80, height=120)
+        self.paned.set_panes(text_container, preview_container)
 
         btn_width = 100
         btn_height = 36
