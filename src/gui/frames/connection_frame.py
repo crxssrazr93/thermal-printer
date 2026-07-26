@@ -237,6 +237,12 @@ class ConnectionFrame(ctk.CTkFrame):
         except Exception as error:
             self._show_error(str(error))
 
+    def _update_device_name(self, name: str) -> None:
+        if name:
+            self.device_name_label.configure(text=name)
+        else:
+            self.device_name_label.configure(text="--")
+
     def _on_connection_state_change(self, state: ConnectionState) -> None:
         # connection state changes control ui button states and visual feedback
         # connected state disables connection controls and enables disconnect
