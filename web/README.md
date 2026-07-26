@@ -90,6 +90,11 @@ follows the theme.
 
 Two editors over one document, and markdown is the document.
 
+Toolbar buttons that can be on or off are toggles, and they light up when they
+are on: Bold inside bold text removes it, H1 on a heading turns it back into a
+paragraph. The ones with no off state, inserting a table, a rule or a picture,
+never light up.
+
 **Rendered** is a real editing surface, built on TipTap. A heading is a
 heading, a quote has its bar, and a table is a table you type into. The toolbar
 and the styling stay ours, so each theme still owns how the document looks.
@@ -132,6 +137,23 @@ the same reason.
 The Image button uploads the file to the server, which stores it by content
 hash under `~/.local/share/thermal-printer/images/` and hands back a reference
 the document carries as ordinary markdown. At print time the renderer scales it
-to the paper and dithers it, since a thermal head has one colour and a
-photograph has to become a pattern of dots to mean anything. An image that
-cannot be loaded prints its alt text rather than leaving a hole.
+to the paper and screens it into dots, since a thermal head has one colour. An
+image that cannot be loaded prints its alt text rather than leaving a hole.
+
+Seven screening methods are available, the same ones the desktop app's image
+tab uses:
+
+| Method | Suits |
+|--------|-------|
+| Threshold | line art, text, logos, anything already black and white |
+| Floyd-Steinberg | photographs, the usual default |
+| Ordered | an even, visibly patterned look |
+| Atkinson | soft results, and noticeably less ink on the paper |
+| Burkes | sharper than Floyd-Steinberg |
+| Sierra | smooth gradients |
+| Stucki | the finest detail, and the slowest |
+
+Settings holds the default. A single picture can override it from the control
+that appears when the picture is selected, and that choice travels in
+markdown's own title slot, `![alt](path "atkinson")`, so it stays with the
+document and any other reader simply ignores it.

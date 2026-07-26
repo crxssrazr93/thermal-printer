@@ -17,6 +17,7 @@ from PIL import Image, ImageDraw, ImageFont
 from ..config.defaults import DEFAULT_LINE_SPACING
 from ..config.printer_profile import get_printer_width
 from ..utils.font_manager import get_font_manager
+from .image_dither import dither_image
 from .math_renderer import render_math
 
 logger = logging.getLogger(__name__)
@@ -56,6 +57,7 @@ DEFAULT_PRINT_STYLE = {
     "table_gap": 12,             # around a table
     "table_scale": 0.9,          # cell size as a fraction of the body
     "table_cell_pad": 4,         # above and below the text in a cell
+    "image_dither": "floyd-steinberg",   # how a picture becomes ink or nothing
 }
 
 _INLINE_CODE = re.compile(r"`([^`]+)`")
@@ -75,6 +77,18 @@ def _parse_directive(body: str) -> dict:
     return dict(
         part.split("=", 1) for part in body.split() if "=" in part
     )
+
+
+def _split_image_target(target: str) -> Tuple[str, str]:
+    """Separate a source from markdown's optional title.
+
+    The title is where a per-image choice lives: ![alt](path "atkinson"), which
+    stays valid markdown and is ignored by anything that does not care.
+    """
+    match = re.match(r'^(?P<src>\S+)(?:\s+"(?P<title>[^"]*)")?$', target.strip())
+    if not match:
+        return target.strip(), ""
+    return match.group("src"), (match.group("title") or "").strip()
 
 
 def _cell_alignment(cell: str) -> str:
@@ -293,10 +307,12 @@ class MarkdownRenderer:
             # an image on its own line is a block, not a note inside a line
             standalone_image = _IMAGE.fullmatch(stripped)
             if standalone_image:
+                source, title = _split_image_target(standalone_image.group(2))
                 blocks.append(Block(
                     kind="image",
-                    lines=[standalone_image.group(2)],
+                    lines=[source],
                     spans=[Span(standalone_image.group(1))],
+                    borders=title,          # the per-image dither, if it named one
                 ))
                 i += 1
                 continue
@@ -662,9 +678,14 @@ class MarkdownRenderer:
                 (available, max(1, round(picture.height * available / picture.width))),
                 Image.LANCZOS,
             )
-        # Floyd-Steinberg, which is what convert("1") does, keeps photographic
-        # tone legible at 203 dpi where a hard threshold turns it to mud
-        sheet.paste(picture.convert("L").convert("1").convert("RGB"), (left, y))
+
+        # A picture has to become a pattern of dots to mean anything at 203 dpi,
+        # and which pattern is a matter of taste and of subject: line art wants
+        # a hard threshold, a photograph wants error diffusion, and a large flat
+        # area wants Atkinson, which keeps less ink on the paper.
+        mode = (block.borders or self.style["image_dither"] or "floyd-steinberg").lower()
+        mode = mode.replace("dither=", "").strip()
+        sheet.paste(dither_image(picture, mode).convert("RGB"), (left, y))
         return y + picture.height
 
     def _load_image(self, source: str):

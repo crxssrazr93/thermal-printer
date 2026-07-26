@@ -145,6 +145,8 @@ button{cursor:pointer;background:none;border:0}
   transition:all 180ms ease;
 }
 .tool:hover{color:var(--ink);border-color:var(--line);background:var(--panel-2)}
+/* a toggle that is on says so, which is the only way to know it is a toggle */
+.tool.is-active{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .tool.strong{font-weight:700}
 .tool.em{font-style:italic}
 .tool.del{text-decoration:line-through}

@@ -49,6 +49,8 @@ from src.core.printer import PrinterConnection    # noqa: E402
 from src.core.protocol import PrinterProtocol     # noqa: E402
 from PIL import Image                              # noqa: E402
 
+from src.config.defaults import DITHER_MODES                   # noqa: E402
+from src.processing.image_dither import DITHER_LABELS         # noqa: E402
 from src.processing.image_processor import ImageProcessor      # noqa: E402
 from src.processing.markdown_renderer import MarkdownRenderer  # noqa: E402
 from src.utils.font_manager import get_font_manager            # noqa: E402
@@ -339,6 +341,14 @@ def api_user_theme(handler, match, body):
     if target.parent != USER_THEMES_DIR.resolve() or not target.is_file():
         return 404, {"error": "not found"}
     return 200, ("text/css", target.read_bytes())
+
+
+@route("GET", "/api/dither")
+def api_dither(handler, match, body):
+    return 200, {
+        "modes": [{"id": mode, "label": DITHER_LABELS.get(mode, mode)} for mode in DITHER_MODES],
+        "default": "floyd-steinberg",
+    }
 
 
 @route("POST", "/api/images")

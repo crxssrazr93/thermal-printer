@@ -96,3 +96,6 @@
 :root[data-theme="3"] .item .iconbtn{border-width:2px;font-weight:700;text-transform:uppercase;
   font-size:11px}
 :root[data-theme="3"] .item .sub{font-family:var(--font-mono)}
+/* the group colours above would otherwise hide which toggles are on */
+:root[data-theme="3"] .tool.is-active{background:var(--accent);color:var(--accent-ink);
+  border-color:var(--line)}

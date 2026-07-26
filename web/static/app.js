@@ -275,9 +275,10 @@ function mdToHtml(md) {
 
     if (/^\s*([-*_]\s*){3,}$/.test(line)) { out.push('<hr>'); i += 1; continue; }
 
-    const picture = /^!\[([^\]]*)\]\(([^)]+)\)$/.exec(trimmed);
+    const picture = /^!\[([^\]]*)\]\(\s*(\S+?)(?:\s+"([^"]*)")?\s*\)$/.exec(trimmed);
     if (picture) {
-      out.push(`<img src="${picture[2]}" alt="${escapeHtml(picture[1])}">`);
+      const title = picture[3] ? ` title="${escapeHtml(picture[3])}"` : '';
+      out.push(`<img src="${picture[2]}" alt="${escapeHtml(picture[1])}"${title}>`);
       i += 1;
       continue;
     }
@@ -376,7 +377,11 @@ function blockToMd(node) {
       `${name === 'OL' ? `${index + 1}.` : '-'} ${inlineToMd(li).trim()}`);
   }
   if (name === 'IMG') {
-    return [`![${node.getAttribute('alt') || ''}](${node.getAttribute('src') || ''})`];
+    const title = node.getAttribute('title');
+    const target = title
+      ? `${node.getAttribute('src') || ''} "${title}"`
+      : node.getAttribute('src') || '';
+    return [`![${node.getAttribute('alt') || ''}](${target})`];
   }
   if (name === 'TABLE') {
     const rows = Array.from(node.querySelectorAll('tr'))
@@ -442,6 +447,7 @@ function setEditorMode(mode) {
   localStorage.setItem(EDITOR_MODE_KEY, raw ? 'raw' : 'rendered');
   if (raw) $('editor').focus();
   else tt?.commands.focus();
+  syncToolbarState();
 }
 
 /* --------------------------------------------------------------- the editor */
@@ -496,8 +502,13 @@ function initRichEditor() {
       Link.configure({ openOnClick: false }),
     ],
     content: '<p></p>',
-    onUpdate: () => { schedulePreview(); positionTableTools(); },
-    onSelectionUpdate: positionTableTools,
+    onUpdate: () => {
+      schedulePreview();
+      positionTableTools();
+      positionImageTools();
+      syncToolbarState();
+    },
+    onSelectionUpdate: () => { positionTableTools(); positionImageTools(); syncToolbarState(); },
     onBlur: () => setTimeout(() => {
       if (!$('tableTools').contains(document.activeElement)) $('tableTools').hidden = true;
     }, 150),
@@ -510,6 +521,8 @@ function initEditorModes() {
   $('modeRaw').addEventListener('click', () => setEditorMode('raw'));
   setEditorMode(localStorage.getItem(EDITOR_MODE_KEY) === 'raw' ? 'raw' : 'rendered');
   initTableTools();
+  initImageTools();
+  syncToolbarState();
 }
 
 /* ---------------------------------------------------------------- pictures */
@@ -538,6 +551,63 @@ async function insertImage() {
     }
   });
   input.click();
+}
+
+/* ------------------------------------------------------------ image controls */
+/* How a picture is reduced to one bit is the most consequential choice in
+ * printing it, and the right answer depends on the picture: a hard threshold
+ * for line art, error diffusion for a photograph, Atkinson when the paper is
+ * mostly dark. It is a property of the image, so it rides in markdown's title
+ * slot and stays with the document. */
+let ditherModes = [];
+
+async function loadDitherModes() {
+  try {
+    const data = await api('/api/dither');
+    ditherModes = data.modes || [];
+  } catch (error) {
+    ditherModes = [];
+  }
+  const select = $('imageDither');
+  const settings = $('defaultDither');
+  [select, settings].forEach((element) => {
+    if (!element) return;
+    element.innerHTML = '';
+    ditherModes.forEach(({ id, label }) => element.append(new Option(label, id)));
+  });
+  if (settings) settings.value = localStorage.getItem(DITHER_KEY) || 'floyd-steinberg';
+}
+
+const DITHER_KEY = 'tp.dither';
+const currentDither = () => localStorage.getItem(DITHER_KEY) || 'floyd-steinberg';
+
+/* Ask the document, not the DOM: a node selection is a fact about the editor
+ * state, while the selected-node class is a rendering detail that is not
+ * always there when the selection is set programmatically. */
+const imageSelected = () => Boolean(tt && tt.isActive('image'));
+
+function positionImageTools() {
+  const tools = $('imageTools');
+  if (!tools) return;
+  const showing = isRendered() && imageSelected();
+  tools.hidden = !showing;
+  if (showing) {
+    $('imageDither').value = tt.getAttributes('image').title || currentDither();
+  }
+}
+
+function initImageTools() {
+  const select = $('imageDither');
+  if (!select) return;
+  select.addEventListener('change', () => {
+    if (!tt.isActive('image')) return;
+    tt.chain().focus().updateAttributes('image', { title: select.value }).run();
+    schedulePreview();
+  });
+  $('defaultDither')?.addEventListener('change', () => {
+    localStorage.setItem(DITHER_KEY, $('defaultDither').value);
+    refreshPreview();
+  });
 }
 
 /* ------------------------------------------------------------ table controls */
@@ -617,6 +687,37 @@ function initTableTools() {
 }
 
 /* ---------------------------------------------------------- rich commands */
+/* Every one of these that can be on or off is a toggle, and the toolbar says
+ * which: pressing Bold inside bold text takes it off again, and H1 on a
+ * heading turns it back into a paragraph. The ones with no "off" state
+ * (insert a table, a rule, a picture) simply never light up. */
+const ACTIVE_STATE = {
+  h1: () => tt.isActive('heading', { level: 1 }),
+  h2: () => tt.isActive('heading', { level: 2 }),
+  h3: () => tt.isActive('heading', { level: 3 }),
+  bold: () => tt.isActive('bold'),
+  italic: () => tt.isActive('italic'),
+  strike: () => tt.isActive('strike'),
+  code: () => tt.isActive('code'),
+  ul: () => tt.isActive('bulletList'),
+  ol: () => tt.isActive('orderedList'),
+  quote: () => tt.isActive('blockquote'),
+  codeblock: () => tt.isActive('codeBlock'),
+  link: () => tt.isActive('link'),
+  table: () => tt.isActive('table'),
+  math: () => tt.isActive('code'),
+};
+
+function syncToolbarState() {
+  const rendered = isRendered() && tt;
+  document.querySelectorAll('.toolbar .tool[data-md]').forEach((button) => {
+    const check = ACTIVE_STATE[button.dataset.md];
+    const on = Boolean(rendered && check && check());
+    button.classList.toggle('is-active', on);
+    button.setAttribute('aria-pressed', String(on));
+  });
+}
+
 const RICH_ACTIONS = {
   h1: () => tt.chain().focus().toggleHeading({ level: 1 }).run(),
   h2: () => tt.chain().focus().toggleHeading({ level: 2 }).run(),
@@ -633,6 +734,12 @@ const RICH_ACTIONS = {
   math: () => tt.chain().focus().toggleCode().run(),
   image: () => insertImage(),
   link: () => {
+    // pressing it on an existing link takes the link off, which is what a
+    // toggle in a toolbar is expected to do
+    if (tt.isActive('link')) {
+      tt.chain().focus().extendMarkRange('link').unsetLink().run();
+      return;
+    }
     const href = window.prompt('Link address', 'https://');
     if (!href) return;
     tt.chain().focus().extendMarkRange('link').setLink({ href }).run();
@@ -971,9 +1078,9 @@ function initToolbar() {
     button.addEventListener('click', () => {
       const action = button.dataset.md;
       if (isRendered()) {
-        rich().focus();
         RICH_ACTIONS[action]?.();
         schedulePreview();
+        syncToolbarState();
         return;
       }
       MD_ACTIONS[action]?.();
@@ -1007,7 +1114,11 @@ function currentFont() {
  * overridden per preset or by hand; the setting stays with the theme. */
 function themeStyle() {
   const print = themePrint(document.documentElement.dataset.theme);
-  return { style: print.style || {}, line_spacing: print.line_spacing };
+  // the theme sets the page, the user sets how pictures are screened onto it
+  return {
+    style: { ...(print.style || {}), image_dither: currentDither() },
+    line_spacing: print.line_spacing,
+  };
 }
 
 function renderOptions() {
@@ -1669,7 +1780,7 @@ async function boot() {
 
   try {
     await refreshState();
-    await Promise.all([loadFonts(), loadPresets(), loadTodos()]);
+    await Promise.all([loadFonts(), loadDitherModes(), loadPresets(), loadTodos()]);
   } catch (error) {
     toast(`Could not reach the server: ${error.message}`, true);
   }
