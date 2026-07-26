@@ -886,7 +886,11 @@ function applyScreenToImage() {
     threshold: Number($('imageThreshold').value),
     strength: Number($('imageStrength').value),
   });
-  tt.chain().focus().updateAttributes('image', { title }).run();
+  // Deliberately not focus(): the editor scrolls the selection into view when
+  // it takes focus back, which throws the page around under a slider that is
+  // being dragged. The selection is still on the picture whether or not the
+  // editor holds focus, so the attribute lands either way.
+  tt.commands.updateAttributes('image', { title });
   schedulePreview();
 }
 
@@ -904,7 +908,7 @@ function initImageTools() {
     setSlider('imageThreshold', currentThreshold());
     setSlider('imageStrength', currentStrength(), '%');
     $('imageDither').value = currentDither();
-    tt.chain().focus().updateAttributes('image', { title: null }).run();
+    tt.commands.updateAttributes('image', { title: null });
     schedulePreview();
   });
 
