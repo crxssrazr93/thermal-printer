@@ -45,8 +45,9 @@ A GUI app for controlling Bluetooth thermal printers on Linux. Currently support
   stamp. Markdown is accepted in the same box with no mode to switch: plain
   prose prints exactly as typed (every newline is a line break), while
   headings, bold/italic, lists, tables, code blocks, quotes, rules and links
-  render when you use them. Display math via `$$...$$` when matplotlib is
-  installed
+  render when you use them. A formatting toolbar writes the syntax for you
+  (wrapping a selection, prefixing lines, dropping in a table or code block).
+  Display math via `$$...$$` when matplotlib is installed
 - **Banner** - large vertical text rotated for the paper roll
 - **Template** - drag-and-drop text areas over a background image
 - **Image** - seven dithering algorithms, brightness/contrast, rotation, invert,

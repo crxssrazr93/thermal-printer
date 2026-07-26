@@ -10,16 +10,30 @@ from .base_text_frame import BaseTextFrame
 from ...config.defaults import DEFAULT_LINE_SPACING
 from ...processing.image_processor import ImageProcessor
 from ...processing.markdown_renderer import MarkdownRenderer
+from ..widgets.markdown_toolbar import MarkdownToolbar
 
 
 class TextFrame(BaseTextFrame):
-    # frame for text printing with markdown formatting and horizontal alignment
+    # frame for text printing with markdown formatting
 
     _settings_section = "text"
     _save_dialog_title = "Save Text Template"
     _print_status_message = "Sending text to printer..."
     _preview_landscape = False
     _renderer_wrap = True
+
+    # emphasis and block structure come from the source, so the whole-document
+    # toggles would be controls that silently do nothing
+    _show_style_toggles = False
+    _show_alignment = False
+
+    def _setup_editor_toolbar(self, parent_frame) -> None:
+        self.markdown_toolbar = MarkdownToolbar(
+            parent_frame,
+            textbox=self.text_input,
+            on_change=self._on_text_change,
+        )
+        self.markdown_toolbar.pack(fill="x", padx=2, pady=(2, 0))
 
     def _init_renderer(self) -> None:
         self._renderer = MarkdownRenderer(

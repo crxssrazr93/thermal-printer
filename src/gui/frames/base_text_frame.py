@@ -49,6 +49,13 @@ class BaseTextFrame(ctk.CTkFrame):
     _renderer_wrap: bool = True
     _templates_dir: str = "gallery/text"
 
+    # Whole-document styling only applies to renderers that accept it. The
+    # markdown renderer takes bold/italic/alignment and ignores them, since the
+    # source carries its own emphasis and block structure, so subclasses using
+    # it turn these off rather than showing controls that do nothing.
+    _show_style_toggles: bool = True
+    _show_alignment: bool = True
+
     # maps settings section to SettingsKeys class for subclass namespace isolation
     _section_to_settings_keys = {
         "text": SettingsKeys.Text,
@@ -122,18 +129,19 @@ class BaseTextFrame(ctk.CTkFrame):
         options_frame = FlowFrame(self)
         options_frame.pack(fill="x", padx=8, pady=4)
 
-        options_frame.add(
-            ctk.CTkLabel(options_frame, text="Align:", font=label_font, width=50), gap=5
-        )
-
         self.align_var = ctk.StringVar(value=TEXT_ALIGN_LEFT)
 
-        for text, value in self._get_alignment_options():
-            options_frame.add(ctk.CTkRadioButton(
-                options_frame, text=text, variable=self.align_var,
-                value=value, command=self._on_alignment_change,
-                font=ctrl_font
-            ), gap=8)
+        if self._show_alignment:
+            options_frame.add(
+                ctk.CTkLabel(options_frame, text="Align:", font=label_font, width=50),
+                gap=5
+            )
+            for text, value in self._get_alignment_options():
+                options_frame.add(ctk.CTkRadioButton(
+                    options_frame, text=text, variable=self.align_var,
+                    value=value, command=self._on_alignment_change,
+                    font=ctrl_font
+                ), gap=8)
 
         # darkness controls
         self._setup_darkness_controls(options_frame)
@@ -176,6 +184,10 @@ class BaseTextFrame(ctk.CTkFrame):
             font=ctk.CTkFont(family="monospace", size=13),
             undo=True
         )
+        # the toolbar sits above the editor, so it has to be packed before the
+        # textbox even though it needs the textbox to already exist
+        self._setup_editor_toolbar(text_container)
+
         self.text_input.pack(fill="both", expand=True, padx=2, pady=2)
         self.text_input.bind("<KeyRelease>", self._on_text_change)
         self._bind_shortcuts()
@@ -235,6 +247,10 @@ class BaseTextFrame(ctk.CTkFrame):
     # -------------------------------------------------------------------------
     # font controls
     # -------------------------------------------------------------------------
+    def _setup_editor_toolbar(self, parent_frame: ctk.CTkFrame) -> None:
+        # override to place a toolbar directly above the text editor
+        pass
+
     def _setup_font_controls(self, parent_frame: ctk.CTkFrame) -> None:
         label_font = ctk.CTkFont(size=14, weight="bold")
         ctrl_font = ctk.CTkFont(size=14)
@@ -283,19 +299,22 @@ class BaseTextFrame(ctk.CTkFrame):
             command=lambda: self._change_size(2)
         ), gap=20)
 
+        # the vars exist either way so settings load/save stays uniform
         self.bold_var = ctk.BooleanVar(value=False)
-        self.bold_button = ctk.CTkCheckBox(
-            parent_frame, text="Bold", variable=self.bold_var,
-            font=ctrl_font, command=self._on_font_change
-        )
-        parent_frame.add(self.bold_button, gap=5)
-
         self.italic_var = ctk.BooleanVar(value=False)
-        self.italic_button = ctk.CTkCheckBox(
-            parent_frame, text="Italic", variable=self.italic_var,
-            font=ctrl_font, command=self._on_font_change
-        )
-        parent_frame.add(self.italic_button, gap=10)
+
+        if self._show_style_toggles:
+            self.bold_button = ctk.CTkCheckBox(
+                parent_frame, text="Bold", variable=self.bold_var,
+                font=ctrl_font, command=self._on_font_change
+            )
+            parent_frame.add(self.bold_button, gap=5)
+
+            self.italic_button = ctk.CTkCheckBox(
+                parent_frame, text="Italic", variable=self.italic_var,
+                font=ctrl_font, command=self._on_font_change
+            )
+            parent_frame.add(self.italic_button, gap=10)
 
         self.symbols_button = ctk.CTkButton(
             parent_frame, text="Symbols", width=70, height=32,
@@ -334,6 +353,9 @@ class BaseTextFrame(ctk.CTkFrame):
             pass
 
     def _update_style_buttons(self) -> None:
+        if not self._show_style_toggles:
+            return
+
         family = self.font_selector.get()
         styles = self._font_manager.get_family_styles(family)
 

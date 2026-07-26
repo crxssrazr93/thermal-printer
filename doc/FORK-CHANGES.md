@@ -122,6 +122,19 @@ receipt should look like rather than authoring a source file that gets
 re-flowed later. Emphasis also will not fire mid-word, so `2*3*4` and
 `some_var_name` print literally instead of silently italicising.
 
+A formatting toolbar sits above the editor. Its buttons edit the source rather
+than styling it: wrapping a selection, prefixing every line the selection
+touches, or inserting a skeleton with the placeholder left selected so the next
+keystroke replaces it. Line prefixes toggle, so the same button turns a list
+back into plain lines, and applying one block marker replaces another instead
+of stacking on top of it.
+
+The whole-document Bold, Italic and Align controls are hidden on this tab. The
+markdown renderer accepts them and ignores them, since the source carries its
+own emphasis and block structure, so leaving them visible would have meant
+three controls that silently do nothing. The Banner tab still uses TextRenderer
+and keeps them.
+
 Display math (`$$...$$`) uses matplotlib's mathtext engine, which needs no TeX
 installation; matplotlib is optional and the raw source prints when it is
 absent.
