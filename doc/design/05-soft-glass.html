@@ -3,24 +3,31 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Thermal Printer - 05 Soft Glass</title>
+<title>Thermal Printer - 05 Monochrome Glass</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
+/* Monochrome depth. The only colour in the interface is the connection LED
+   and the print-failed state - everything that is chrome stays neutral, so
+   the black-on-white receipt is the most saturated thing on screen. */
 :root{
-  --ink:#0F172A; --muted:#475569; --line:rgba(15,23,42,.12);
-  --glass:rgba(255,255,255,.82); --glass-2:rgba(255,255,255,.66);
-  --accent:#4F46E5; --accent-2:#0EA5E9; --ok:#059669;
-  --shadow:0 10px 30px rgba(15,23,42,.10),0 2px 8px rgba(15,23,42,.06);
-  --wash1:#C7D2FE; --wash2:#BAE6FD; --wash3:#FBCFE8; --page:#EEF2FF;
+  --ink:#0B0B0C; --muted:#5C5C63; --faint:#8A8A92;
+  --line:rgba(11,11,12,.13); --line-2:rgba(11,11,12,.07);
+  --glass:rgba(255,255,255,.78); --glass-2:rgba(255,255,255,.55);
+  --solid:#0B0B0C; --on-solid:#FFFFFF;
+  --page:#EDEDEF; --wash-a:#FFFFFF; --wash-b:#DCDCE0; --wash-c:#C8C8CE;
+  --shadow:0 10px 30px rgba(11,11,12,.10),0 2px 8px rgba(11,11,12,.06);
+  --ok:#1E874B;
 }
 [data-theme="dark"]{
-  --ink:#F1F5F9; --muted:#A3B0C2; --line:rgba(255,255,255,.12);
-  --glass:rgba(23,29,45,.72); --glass-2:rgba(23,29,45,.55);
-  --accent:#818CF8; --accent-2:#38BDF8; --ok:#34D399;
-  --shadow:0 12px 34px rgba(0,0,0,.42),0 2px 8px rgba(0,0,0,.3);
-  --wash1:#312E81; --wash2:#0C4A6E; --wash3:#5B21B6; --page:#0B1020;
+  --ink:#F4F4F5; --muted:#A0A0A8; --faint:#74747C;
+  --line:rgba(255,255,255,.13); --line-2:rgba(255,255,255,.06);
+  --glass:rgba(24,24,27,.74); --glass-2:rgba(255,255,255,.05);
+  --solid:#F4F4F5; --on-solid:#0B0B0C;
+  --page:#0A0A0B; --wash-a:#2A2A2E; --wash-b:#151517; --wash-c:#000000;
+  --shadow:0 12px 34px rgba(0,0,0,.5),0 2px 8px rgba(0,0,0,.35);
+  --ok:#4ADE80;
 }
 *{box-sizing:border-box}
 html,body{height:100%}
@@ -28,31 +35,32 @@ body{
   margin:0;color:var(--ink);font-family:Inter,system-ui,sans-serif;font-size:14px;line-height:1.55;
   background:var(--page);-webkit-font-smoothing:antialiased;position:relative;overflow:hidden;
 }
+/* neutral wash - grade of grey, no hue */
 body::before{
   content:"";position:fixed;inset:-20%;z-index:0;
   background:
-    radial-gradient(42% 42% at 18% 22%,var(--wash1) 0,transparent 60%),
-    radial-gradient(38% 38% at 82% 26%,var(--wash2) 0,transparent 62%),
-    radial-gradient(46% 46% at 62% 88%,var(--wash3) 0,transparent 60%);
-  filter:blur(28px);opacity:.85;
+    radial-gradient(46% 46% at 16% 14%,var(--wash-a) 0,transparent 62%),
+    radial-gradient(40% 40% at 84% 24%,var(--wash-b) 0,transparent 64%),
+    radial-gradient(52% 52% at 60% 92%,var(--wash-c) 0,transparent 62%);
+  filter:blur(30px);opacity:.9;
 }
 .mono{font-family:"JetBrains Mono",monospace}
 button{font:inherit;color:inherit;cursor:pointer}
-:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
 
-.app{position:relative;z-index:1;height:100vh;display:flex;flex-direction:column;gap:14px;padding:16px 18px}
+.app{position:relative;z-index:1;height:100vh;display:flex;flex-direction:column;gap:13px;padding:15px 17px}
 
 .glass{
-  background:var(--glass);backdrop-filter:blur(18px) saturate(150%);
-  -webkit-backdrop-filter:blur(18px) saturate(150%);
-  border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);
+  background:var(--glass);backdrop-filter:blur(20px) saturate(120%);
+  -webkit-backdrop-filter:blur(20px) saturate(120%);
+  border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);
 }
 
-/* ---------- floating top bar ---------- */
-.bar{display:flex;align-items:center;gap:14px;padding:12px 18px}
+/* ---------- top bar ---------- */
+.bar{display:flex;align-items:center;gap:13px;padding:11px 17px}
 .logo{
-  width:34px;height:34px;border-radius:11px;flex:none;display:grid;place-items:center;
-  background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff;
+  width:33px;height:33px;border-radius:10px;flex:none;display:grid;place-items:center;
+  background:var(--solid);color:var(--on-solid);
 }
 .title b{display:block;font-size:14.5px;font-weight:600;letter-spacing:-.01em}
 .title span{display:block;font-size:11px;color:var(--muted)}
@@ -61,17 +69,17 @@ button{font:inherit;color:inherit;cursor:pointer}
   margin-left:auto;display:inline-flex;align-items:center;gap:8px;padding:7px 14px;border-radius:999px;
   background:var(--glass-2);border:1px solid var(--line);font-size:12.5px;
 }
-.status .dot{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 25%,transparent)}
+.status .dot{width:7px;height:7px;border-radius:50%;background:var(--ok)}
 .pillbtn{
   border:1px solid var(--line);background:var(--glass-2);border-radius:999px;padding:8px 16px;font-size:12.5px;
   transition:background 220ms ease,border-color 220ms ease;
 }
-.pillbtn:hover{background:var(--glass);border-color:var(--accent)}
+.pillbtn:hover{border-color:var(--ink)}
 .iconbtn{
-  border:1px solid var(--line);background:var(--glass-2);border-radius:50%;width:36px;height:36px;
-  display:grid;place-items:center;line-height:0;transition:background 220ms ease;
+  border:1px solid var(--line);background:var(--glass-2);border-radius:50%;width:35px;height:35px;
+  display:grid;place-items:center;line-height:0;transition:border-color 220ms ease;
 }
-.iconbtn:hover{background:var(--glass)}
+.iconbtn:hover{border-color:var(--ink)}
 
 /* ---------- segmented nav ---------- */
 .segwrap{display:flex;justify-content:center}
@@ -81,45 +89,41 @@ button{font:inherit;color:inherit;cursor:pointer}
   color:var(--muted);transition:background 220ms ease,color 220ms ease;
 }
 .seg button:hover{color:var(--ink);background:var(--glass-2)}
-.seg button[aria-current="page"]{
-  background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff;
-  box-shadow:0 4px 12px color-mix(in srgb,var(--accent) 40%,transparent);
-}
+.seg button[aria-current="page"]{background:var(--solid);color:var(--on-solid)}
 
 /* ---------- workspace ---------- */
-.work{flex:1;display:grid;grid-template-columns:1fr 360px;gap:14px;overflow:hidden}
+.work{flex:1;display:grid;grid-template-columns:1fr 356px;gap:13px;overflow:hidden}
 .card{display:flex;flex-direction:column;overflow:hidden}
-.card-head{display:flex;align-items:center;gap:10px;padding:13px 18px;border-bottom:1px solid var(--line)}
-.card-head h2{margin:0;font-size:12.5px;font-weight:600;color:var(--muted);letter-spacing:.05em;text-transform:uppercase}
-.card-head .r{margin-left:auto;font-size:11.5px;color:var(--muted)}
+.card-head{display:flex;align-items:center;gap:10px;padding:12px 17px;border-bottom:1px solid var(--line-2)}
+.card-head h2{margin:0;font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
+.card-head .r{margin-left:auto;font-size:11.5px;color:var(--faint)}
 
-.tools{display:flex;flex-wrap:wrap;gap:5px;padding:12px 16px;border-bottom:1px solid var(--line)}
+.tools{display:flex;flex-wrap:wrap;gap:5px;padding:11px 15px;border-bottom:1px solid var(--line-2)}
 .tools button{
-  border:1px solid transparent;background:var(--glass-2);border-radius:9px;padding:6px 11px;font-size:12px;
+  border:1px solid transparent;background:transparent;border-radius:8px;padding:6px 11px;font-size:12px;
   color:var(--muted);transition:all 220ms ease;
 }
-.tools button:hover{color:var(--ink);border-color:var(--line);background:var(--glass)}
+.tools button:hover{color:var(--ink);border-color:var(--line);background:var(--glass-2)}
 .tools .sep{width:1px;background:var(--line);margin:4px 6px}
 
 .write{
   flex:1;overflow:auto;padding:20px 22px;font-family:"JetBrains Mono",monospace;font-size:13px;
   line-height:1.95;white-space:pre-wrap;
 }
-.write .h{color:var(--accent)}
-.write .b{color:var(--ink);font-weight:600}
+/* markup cues by weight and opacity, not hue */
+.write .h{font-weight:500;color:var(--ink)}
+.write .b{font-weight:600;color:var(--ink)}
 .write .q{color:var(--muted);font-style:italic}
-.write .p{color:var(--accent-2)}
+.write .p{color:var(--faint)}
 
 /* right rail */
-.rail{display:flex;flex-direction:column;gap:14px;overflow:auto}
-/* cards keep their natural height and the rail scrolls, otherwise flex
-   squashes them and clips the last control off the bottom */
+.rail{display:flex;flex-direction:column;gap:13px;overflow:auto}
 .rail > .card{flex:0 0 auto}
-.pv{display:flex;flex-direction:column;align-items:center;gap:14px;padding:18px}
+.pv{display:flex;flex-direction:column;align-items:center;gap:13px;padding:17px}
 .paper{
-  width:290px;background:#fff;color:#0B0B0B;border-radius:12px;padding:20px 18px 26px;
+  width:288px;background:#fff;color:#0B0B0B;border-radius:10px;padding:20px 18px 26px;
   font-family:"JetBrains Mono",monospace;font-size:11.5px;line-height:1.7;
-  box-shadow:0 14px 32px rgba(2,6,23,.28);
+  box-shadow:0 14px 32px rgba(0,0,0,.30);
 }
 .paper h3{font-size:19px;margin:0 0 5px;letter-spacing:-.01em}
 .paper .hr{border-top:2px solid #0B0B0B;margin:5px 0 12px}
@@ -127,40 +131,36 @@ button{font:inherit;color:inherit;cursor:pointer}
 .paper blockquote{margin:10px 0;padding-left:10px;border-left:3px solid #0B0B0B;font-style:italic}
 .paper table{width:100%;border-collapse:collapse;margin-top:12px;font-size:11px}
 .paper th{text-align:left;border-bottom:1.5px solid #0B0B0B;padding:4px 0}
-.paper td{border-bottom:1px dotted #A3A3A3;padding:4px 0}
+.paper td{border-bottom:1px dotted #A8A8A8;padding:4px 0}
 
 .cta{
-  width:290px;border:0;border-radius:13px;padding:13px;font-size:14px;font-weight:600;color:#fff;
-  background:linear-gradient(135deg,var(--accent),var(--accent-2));
-  box-shadow:0 8px 20px color-mix(in srgb,var(--accent) 38%,transparent);
-  transition:filter 220ms ease;
+  width:288px;border:1px solid var(--solid);border-radius:12px;padding:13px;font-size:14px;font-weight:600;
+  background:var(--solid);color:var(--on-solid);transition:opacity 220ms ease;
 }
-.cta:hover{filter:brightness(1.08)}
+.cta:hover{opacity:.85}
 .cta2{
-  width:290px;border:1px solid var(--line);background:var(--glass-2);border-radius:13px;padding:11px;font-size:13px;
-  transition:background 220ms ease;
+  width:288px;border:1px solid var(--line);background:transparent;border-radius:12px;padding:11px;font-size:13px;
+  transition:border-color 220ms ease;
 }
-.cta2:hover{background:var(--glass)}
+.cta2:hover{border-color:var(--ink)}
 
-.presets{padding:14px 16px;display:flex;flex-direction:column;gap:8px}
+.presets{padding:13px 15px;display:flex;flex-direction:column;gap:7px}
 .preset{
-  display:flex;align-items:center;gap:11px;padding:11px 13px;border-radius:12px;
-  background:var(--glass-2);border:1px solid transparent;cursor:pointer;
+  display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:11px;
+  background:transparent;border:1px solid transparent;cursor:pointer;
   transition:border-color 220ms ease,background 220ms ease;
 }
-.preset:hover{border-color:var(--accent);background:var(--glass)}
+.preset:hover{border-color:var(--line);background:var(--glass-2)}
 .preset .ic{
-  width:30px;height:30px;border-radius:9px;flex:none;display:grid;place-items:center;
-  background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff;
+  width:29px;height:29px;border-radius:8px;flex:none;display:grid;place-items:center;
+  border:1px solid var(--line);color:var(--muted);
 }
 .preset b{display:block;font-size:13px;font-weight:500}
-.preset span{display:block;font-size:11.5px;color:var(--muted)}
-.preset .c{margin-left:auto;font-size:11px;color:var(--muted)}
+.preset span{display:block;font-size:11.5px;color:var(--faint)}
+.preset .c{margin-left:auto;font-size:11px;color:var(--faint)}
 
-.foot{
-  display:flex;align-items:center;gap:20px;padding:10px 18px;font-size:11.5px;color:var(--muted);
-}
-.foot .r{margin-left:auto}
+.foot{display:flex;align-items:center;gap:20px;padding:9px 17px;font-size:11.5px;color:var(--muted)}
+.foot .r{margin-left:auto;color:var(--faint)}
 
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 @media (max-width:980px){.work{grid-template-columns:1fr}}
@@ -173,7 +173,7 @@ button{font:inherit;color:inherit;cursor:pointer}
     <span class="logo" aria-hidden="true">
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><rect x="2" y="9" width="20" height="8" rx="2"/><path d="M6 14h12v8H6z"/></svg>
     </span>
-    <div class="title"><b>Thermal Printer</b><span>Soft Glass</span></div>
+    <div class="title"><b>Thermal Printer</b><span>Monochrome Glass</span></div>
     <span class="status"><span class="dot" aria-hidden="true"></span> MPT-II connected</span>
     <button class="pillbtn">Devices</button>
     <button class="iconbtn" id="themeBtn" aria-label="Toggle colour theme">
