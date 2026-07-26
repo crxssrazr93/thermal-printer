@@ -128,8 +128,13 @@ the preview reports both the dots and the millimetres it will use.
 The strip length is a maximum rather than an amount: it decides how much room a
 line has before it runs out, and the blank end is cut off before printing, so a
 two word banner on a 150 mm strip uses the few centimetres it needs instead of
-feeding the lot. Rules under headings are cut to the same length, since a rule
-running off past the words looks like a mistake.
+feeding the lot. The end is given the same room the start has, and rules under
+headings are cut back with everything else, since a rule running off past the
+words looks like a mistake.
+
+The head prints the full 48 mm width whatever is on it, so a strip shallower
+than that leaves bare paper along one side. The page sits at the start of the
+width and the spare paper follows it.
 
 ## Languages
 

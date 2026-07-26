@@ -225,7 +225,7 @@ class Session:
         image = renderer.render(text or " ")
 
         if landscape:
-            image = self._turn(self._trim_tail(image, options), head_width)
+            image = self._trim_tail(self._turn(image, head_width))
         processor = ImageProcessor(
             brightness=1.0,
             contrast=float(options.get("darkness") or 1.0),
@@ -239,33 +239,31 @@ class Session:
     trimmed = False
 
     @staticmethod
-    def _trim_tail(image, options: Dict[str, Any]):
-        """Cut the blank end off a strip composed along the roll.
+    def _trim_tail(image):
+        """Cut the blank end off a strip printed along the roll.
 
         The strip length is how much room the words have, not how much paper
         the job should use: a two word banner on a 150 mm strip would otherwise
-        feed 150 mm of blank paper after it. So the strip is cut back to the
-        last column with any ink in it, plus the margin the page was set with,
-        and what is left is what feeds. The length still bounds the page, since
-        that is what decides where a line runs out of room.
+        feed 150 mm of paper and most of it blank. Done after the turn, where a
+        row is a row of paper, so the end can simply be given the same room the
+        start has rather than being reasoned about through a rotation.
         """
-        margin = int((options.get("style") or {}).get("margin") or 24)
         pixels = np.asarray(image.convert("L")) < 200
 
-        # A rule runs the width of the page, so it says nothing about where the
-        # words stop and would defeat the measurement. Rows that are inked
-        # nearly all the way across are therefore left out of it; they are cut
-        # to the same length as everything else, which is what a rule under a
-        # trimmed heading should do anyway.
-        spans = pixels.mean(axis=1) < 0.9
-        body = pixels[spans] if spans.any() else pixels
-        inked = np.where(body.any(axis=0))[0]
-        if not len(inked):
+        # A rule under a heading runs the length of the strip, which after the
+        # turn is a line down the paper: every row has ink in it and nothing
+        # would ever be trimmed. Columns that are inked nearly all the way down
+        # are therefore left out of the measurement, and cut back with the rest.
+        runs = pixels.mean(axis=0) < 0.9
+        body = pixels[:, runs] if runs.any() else pixels
+        rows = np.where(body.any(axis=1))[0]
+        if not len(rows):
             # nothing on it at all: a short blank strip beats a long one
-            return image.crop((0, 0, min(image.width, margin * 4), image.height))
+            return image.crop((0, 0, image.width, min(image.height, 96)))
 
-        end = min(image.width, int(inked.max()) + margin + 1)
-        return image.crop((0, 0, end, image.height))
+        lead = int(rows[0])
+        end = min(image.height, int(rows[-1]) + lead + 1)
+        return image.crop((0, 0, image.width, end))
 
     @staticmethod
     def _turn(image, head_width: int):
@@ -281,8 +279,12 @@ class Session:
 
         turned = image.transpose(Image.ROTATE_270)
         if turned.width < head_width:
+            # The head prints the full width of the paper whatever is on it, so
+            # a strip shallower than that leaves bare paper. It goes at the
+            # start of the width, where a page begins, and the spare paper ends
+            # up after it rather than before.
             padded = Image.new("RGB", (head_width, turned.height), "white")
-            padded.paste(turned, (0, 0))
+            padded.paste(turned, (head_width - turned.width, 0))
             return padded
         return turned
 
