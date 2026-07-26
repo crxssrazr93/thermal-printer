@@ -64,6 +64,13 @@ receipt comes out as vertical streaks. Every write also goes out in full in
 small pieces, because a socket send is free to accept less than it is given and
 silently drop the rest.
 
+## Along the roll
+
+A page composed along the roll is turned a quarter turn before it is sent, and
+the blank end of the strip is cut off first, so the paper used is the paper the
+words needed. What bounds it is the strip length: that is how much room a line
+has, not how much paper the job will take.
+
 ## Printing rules
 
 Writes are serialised behind a lock. A thermal printer is a single serial

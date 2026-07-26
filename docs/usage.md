@@ -125,6 +125,12 @@ it. **Turn to read** switches between that and the page as it actually comes
 off the roll. Strip length is set in millimetres, which is how paper is sold;
 the preview reports both the dots and the millimetres it will use.
 
+The strip length is a maximum rather than an amount: it decides how much room a
+line has before it runs out, and the blank end is cut off before printing, so a
+two word banner on a 150 mm strip uses the few centimetres it needs instead of
+feeding the lot. Rules under headings are cut to the same length, since a rule
+running off past the words looks like a mistake.
+
 ## Languages
 
 Arabic, Hebrew and the other right to left scripts print properly: the text is

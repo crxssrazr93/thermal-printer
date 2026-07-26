@@ -52,6 +52,7 @@ from src.core.device_discovery import (           # noqa: E402
 )
 from src.core.printer import PrinterConnection    # noqa: E402
 from src.core.protocol import PrinterProtocol     # noqa: E402
+import numpy as np                                 # noqa: E402
 from PIL import Image                              # noqa: E402
 
 from src.processing.image_dither import (                     # noqa: E402
@@ -224,7 +225,7 @@ class Session:
         image = renderer.render(text or " ")
 
         if landscape:
-            image = self._turn(image, head_width)
+            image = self._turn(self._trim_tail(image, options), head_width)
         processor = ImageProcessor(
             brightness=1.0,
             contrast=float(options.get("darkness") or 1.0),
@@ -236,6 +237,35 @@ class Session:
     # set when the last composed strip was deeper than the head, so the UI can
     # say so rather than let the user find out on paper
     trimmed = False
+
+    @staticmethod
+    def _trim_tail(image, options: Dict[str, Any]):
+        """Cut the blank end off a strip composed along the roll.
+
+        The strip length is how much room the words have, not how much paper
+        the job should use: a two word banner on a 150 mm strip would otherwise
+        feed 150 mm of blank paper after it. So the strip is cut back to the
+        last column with any ink in it, plus the margin the page was set with,
+        and what is left is what feeds. The length still bounds the page, since
+        that is what decides where a line runs out of room.
+        """
+        margin = int((options.get("style") or {}).get("margin") or 24)
+        pixels = np.asarray(image.convert("L")) < 200
+
+        # A rule runs the width of the page, so it says nothing about where the
+        # words stop and would defeat the measurement. Rows that are inked
+        # nearly all the way across are therefore left out of it; they are cut
+        # to the same length as everything else, which is what a rule under a
+        # trimmed heading should do anyway.
+        spans = pixels.mean(axis=1) < 0.9
+        body = pixels[spans] if spans.any() else pixels
+        inked = np.where(body.any(axis=0))[0]
+        if not len(inked):
+            # nothing on it at all: a short blank strip beats a long one
+            return image.crop((0, 0, min(image.width, margin * 4), image.height))
+
+        end = min(image.width, int(inked.max()) + margin + 1)
+        return image.crop((0, 0, end, image.height))
 
     @staticmethod
     def _turn(image, head_width: int):
