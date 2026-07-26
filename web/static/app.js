@@ -61,7 +61,7 @@ async function loadThemes() {
     // manifest is missing or unreadable
     // the manifest's order is the menu's order and its first entry is the
     // default, so a fallback list keeps the same order the manifest has
-    themes = ['4', '2', '3', '1'].map((id) => ({ id, name: `Theme ${id}`, print: {} }));
+    themes = ['1', '2', '3', '4'].map((id) => ({ id, name: `Theme ${id}`, print: {} }));
   }
 
   themes.forEach((theme) => {

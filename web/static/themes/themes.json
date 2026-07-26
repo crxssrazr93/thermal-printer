@@ -1,9 +1,9 @@
 {
   "themes": [
     {
-      "id": "4",
-      "name": "Theme 4",
-      "stylesheet": "04.css",
+      "id": "1",
+      "name": "Theme 1",
+      "stylesheet": "01.css",
       "swatch": [
         "#FFFFFF",
         "#0A0A0B"
@@ -122,9 +122,9 @@
       }
     },
     {
-      "id": "1",
-      "name": "Theme 1",
-      "stylesheet": "01.css",
+      "id": "4",
+      "name": "Theme 4",
+      "stylesheet": "04.css",
       "swatch": [
         "#1B5CFF",
         "#0C0C0D"

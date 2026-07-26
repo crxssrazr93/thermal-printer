@@ -53,7 +53,7 @@ into the rest of the page:
 
 Setting variables alone gets you a complete theme. Add ordinary rules after
 them when the character needs more than colour, as theme 3 does for its offset
-shadows and theme 4 does for its blur.
+shadows and theme 1 does for its blur.
 
 `[data-mode]` is `light` or `dark` and is independent of the theme, so define
 both if you want the toggle to work.
