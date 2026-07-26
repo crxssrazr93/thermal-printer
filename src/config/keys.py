@@ -33,6 +33,7 @@ class SettingsKeys:
         ROTATION = "image.rotation"
         INVERT = "image.invert"
         AUTO_RESIZE = "image.auto_resize"
+        FIT_MODE = "image.fit_mode"
 
     class Gui:
         WINDOW_WIDTH = "gui.window_width"

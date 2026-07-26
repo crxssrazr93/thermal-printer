@@ -16,7 +16,6 @@ if TYPE_CHECKING:
     from ...interfaces import SettingsService
 
 from ...config.defaults import (
-    PREVIEW_PAPER_WIDTH,
     PREVIEW_MIN_SIDEBAR_WIDTH,
     PREVIEW_PAPER_BORDER_WIDTH,
     PREVIEW_SIDEBAR_COLOR_LIGHT,
@@ -34,6 +33,7 @@ from ...config.defaults import (
     CANVAS_DARKNESS_BOLD_THRESHOLD,
     CANVAS_LABEL_BG_COLOR,
 )
+from ...config.printer_profile import get_printer_width
 from ...config.settings import get_settings
 from ...config.keys import SettingsKeys
 from ...processing.label_renderer import TextAreaConfig
@@ -208,7 +208,7 @@ class InteractiveCanvas(ctk.CTkFrame):
         # refresh user scale from settings
         self._user_scale = self._get_user_scale()
 
-        paper_width = PREVIEW_PAPER_WIDTH
+        paper_width = get_printer_width()
         scaled_paper = paper_width * self._user_scale
         min_total = scaled_paper + (2 * PREVIEW_MIN_SIDEBAR_WIDTH)
 
@@ -474,7 +474,7 @@ class InteractiveCanvas(ctk.CTkFrame):
             canvas_height = PREVIEW_FALLBACK_HEIGHT
 
         self._scale = self._calculate_scale(canvas_width)
-        paper_width = int(PREVIEW_PAPER_WIDTH * self._scale)
+        paper_width = int(get_printer_width() * self._scale)
         self._paper_x = (canvas_width - paper_width) // 2
 
         self.canvas.create_rectangle(
@@ -537,14 +537,14 @@ class InteractiveCanvas(ctk.CTkFrame):
         img_width, img_height = self._image.size
 
         self._scale = self._calculate_scale(canvas_width)
-        paper_width = int(PREVIEW_PAPER_WIDTH * self._scale)
+        paper_width = int(get_printer_width() * self._scale)
         self._paper_x = (canvas_width - paper_width) // 2
 
         # scale image to fit within paper width while maintaining aspect ratio
-        if img_width > PREVIEW_PAPER_WIDTH:
+        if img_width > get_printer_width():
             # image is wider than paper - scale down to fit
-            self._image_scale = PREVIEW_PAPER_WIDTH / img_width
-            display_width = int(PREVIEW_PAPER_WIDTH * self._scale)
+            self._image_scale = get_printer_width() / img_width
+            display_width = int(get_printer_width() * self._scale)
             display_height = int(img_height * self._image_scale * self._scale)
         else:
             # image fits within paper

@@ -7,6 +7,8 @@ import customtkinter as ctk
 from PIL import Image
 
 from ...config.defaults import (
+    DEFAULT_FIT_MODE,
+    FIT_MODES,
     DEFAULT_BRIGHTNESS,
     DEFAULT_CONTRAST,
     DEFAULT_DITHER_MODE,
@@ -187,6 +189,22 @@ class ImageFrame(ctk.CTkFrame):
         )
         options_frame.add(self.dither_preview_check, gap=15)
 
+        options_frame.add(ctk.CTkLabel(
+            options_frame, text="Fit:", font=label_font, width=30, anchor="w"
+        ), gap=5)
+
+        self.fit_mode_var = ctk.StringVar(value=DEFAULT_FIT_MODE)
+        self.fit_mode_dropdown = ctk.CTkOptionMenu(
+            options_frame,
+            values=FIT_MODES,
+            variable=self.fit_mode_var,
+            width=150, height=32,
+            font=ctrl_font,
+            dynamic_resizing=False,
+            command=self._on_fit_mode_change
+        )
+        options_frame.add(self.fit_mode_dropdown, gap=15)
+
         # preview canvas expands to fill space
         preview_container = ctk.CTkFrame(self)
         preview_container.pack(fill="both", expand=True, padx=10, pady=5)
@@ -244,6 +262,9 @@ class ImageFrame(ctk.CTkFrame):
         self.save_button.pack(side="right", padx=(0, 8))
 
     def _load_settings(self) -> None:
+        self.fit_mode_var.set(
+            self._settings.get(SettingsKeys.Image.FIT_MODE, DEFAULT_FIT_MODE)
+        )
         self.brightness_var.set(self._settings.get(SettingsKeys.Image.BRIGHTNESS, DEFAULT_BRIGHTNESS))
         self.contrast_var.set(self._settings.get(SettingsKeys.Image.CONTRAST, DEFAULT_CONTRAST))
         self.dither_var.set(self._settings.get(SettingsKeys.Image.DITHER_MODE, DEFAULT_DITHER_MODE))
@@ -288,6 +309,14 @@ class ImageFrame(ctk.CTkFrame):
 
         if self._source_image:
             self._update_preview()
+
+    def _on_fit_mode_change(self, value=None) -> None:
+        mode = self.fit_mode_var.get()
+        if self._image_processor:
+            self._image_processor.fit_mode = mode
+        self._settings.set(SettingsKeys.Image.FIT_MODE, mode)
+        self._settings.save()
+        self._update_preview()
 
     def _on_option_change(self, value=None) -> None:
         # auto-check show dithering based on dither mode

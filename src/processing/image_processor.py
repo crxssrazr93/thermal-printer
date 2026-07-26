@@ -29,6 +29,11 @@ from ..config.defaults import (
 )
 from ..core.protocol import PrinterProtocol
 from ..config.printer_profile import get_printer_width
+from ..config.defaults import (
+    DEFAULT_FIT_MODE,
+    FIT_MODE_FILL,
+    FIT_MODE_NONE,
+)
 from ..core.exceptions import InvalidImageError
 
 
@@ -43,6 +48,7 @@ class ImageProcessor:
         rotation: int = DEFAULT_ROTATION,
         invert: bool = False,
         auto_resize: bool = True,
+        fit_mode: Optional[str] = None,
     ):
         self.printer_width = printer_width if printer_width is not None else get_printer_width()
         self.brightness = brightness
@@ -51,6 +57,7 @@ class ImageProcessor:
         self.rotation = rotation
         self.invert = invert
         self.auto_resize = auto_resize
+        self.fit_mode = fit_mode if fit_mode is not None else DEFAULT_FIT_MODE
 
     def process(self, image: Image.Image) -> Image.Image:
 
@@ -100,6 +107,20 @@ class ImageProcessor:
     def _resize(self, img: Image.Image) -> Image.Image:
         if img.width == self.printer_width:
             return img
+
+        if self.fit_mode == FIT_MODE_NONE and img.width < self.printer_width:
+            padded = Image.new(img.mode, (self.printer_width, img.height), 'white')
+            padded.paste(img, ((self.printer_width - img.width) // 2, 0))
+            return padded
+
+        # Fit to width enlarges as well as shrinks, so a small logo spans the
+        # paper instead of printing tiny between white bars.
+        if self.fit_mode == FIT_MODE_FILL and img.width < self.printer_width:
+            scale = self.printer_width / img.width
+            return img.resize(
+                (self.printer_width, max(1, int(img.height * scale))),
+                Image.Resampling.LANCZOS
+            )
 
         if img.width > self.printer_width:
             scale = self.printer_width / img.width

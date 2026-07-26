@@ -9,6 +9,10 @@ from ...config.settings import get_settings
 from ...utils.validators import validate_mac_address, normalize_mac_address
 from ..widgets.flow_frame import FlowFrame
 
+TRANSPORT_BLUETOOTH = "Bluetooth"
+TRANSPORT_USB = "USB"
+TRANSPORT_CUPS = "CUPS"
+
 if TYPE_CHECKING:
     from ...interfaces import SettingsService
 
@@ -49,9 +53,24 @@ class ConnectionFrame(ctk.CTkFrame):
         row.pack(fill="x", padx=12, pady=10)
 
         row.add(ctk.CTkLabel(
-            row, text="MAC:",
+            row, text="Link:",
             font=label_font
-        ), gap=10)
+        ), gap=6)
+
+        self.transport_var = ctk.StringVar(value=TRANSPORT_BLUETOOTH)
+        self.transport_dropdown = ctk.CTkOptionMenu(
+            row,
+            values=[TRANSPORT_BLUETOOTH, TRANSPORT_USB, TRANSPORT_CUPS],
+            variable=self.transport_var,
+            width=110, height=36,
+            font=entry_font,
+            dynamic_resizing=False,
+            command=self._on_transport_change
+        )
+        row.add(self.transport_dropdown, gap=12)
+
+        self.mac_label = ctk.CTkLabel(row, text="MAC:", font=label_font)
+        row.add(self.mac_label, gap=10)
 
         self.mac_entry = ctk.CTkEntry(
             row, placeholder_text="XX:XX:XX:XX:XX:XX",
@@ -130,10 +149,78 @@ class ConnectionFrame(ctk.CTkFrame):
         self._settings.save()
 
     def _on_scan_click(self) -> None:
+        mode = self.transport_var.get()
+
+        if mode == TRANSPORT_USB:
+            devices = self.printer.list_usb_devices()
+            if not devices:
+                self._show_error(
+                    "No USB printer found at /dev/usb/lp*.\n\n"
+                    "Check the cable and power, and that your user is in the 'lp' group."
+                )
+                return
+            self.mac_entry.delete(0, "end")
+            self.mac_entry.insert(0, devices[0])
+            self._set_status(f"Found {len(devices)} USB printer(s): {devices[0]}")
+            return
+
+        if mode == TRANSPORT_CUPS:
+            queues = self.printer.list_cups_destinations()
+            if not queues:
+                self._show_error("No CUPS queues found. Is cups running?")
+                return
+            self.mac_entry.delete(0, "end")
+            self.mac_entry.insert(0, queues[0])
+            self._set_status(f"Found {len(queues)} queue(s): {', '.join(queues)}")
+            return
+
         if self.on_scan_request:
             self.on_scan_request()
 
+    def _on_transport_change(self, value=None) -> None:
+        """Bluetooth needs a MAC; the wired transports take a device or queue."""
+        mode = self.transport_var.get()
+
+        if mode == TRANSPORT_BLUETOOTH:
+            self.mac_label.configure(text="MAC:")
+            self.mac_entry.configure(placeholder_text="XX:XX:XX:XX:XX:XX")
+            self.scan_button.configure(state="normal", text="Scan")
+        elif mode == TRANSPORT_USB:
+            self.mac_label.configure(text="Device:")
+            self.mac_entry.configure(placeholder_text="auto (/dev/usb/lp0)")
+            self.scan_button.configure(state="normal", text="Detect")
+        else:
+            self.mac_label.configure(text="Queue:")
+            self.mac_entry.configure(placeholder_text="CUPS queue name")
+            self.scan_button.configure(state="normal", text="Detect")
+
+        self._set_status(f"Link: {mode}")
+
+    def _connect_wired(self, mode: str) -> None:
+        target = self.mac_entry.get().strip()
+
+        self.connect_button.configure(state="disabled")
+        self.scan_button.configure(state="disabled")
+        self._set_status("Connecting...")
+
+        try:
+            if mode == TRANSPORT_USB:
+                self.printer.connect_usb(target or None)
+            else:
+                if not target:
+                    raise ValueError("Enter a CUPS queue name, or press Detect")
+                self.printer.connect_cups(target)
+        except Exception as e:
+            self._show_error(str(e))
+            self.connect_button.configure(state="normal")
+            self.scan_button.configure(state="normal")
+
     def _on_connect_click(self) -> None:
+        mode = self.transport_var.get()
+        if mode != TRANSPORT_BLUETOOTH:
+            self._connect_wired(mode)
+            return
+
         if self.on_bluetooth_check and not self.on_bluetooth_check():
             return
 

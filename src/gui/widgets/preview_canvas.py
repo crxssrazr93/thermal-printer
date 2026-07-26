@@ -10,7 +10,6 @@ if TYPE_CHECKING:
 from ...utils.pil_compat import Image, PhotoImage, is_imagetk_available
 
 from ...config.defaults import (
-    PREVIEW_PAPER_WIDTH,
     PREVIEW_MIN_SIDEBAR_WIDTH,
     PREVIEW_PAPER_BORDER_WIDTH,
     PREVIEW_SIDEBAR_COLOR_LIGHT,
@@ -27,6 +26,7 @@ from ...config.defaults import (
     PREVIEW_PLACEHOLDER_TEXT,
     PREVIEW_PLACEHOLDER_COLOR,
 )
+from ...config.printer_profile import get_printer_width
 from ...config.settings import get_settings
 from ...config.keys import SettingsKeys
 
@@ -185,7 +185,7 @@ class PreviewCanvas(ctk.CTkFrame):
         # refresh scale from settings
         self._user_scale = self._get_user_scale()
 
-        paper_size = PREVIEW_PAPER_WIDTH  # paper width in portrait, paper height in landscape
+        paper_size = get_printer_width()  # paper width in portrait, paper height in landscape
         scaled_paper = paper_size * self._user_scale
         min_total = scaled_paper + (2 * PREVIEW_MIN_SIDEBAR_WIDTH)
 
@@ -209,7 +209,7 @@ class PreviewCanvas(ctk.CTkFrame):
         if self._landscape:
             # landscape orientation
             self._scale = self._calculate_scale(canvas_height)
-            paper_height = int(PREVIEW_PAPER_WIDTH * self._scale)
+            paper_height = int(get_printer_width() * self._scale)
             paper_y = (canvas_height - paper_height) // 2
 
             self.canvas.create_rectangle(
@@ -222,7 +222,7 @@ class PreviewCanvas(ctk.CTkFrame):
         else:
             # portrait orientation
             self._scale = self._calculate_scale(canvas_width)
-            paper_width = int(PREVIEW_PAPER_WIDTH * self._scale)
+            paper_width = int(get_printer_width() * self._scale)
             paper_x = (canvas_width - paper_width) // 2
 
             self.canvas.create_rectangle(
@@ -283,7 +283,7 @@ class PreviewCanvas(ctk.CTkFrame):
         if self._landscape:
             # landscape orientation
             self._scale = self._calculate_scale(canvas_height)
-            paper_height = int(PREVIEW_PAPER_WIDTH * self._scale)
+            paper_height = int(get_printer_width() * self._scale)
             paper_y = (canvas_height - paper_height) // 2
 
             display_width = int(img_width * self._scale)
@@ -332,7 +332,7 @@ class PreviewCanvas(ctk.CTkFrame):
         else:
             # portrait orientation
             self._scale = self._calculate_scale(canvas_width)
-            paper_width = int(PREVIEW_PAPER_WIDTH * self._scale)
+            paper_width = int(get_printer_width() * self._scale)
             paper_x = (canvas_width - paper_width) // 2
 
             display_width = int(img_width * self._scale)

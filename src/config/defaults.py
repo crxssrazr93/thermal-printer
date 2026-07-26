@@ -10,6 +10,13 @@ DEFAULT_PRINTER_WIDTH = 384
 # Printer capability profiles live in data/printer_profiles.json (schema follows
 # escpos-printer-db). Loaded at runtime by config/printer_profile.py.
 DEFAULT_PRINTER_PROFILE = "ctp500"
+
+# how an image is fitted to the printer head width
+FIT_MODE_SHRINK = "Shrink to fit"   # downscale only - never enlarge (legacy behaviour)
+FIT_MODE_FILL = "Fit to width"      # scale up or down so the image spans the paper
+FIT_MODE_NONE = "Original size"     # no scaling - pad or crop
+FIT_MODES = [FIT_MODE_FILL, FIT_MODE_SHRINK, FIT_MODE_NONE]
+DEFAULT_FIT_MODE = FIT_MODE_SHRINK
 DEFAULT_RFCOMM_CHANNEL = 1
 
 # fonts
@@ -463,6 +470,7 @@ def get_default_config() -> Dict[str, Any]:
             "rotation": DEFAULT_ROTATION,
             "invert": False,
             "auto_resize": True,
+            "fit_mode": DEFAULT_FIT_MODE,
         },
         "gui": {
             "window_width": DEFAULT_WINDOW_WIDTH,
