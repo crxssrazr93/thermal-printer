@@ -41,10 +41,12 @@ A GUI app for controlling Bluetooth thermal printers on Linux. Currently support
 
 ### Printing Modes
 
-- **Text** - fonts, sizes, bold/italic, alignment, darkness, optional date stamp
-- **Markdown** - headings, bold/italic, lists, tables, code blocks, quotes,
-  rules and links, with live preview. Display math via `$$...$$` when
-  matplotlib is installed
+- **Text** - fonts, sizes, bold/italic, alignment, darkness, optional date
+  stamp. Markdown is accepted in the same box with no mode to switch: plain
+  prose prints exactly as typed (every newline is a line break), while
+  headings, bold/italic, lists, tables, code blocks, quotes, rules and links
+  render when you use them. Display math via `$$...$$` when matplotlib is
+  installed
 - **Banner** - large vertical text rotated for the paper roll
 - **Template** - drag-and-drop text areas over a background image
 - **Image** - seven dithering algorithms, brightness/contrast, rotation, invert,
@@ -121,8 +123,8 @@ pip install -r requirements.txt
 ## Requirements
 
 Python 3.10+, a Bluetooth adapter (for the Bluetooth transport), BlueZ, and
-tkinter. `matplotlib` is optional and only needed for LaTeX math in the
-Markdown tab.
+tkinter. `matplotlib` is optional and only needed for LaTeX math in the Text
+tab.
 
 ## Requirements (detail)
 

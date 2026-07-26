@@ -26,8 +26,12 @@ HEADING_SCALE = {1: 1.6, 2: 1.35, 3: 1.15, 4: 1.0, 5: 1.0, 6: 1.0}
 BULLETS = ["\u2022", "-", "*"]  # only glyphs the mono faces reliably carry
 
 _INLINE_CODE = re.compile(r"`([^`]+)`")
-_BOLD = re.compile(r"(?:\*\*|__)(.+?)(?:\*\*|__)")
-_ITALIC = re.compile(r"(?<![\*_])(?:\*|_)([^\*_]+?)(?:\*|_)(?![\*_])")
+# Emphasis must not fire mid-word. Markdown allows intraword "*", but on a
+# printer the input is as often plain text as markup, and silently italicising
+# the 3 in "2*3*4" or the middle of "some_var_name" corrupts what was typed.
+# Requiring a non-word character on both sides keeps prose literal.
+_BOLD = re.compile(r"(?<!\w)(?:\*\*|__)(.+?)(?:\*\*|__)(?!\w)")
+_ITALIC = re.compile(r"(?<![\w\*_])(?:\*|_)([^\*_\s][^\*_]*?)(?:\*|_)(?![\w\*_])")
 _STRIKE = re.compile(r"~~(.+?)~~")
 _LINK = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 _IMAGE = re.compile(r"!\[([^\]]*)\]\(([^)]+)\)")
@@ -220,15 +224,14 @@ class MarkdownRenderer:
                 i += 1
                 continue
 
-            # paragraph - join soft-wrapped lines
-            para = [stripped]
+            # paragraph - one block per typed line
+            #
+            # Markdown proper joins consecutive lines into one paragraph, but
+            # that convention exists for source files that get re-flowed later.
+            # Here the user is typing what a receipt should look like, so a
+            # newline is a line break. Long lines still soft-wrap to the paper.
+            blocks.append(Block(kind="paragraph", spans=self._parse_inline(stripped)))
             i += 1
-            while i < len(lines) and lines[i].strip() and not re.match(
-                r"(#{1,6}\s|>|[-*+]\s|\d+[.)]\s|```)", lines[i].strip()
-            ):
-                para.append(lines[i].strip())
-                i += 1
-            blocks.append(Block(kind="paragraph", spans=self._parse_inline(" ".join(para))))
 
         return blocks
 
@@ -244,8 +247,8 @@ class MarkdownRenderer:
 
         spans: List[Span] = []
         pattern = re.compile(
-            r"(?P<code>`[^`]+`)|(?P<bold>(?:\*\*|__).+?(?:\*\*|__))|"
-            r"(?P<italic>(?<![\*_])[\*_][^\*_]+?[\*_](?![\*_]))"
+            r"(?P<code>`[^`]+`)|(?P<bold>(?<!\w)(?:\*\*|__).+?(?:\*\*|__)(?!\w))|"
+            r"(?P<italic>(?<![\w\*_])[\*_][^\*_\s][^\*_]*?[\*_](?![\w\*_]))"
         )
 
         position = 0

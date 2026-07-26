@@ -28,7 +28,6 @@ from .frames.connection_frame import ConnectionFrame
 from .frames.text_frame import TextFrame
 from .frames.image_frame import ImageFrame
 from .frames.banner_frame import BannerFrame
-from .frames.markdown_frame import MarkdownFrame
 from .frames.template_frame import TemplateFrame
 from .frames.settings_frame import SettingsFrame
 from .dialogs.printer_scanner import PrinterScannerDialog
@@ -133,7 +132,6 @@ class PrinterApp(ctk.CTk):
         self.tabview.grid(row=1, column=0, sticky="nsew", padx=10, pady=5)
 
         self.tabview.add("Text")
-        self.tabview.add("Markdown")
         self.tabview.add("Banner")
         self.tabview.add("Template")
         self.tabview.add("Image")
@@ -141,7 +139,6 @@ class PrinterApp(ctk.CTk):
 
         frame_classes = {
             "Text": TextFrame,
-            "Markdown": MarkdownFrame,
             "Banner": BannerFrame,
             "Template": TemplateFrame,
             "Image": ImageFrame,
@@ -177,7 +174,7 @@ class PrinterApp(ctk.CTk):
         except (AttributeError, KeyError) as e:
             logger.debug(f"Could not configure tab buttons: {e}")
 
-        for tab_name in ["Text", "Markdown", "Banner", "Template", "Image", "Settings"]:
+        for tab_name in ["Text", "Banner", "Template", "Image", "Settings"]:
             self.tabview.tab(tab_name).grid_columnconfigure(0, weight=1)
             self.tabview.tab(tab_name).grid_rowconfigure(0, weight=1)
 
@@ -189,7 +186,7 @@ class PrinterApp(ctk.CTk):
 
     def _get_last_tab(self) -> str:
         last_tab = self._settings.get(SettingsKeys.Gui.LAST_TAB, "Text")
-        valid_tabs = ["Text", "Markdown", "Banner", "Template", "Image", "Settings"]
+        valid_tabs = ["Text", "Banner", "Template", "Image", "Settings"]
         if last_tab in valid_tabs:
             return last_tab
         return "Text"

@@ -111,11 +111,20 @@ is exactly the case on the test unit (8.5mm).
 
 ## 8. Markdown and LaTeX math
 
-A Markdown tab renders headings, emphasis, lists, tables, code, quotes, rules
-and links with live preview, subclassing `BaseTextFrame` and swapping only the
-renderer. Display math (`$$...$$`) uses matplotlib's mathtext engine, which
-needs no TeX installation; matplotlib is optional and the raw source prints
-when it is absent.
+The Text tab renders headings, emphasis, lists, tables, code, quotes, rules and
+links with live preview. There is no separate Markdown tab and no mode toggle:
+plain text is valid markdown, so one input covers both and the user never has
+to declare which they are typing.
+
+Two deliberate deviations from CommonMark make that safe. A newline is a hard
+line break rather than a soft wrap, because the user is describing what the
+receipt should look like rather than authoring a source file that gets
+re-flowed later. Emphasis also will not fire mid-word, so `2*3*4` and
+`some_var_name` print literally instead of silently italicising.
+
+Display math (`$$...$$`) uses matplotlib's mathtext engine, which needs no TeX
+installation; matplotlib is optional and the raw source prints when it is
+absent.
 
 MathML is deliberately unsupported - no usable pure-Python renderer exists, and
 the alternatives are an external Java toolchain or a hand-written
