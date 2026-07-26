@@ -122,6 +122,19 @@ pip install -r requirements.txt
 ./run.sh
 ```
 
+## Web UI
+
+A browser front end is included, so the desktop app does not have to be running:
+
+```
+./web/run-web.sh
+```
+
+Open <http://127.0.0.1:8760> and install it from Chrome's address bar for its
+own window. It shares printer configuration with the desktop app, adds
+persistent presets and to-dos, and offers four themes each with light and dark
+modes. Details in [web/README.md](web/README.md).
+
 ## Requirements
 
 Python 3.10+, a Bluetooth adapter (for the Bluetooth transport), BlueZ, and
@@ -535,5 +548,6 @@ Contributions are welcome! Please feel free to submit issues or pull requests.
 - [x] Various bug fixes - see `doc/FORK-CHANGES.md`
 - [ ] Refactor out duplicate code (render/process/print paths still repeat
       across the text, image, template and calendar frames)
+- [x] Browser front end (PWA) with presets, to-dos and switchable themes
 - [ ] Create executable binary
 - [ ] Verify the CTP-500 vendor command sequences on real CTP-500 hardware

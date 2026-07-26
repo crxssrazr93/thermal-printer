@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en" data-theme="1" data-mode="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0C0C0D">
+<title>Thermal Printer</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;600&family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ------------------------------------------------ top bar -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><rect x="2" y="9" width="20" height="8" rx="2"/><path d="M6 14h12v8H6z"/></svg>
+      </span>
+      <b>Thermal Printer</b>
+    </div>
+
+    <div class="conn">
+      <label class="sr-only" for="profileSelect">Printer</label>
+      <select id="profileSelect" class="control"></select>
+      <button id="connectBtn" class="btn">Connect</button>
+      <span id="connState" class="state" role="status" aria-live="polite">
+        <span class="dot" aria-hidden="true"></span><span id="connText">Disconnected</span>
+      </span>
+    </div>
+  </header>
+
+  <!-- ------------------------------------------------ tabs -->
+  <nav class="tabs" role="tablist" aria-label="Sections">
+    <button class="tab" role="tab" aria-selected="true"  data-view="compose">Compose</button>
+    <button class="tab" role="tab" aria-selected="false" data-view="todos">To-dos</button>
+    <button class="tab" role="tab" aria-selected="false" data-view="presets">Presets</button>
+    <button class="tab" role="tab" aria-selected="false" data-view="settings">Settings</button>
+  </nav>
+
+  <!-- ------------------------------------------------ views -->
+  <main class="main">
+
+    <!-- compose -->
+    <section class="view split" id="view-compose" role="tabpanel">
+      <div class="panel editor">
+        <div class="panel-head">
+          <h2>Compose</h2>
+          <span class="head-meta" id="presetLabel">Untitled</span>
+        </div>
+
+        <div class="toolbar" role="toolbar" aria-label="Markdown formatting">
+          <button class="tool" data-md="h1">H1</button>
+          <button class="tool" data-md="h2">H2</button>
+          <button class="tool" data-md="h3">H3</button>
+          <span class="tool-sep" aria-hidden="true"></span>
+          <button class="tool strong" data-md="bold" title="Bold">B</button>
+          <button class="tool em" data-md="italic" title="Italic">I</button>
+          <button class="tool del" data-md="strike" title="Strikethrough">S</button>
+          <button class="tool code" data-md="code" title="Inline code">&lt;/&gt;</button>
+          <span class="tool-sep" aria-hidden="true"></span>
+          <button class="tool" data-md="ul">List</button>
+          <button class="tool" data-md="ol">1.</button>
+          <button class="tool" data-md="quote">Quote</button>
+          <span class="tool-sep" aria-hidden="true"></span>
+          <button class="tool" data-md="link">Link</button>
+          <button class="tool" data-md="table">Table</button>
+          <button class="tool" data-md="codeblock">Code</button>
+          <button class="tool" data-md="rule">Rule</button>
+          <button class="tool" data-md="math">Math</button>
+        </div>
+
+        <label class="sr-only" for="editor">Markdown source</label>
+        <textarea id="editor" class="editor-area" spellcheck="false"
+          placeholder="Type here. Markdown works: # heading, **bold**, - list, > quote, | tables |"></textarea>
+      </div>
+
+      <aside class="panel preview">
+        <div class="panel-head">
+          <h2>Preview</h2>
+          <span class="head-meta" id="previewMeta">&ndash;</span>
+        </div>
+        <div class="paper-stage">
+          <div class="paper-wrap">
+            <img id="preview" class="paper" alt="Print preview">
+          </div>
+        </div>
+        <div class="actions">
+          <button id="printBtn" class="btn primary">Print</button>
+          <button id="savePresetBtn" class="btn">Save as preset</button>
+        </div>
+      </aside>
+    </section>
+
+    <!-- to-dos -->
+    <section class="view" id="view-todos" role="tabpanel" hidden>
+      <div class="panel narrow">
+        <div class="panel-head">
+          <h2>To-dos</h2>
+          <span class="head-meta" id="todoCount">0 open</span>
+        </div>
+        <form class="row-form" id="todoForm">
+          <label class="sr-only" for="todoInput">New item</label>
+          <input id="todoInput" class="control grow" placeholder="Add an item and press Enter" autocomplete="off">
+          <button class="btn" type="submit">Add</button>
+        </form>
+        <ul class="list" id="todoList"></ul>
+        <div class="actions spread">
+          <button id="clearDoneBtn" class="btn subtle">Clear done</button>
+          <button id="printTodosBtn" class="btn primary">Print list</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- presets -->
+    <section class="view" id="view-presets" role="tabpanel" hidden>
+      <div class="panel narrow">
+        <div class="panel-head">
+          <h2>Presets</h2>
+          <span class="head-meta" id="presetCount">0 saved</span>
+        </div>
+        <p class="hint">Open a preset to load it into Compose, edit, and print. Saving with the same name overwrites it.</p>
+        <ul class="list" id="presetList"></ul>
+      </div>
+    </section>
+
+    <!-- settings -->
+    <section class="view" id="view-settings" role="tabpanel" hidden>
+      <div class="panel narrow">
+        <div class="panel-head"><h2>Printer</h2></div>
+
+        <div class="field">
+          <label for="tearGap">Tear-off gap (mm)</label>
+          <div class="row-form">
+            <input id="tearGap" class="control" type="number" min="0" max="40" step="0.5">
+            <button id="saveTearBtn" class="btn">Save</button>
+          </div>
+          <p class="hint">Feed after each print so the paper clears the tear bar.</p>
+        </div>
+
+        <div class="field">
+          <label for="fontSize">Font size</label>
+          <input id="fontSize" class="control" type="number" min="8" max="72" step="1" value="24">
+        </div>
+
+        <div class="field">
+          <label for="darkness">Darkness</label>
+          <input id="darkness" class="control" type="number" min="0.5" max="2" step="0.05" value="1">
+        </div>
+
+        <div class="panel-head"><h2>Devices</h2></div>
+        <ul class="list" id="deviceList"></ul>
+
+        <details class="disclosure">
+          <summary>Add a device</summary>
+          <div class="field">
+            <label for="newTransport">Connection</label>
+            <select id="newTransport" class="control">
+              <option>Bluetooth</option><option>USB</option><option>CUPS</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="newDevice">Device</label>
+            <div class="row-form">
+              <select id="newDevice" class="control grow"></select>
+              <button id="scanBtn" class="btn">Scan</button>
+            </div>
+          </div>
+          <div class="field">
+            <label for="newCapability">Printer type</label>
+            <select id="newCapability" class="control"></select>
+          </div>
+          <div class="field">
+            <label for="newName">Name</label>
+            <input id="newName" class="control" placeholder="Kitchen printer">
+          </div>
+          <button id="addDeviceBtn" class="btn primary">Save device</button>
+        </details>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ------------------------------------------------ status -->
+  <footer class="statusbar">
+    <span id="statusMsg">Ready</span>
+    <span class="status-right">
+      <span id="statusProfile"></span>
+      <span id="statusWidth"></span>
+    </span>
+  </footer>
+</div>
+
+<!-- ------------------------------------------------ theme switcher (bottom right) -->
+<div class="theme-switcher">
+  <button id="themeToggle" class="theme-btn" aria-haspopup="true" aria-expanded="false" aria-controls="themeMenu">
+    <span class="swatch" aria-hidden="true"></span>
+    <span id="themeLabel">Theme 1</span>
+    <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg>
+  </button>
+
+  <div class="theme-menu" id="themeMenu" role="menu" hidden>
+    <button class="theme-item" role="menuitemradio" data-theme="1"><span class="swatch s1" aria-hidden="true"></span>Theme 1</button>
+    <button class="theme-item" role="menuitemradio" data-theme="2"><span class="swatch s2" aria-hidden="true"></span>Theme 2</button>
+    <button class="theme-item" role="menuitemradio" data-theme="3"><span class="swatch s3" aria-hidden="true"></span>Theme 3</button>
+    <button class="theme-item" role="menuitemradio" data-theme="4"><span class="swatch s4" aria-hidden="true"></span>Theme 4</button>
+    <div class="theme-sep" role="separator"></div>
+    <button class="theme-item" id="modeToggle" role="menuitem">
+      <svg class="mode-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+      <span id="modeLabel">Light mode</span>
+    </button>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="app.js"></script>
+</body>
+</html>

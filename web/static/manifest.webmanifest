@@ -1,0 +1,13 @@
+{
+  "name": "Thermal Printer",
+  "short_name": "Printer",
+  "description": "Compose, preview and print to a 58mm thermal printer",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#0C0C0D",
+  "theme_color": "#0C0C0D",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
