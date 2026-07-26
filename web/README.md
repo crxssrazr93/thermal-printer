@@ -30,8 +30,10 @@ web framework would add install friction for no benefit at this size.
 - **Presets**: save the current text, reopen it later, edit, print
 - **Settings**: tear gap, font size, darkness, and device management
   (scan Bluetooth/USB/CUPS, save and remove devices)
+- **Rendered and raw** editing: rendered paints the markdown as you type,
+  raw shows the source. Both edit the same plain markdown
 - Four themes, each with light and dark, chosen from the switcher at the
-  bottom right
+  bottom right, and each with its own printing font
 
 ## Where things live
 
@@ -41,6 +43,8 @@ web framework would add install friction for no benefit at this size.
 | Printer settings and devices | shared with the desktop app's `config.yaml` |
 | Front end | `web/static/` |
 | Server | `web/server.py` |
+| Built-in themes | `web/static/themes/` |
+| Your themes | `~/.local/share/thermal-printer/themes/` |
 
 Presets and to-dos sit outside the repo so a `git checkout` cannot wipe them.
 Printer configuration is deliberately shared, so a device saved in one app
@@ -59,3 +63,29 @@ hand, which is the wrong trade for something served from localhost.
 The server binds to `127.0.0.1` and has no authentication, so it is reachable
 only from this machine. Set `THERMAL_WEB_HOST=0.0.0.0` to expose it to the
 network, and understand that anyone who can reach it can print.
+
+## Themes
+
+A theme is a CSS file plus an entry in a manifest, never code. Nothing in the
+front end knows the built-in themes by name: it asks the server for the list,
+links each stylesheet, builds the switcher from it, and takes the printing font
+from the same entry.
+
+Drop your own into `~/.local/share/thermal-printer/themes/` alongside a
+`themes.json` and it appears in the switcher on the next reload. Reusing a
+built-in id replaces that theme with yours. `web/static/themes/README.md` has
+the full shape, the variable list, and the rules for writing theme CSS that
+cannot leak into the rest of the page.
+
+Each theme also names the font its printed output uses, so switching theme
+changes the paper as well as the screen. Choosing a font by hand pins it, and
+from then on theme changes leave it alone.
+
+## Editor modes
+
+Rendered mode is a mirror element drawn behind the textarea, carrying the
+decoration while the textarea carries transparent text and the caret. The thing
+being edited stays plain markdown, so selection, undo, and every toolbar button
+behave identically in both modes. It also means the decoration has to be
+metric neutral: colour, weight and slant are fine, padding and font size are
+not, because they would slide the glyphs out from under the caret.

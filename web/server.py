@@ -59,6 +59,12 @@ DATA_DIR = Path(
 PRESETS_FILE = DATA_DIR / "presets.json"
 TODOS_FILE = DATA_DIR / "todos.json"
 
+# A theme is a CSS file plus a manifest entry. Built-ins ship with the app;
+# anything the user drops in the data directory is merged on top, so a theme
+# can be added, or a built-in replaced, without touching the source.
+THEMES_DIR = STATIC_DIR / "themes"
+USER_THEMES_DIR = DATA_DIR / "themes"
+
 DEFAULT_FONT = "DejaVuSansMono"   # family names carry no spaces; a miss falls back silently
 DEFAULT_SIZE = 24
 DEFAULT_LINE_SPACING = 1.1
@@ -96,6 +102,30 @@ def load_presets():
 
 def load_todos():
     return _read_json(TODOS_FILE, [])
+
+
+def load_themes():
+    """Built-in themes, then user themes; a repeated id replaces the built-in."""
+    merged = {}
+    for directory, prefix, source in (
+        (THEMES_DIR, "themes/", "builtin"),
+        (USER_THEMES_DIR, "/themes/user/", "user"),
+    ):
+        manifest = _read_json(directory / "themes.json", {})
+        for entry in manifest.get("themes", []):
+            theme_id = str(entry.get("id") or "").strip()
+            stylesheet = entry.get("stylesheet") or ""
+            if not theme_id or not stylesheet:
+                continue
+            merged[theme_id] = {
+                "id": theme_id,
+                "name": entry.get("name") or f"Theme {theme_id}",
+                "href": prefix + stylesheet,
+                "swatch": entry.get("swatch") or [],
+                "print": entry.get("print") or {},
+                "source": source,
+            }
+    return list(merged.values())
 
 
 # -----------------------------------------------------------------------------
@@ -282,6 +312,19 @@ def api_state(handler, match, body):
 def api_fonts(handler, match, body):
     families = get_font_manager().get_available_families() or [DEFAULT_FONT]
     return 200, {"fonts": families, "default": DEFAULT_FONT}
+
+
+@route("GET", "/api/themes")
+def api_themes(handler, match, body):
+    return 200, {"themes": load_themes()}
+
+
+@route("GET", r"/themes/user/(?P<name>[A-Za-z0-9._-]+\.css)")
+def api_user_theme(handler, match, body):
+    target = (USER_THEMES_DIR / match.group("name")).resolve()
+    if target.parent != USER_THEMES_DIR.resolve() or not target.is_file():
+        return 404, {"error": "not found"}
+    return 200, ("text/css", target.read_bytes())
 
 
 @route("GET", "/api/devices")

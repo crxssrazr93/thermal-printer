@@ -38,14 +38,79 @@ function toast(message, isError = false) {
 function status(message) { $('statusMsg').textContent = message; }
 
 /* ------------------------------------------------------------------ theme */
+/* Themes are data. The server merges the built-in manifest with anything in
+ * ~/.local/share/thermal-printer/themes, and this file only ever reads that
+ * list: it links the stylesheet, builds the menu entry and takes the print
+ * font from it. Adding a theme therefore never means editing this file. */
 const THEME_KEY = 'tp.theme';
 const MODE_KEY = 'tp.mode';
 
+let themes = [];
+
+const themeById = (id) => themes.find((theme) => theme.id === id);
+
+async function loadThemes() {
+  try {
+    const data = await api('/api/themes');
+    themes = data.themes || [];
+  } catch (error) {
+    themes = [];
+  }
+  if (!themes.length) {
+    // the four built-ins are linked statically, so the UI still works if the
+    // manifest is missing or unreadable
+    themes = ['1', '2', '3', '4'].map((id) => ({ id, name: `Theme ${id}`, print: {} }));
+  }
+
+  themes.forEach((theme) => {
+    if (!theme.href || document.querySelector(`link[href="${theme.href}"]`)) return;
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = theme.href;
+    document.head.append(link);
+  });
+
+  buildThemeMenu();
+}
+
+function buildThemeMenu() {
+  const menu = $('themeMenu');
+  menu.querySelectorAll('.theme-item[data-theme]').forEach((item) => item.remove());
+  const separator = menu.querySelector('.theme-sep');
+
+  themes.forEach((theme) => {
+    const item = document.createElement('button');
+    item.className = 'theme-item';
+    item.setAttribute('role', 'menuitemradio');
+    item.dataset.theme = theme.id;
+
+    const swatch = document.createElement('span');
+    swatch.className = 'swatch';
+    swatch.setAttribute('aria-hidden', 'true');
+    const [a, b] = theme.swatch || [];
+    if (a) swatch.style.background = `linear-gradient(135deg,${a} 50%,${b || a} 50%)`;
+
+    item.append(swatch, document.createTextNode(theme.name || `Theme ${theme.id}`));
+    item.addEventListener('click', () => {
+      applyTheme(theme.id, document.documentElement.dataset.mode);
+      menu.hidden = true;
+      $('themeToggle').setAttribute('aria-expanded', 'false');
+    });
+    menu.insertBefore(item, separator);
+  });
+}
+
 function applyTheme(theme, mode) {
   const root = document.documentElement;
+  const entry = themeById(theme) || themes[0] || { id: theme };
+  theme = entry.id;
   root.dataset.theme = theme;
   root.dataset.mode = mode;
-  $('themeLabel').textContent = `Theme ${theme}`;
+  $('themeLabel').textContent = entry.name || `Theme ${theme}`;
+
+  const [a, b] = entry.swatch || [];
+  const swatch = $('themeToggle').querySelector('.swatch');
+  if (a && swatch) swatch.style.background = `linear-gradient(135deg,${a} 50%,${b || a} 50%)`;
   $('modeLabel').textContent = mode === 'dark' ? 'Light mode' : 'Dark mode';
   document.querySelectorAll('.theme-item[data-theme]').forEach((item) => {
     item.setAttribute('aria-checked', String(item.dataset.theme === theme));
@@ -57,8 +122,9 @@ function applyTheme(theme, mode) {
 
 function initTheme() {
   const prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;
+  const saved = localStorage.getItem(THEME_KEY);
   applyTheme(
-    localStorage.getItem(THEME_KEY) || '1',
+    themeById(saved) ? saved : (themes[0] && themes[0].id) || '1',
     localStorage.getItem(MODE_KEY) || (prefersLight ? 'light' : 'dark')
   );
 
@@ -79,12 +145,6 @@ function initTheme() {
     if (event.key === 'Escape' && !menu.hidden) { close(); toggle.focus(); }
   });
 
-  menu.querySelectorAll('.theme-item[data-theme]').forEach((item) => {
-    item.addEventListener('click', () => {
-      applyTheme(item.dataset.theme, document.documentElement.dataset.mode);
-      close();
-    });
-  });
   $('modeToggle').addEventListener('click', () => {
     const next = document.documentElement.dataset.mode === 'dark' ? 'light' : 'dark';
     applyTheme(document.documentElement.dataset.theme, next);
@@ -122,7 +182,86 @@ function replaceRange(start, end, text, selStart, selEnd) {
   el.setRangeText(text, start, end, 'end');
   if (selStart !== undefined) el.setSelectionRange(selStart, selEnd ?? selStart);
   el.focus();
-  if (el.id === 'editor') schedulePreview();
+  // setRangeText fires no input event, so the mirror has to be told
+  if (el.id === 'editor') { syncHighlight(); schedulePreview(); }
+}
+
+/* ---------------------------------------------------- rendered editor mode */
+/* Rendered mode paints the markdown instead of showing it flat, but the thing
+ * being edited is still the same textarea underneath: a mirror element behind
+ * it carries the decoration, the textarea carries transparent text and the
+ * caret. That keeps selection, undo, and every toolbar action working on plain
+ * markdown, which a contenteditable would have quietly turned into HTML. */
+const EDITOR_MODE_KEY = 'tp.editorMode';
+
+const escapeHtml = (text) =>
+  text.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+
+function highlightInline(text) {
+  return escapeHtml(text)
+    .replace(/`[^`]+`/g, (m) => `<span class="md-code">${m}</span>`)
+    .replace(/\{\{\s*\w+\s*\}\}/g, (m) => `<span class="md-token">${m}</span>`)
+    .replace(/\[[^\]]+\]\([^)]+\)/g, (m) => `<span class="md-link">${m}</span>`)
+    .replace(/~~[^~]+~~/g, (m) => `<span class="md-del">${m}</span>`)
+    .replace(/(?<!\w)(\*\*|__)(?=\S)[\s\S]*?\S\1(?!\w)/g,
+      (m) => `<span class="md-strong">${m}</span>`)
+    .replace(/(?<![\w*_])[*_][^*_\s][^*_]*?[*_](?![\w*_])/g,
+      (m) => `<span class="md-em">${m}</span>`);
+}
+
+function highlightLine(line, inFence) {
+  if (inFence || /^\s*```/.test(line)) return `<span class="md-code">${escapeHtml(line)}</span>`;
+  if (/^\s*([-*_]\s*){3,}$/.test(line)) return `<span class="md-rule">${escapeHtml(line)}</span>`;
+  if (line.includes('|')) return `<span class="md-table">${escapeHtml(line)}</span>`;
+
+  let match = /^(\s*)(#{1,6}\s)(.*)$/.exec(line);
+  if (match) return `${match[1]}<span class="md-h">${match[2]}${highlightInline(match[3])}</span>`;
+
+  match = /^(\s*)(>\s?)(.*)$/.exec(line);
+  if (match) return `${match[1]}<span class="md-quote">${match[2]}${highlightInline(match[3])}</span>`;
+
+  match = /^(\s*)([-*+]\s|\d+[.)]\s)(.*)$/.exec(line);
+  if (match) return `${match[1]}<span class="md-marker">${match[2]}</span>${highlightInline(match[3])}`;
+
+  return highlightInline(line);
+}
+
+function highlightMarkdown(text) {
+  let inFence = false;
+  return text.split('\n').map((line) => {
+    const fence = /^\s*```/.test(line);
+    const html = highlightLine(line, inFence && !fence);
+    if (fence) inFence = !inFence;
+    return html;
+  }).join('\n');
+}
+
+function syncHighlight() {
+  const shell = $('editorShell');
+  if (!shell || shell.classList.contains('raw')) return;
+  // the trailing newline keeps a final empty line from collapsing, which would
+  // let the mirror scroll differently from the textarea at the very bottom
+  $('editorHL').innerHTML = `${highlightMarkdown($('editor').value)}\n`;
+  $('editorHL').scrollTop = $('editor').scrollTop;
+}
+
+function setEditorMode(mode) {
+  const raw = mode === 'raw';
+  $('editorShell').classList.toggle('raw', raw);
+  $('modeRendered').setAttribute('aria-pressed', String(!raw));
+  $('modeRaw').setAttribute('aria-pressed', String(raw));
+  localStorage.setItem(EDITOR_MODE_KEY, raw ? 'raw' : 'rendered');
+  syncHighlight();
+}
+
+function initEditorModes() {
+  $('modeRendered').addEventListener('click', () => setEditorMode('rendered'));
+  $('modeRaw').addEventListener('click', () => setEditorMode('raw'));
+  $('editor').addEventListener('scroll', () => {
+    $('editorHL').scrollTop = $('editor').scrollTop;
+    $('editorHL').scrollLeft = $('editor').scrollLeft;
+  });
+  setEditorMode(localStorage.getItem(EDITOR_MODE_KEY) || 'rendered');
 }
 
 const isWrapped = (text, prefix, suffix) =>
@@ -357,16 +496,11 @@ function initToolbar() {
  * object URL so revoking one cannot blank another. */
 const previewUrls = {};
 
-/* Each theme carries its own printing voice, not just its own chrome. The
- * font is what the paper actually looks like, so a theme that does not change
- * it only ever skin-deep. These are all families installed on this machine;
- * anything not found silently falls back, so they are checked at load. */
-const THEME_PRINT = {
-  '1': { font: 'NotoSansMono Medium', size: 24 },   // neutral, precise
-  '2': { font: 'NimbusMonoPS',        size: 25 },   // typewriter, warm
-  '3': { font: 'NotoSansMono Black',  size: 24 },   // heavy, loud
-  '4': { font: 'AdwaitaMono',         size: 24 },   // modern, even
-};
+/* Each theme carries its own printing voice, not just its own chrome: the font
+ * is what the paper actually looks like, so a theme that leaves it alone is
+ * only ever skin-deep. The pairing lives in the theme manifest next to the
+ * stylesheet, which is what makes a user theme able to bring its own. */
+const themePrint = (id) => (themeById(id) || {}).print || {};
 
 const FONT_KEY = 'tp.font';
 const SIZE_KEY = 'tp.size';
@@ -400,7 +534,7 @@ function setPrintFont(font, size, { pin = false } = {}) {
  * overriding a deliberate choice is worse than a theme looking less distinct. */
 function applyThemePrintDefaults(theme) {
   if (localStorage.getItem(FONT_PINNED) === '1') return;
-  const preset = THEME_PRINT[theme];
+  const preset = themePrint(theme);
   if (!preset || !fontList.length) return;
   const font = fontList.includes(preset.font) ? preset.font : currentFont();
   setPrintFont(font, preset.size);
@@ -427,7 +561,7 @@ async function loadFonts() {
   if (pinned && saved && fontList.includes(saved)) {
     setPrintFont(saved, savedSize || 24);
   } else {
-    const preset = THEME_PRINT[theme] || {};
+    const preset = themePrint(theme);
     const font = fontList.includes(preset.font) ? preset.font
       : (fontList.includes('DejaVuSansMono') ? 'DejaVuSansMono' : fontList[0]);
     setPrintFont(font, preset.size || 24);
@@ -604,6 +738,36 @@ function renderPresets() {
 
       list.append(li);
     });
+
+  renderQuickPresets();
+}
+
+/* The same presets, reachable without leaving Compose. */
+function renderQuickPresets() {
+  const list = $('quickPresets');
+  if (!list) return;
+  list.innerHTML = '';
+  $('quickCount').textContent = `${state.presets.length} saved`;
+
+  if (!state.presets.length) {
+    list.innerHTML = '<li class="empty">Nothing saved yet</li>';
+    return;
+  }
+
+  state.presets
+    .slice()
+    .sort((a, b) => (b.updated || 0) - (a.updated || 0))
+    .slice(0, 8)
+    .forEach((preset) => {
+      const lines = (preset.text || '').split('\n').filter(Boolean).length;
+      const li = document.createElement('li');
+      li.className = 'item';
+      li.innerHTML = '<div class="name"></div><span class="spacer"></span><span class="sub"></span>';
+      li.querySelector('.name').textContent = preset.name;
+      li.querySelector('.sub').textContent = lines;
+      li.addEventListener('click', () => openPreset(preset));
+      list.append(li);
+    });
 }
 
 function openPreset(preset) {
@@ -616,6 +780,7 @@ function openPreset(preset) {
   }
   if (preset.options?.darkness) $('darkness').value = preset.options.darkness;
   showView('compose');
+  syncHighlight();
   refreshPreview();
   toast(`Opened "${preset.name}"`);
 }
@@ -979,8 +1144,10 @@ function initShortcuts() {
 }
 
 async function boot() {
+  await loadThemes();
   initTheme();
   initTabs();
+  initEditorModes();
   initToolbar();
   initConnection();
   initTodos();
@@ -989,7 +1156,7 @@ async function boot() {
   initPresetEditor();
   initShortcuts();
 
-  editor().addEventListener('input', schedulePreview);
+  editor().addEventListener('input', () => { syncHighlight(); schedulePreview(); });
   $('printBtn').addEventListener('click', () => printText(editor().value));
   $('savePresetBtn').addEventListener('click', () => openPresetEditor(null));
 
@@ -1003,6 +1170,7 @@ async function boot() {
   if (!editor().value) {
     editor().value = '# Groceries\nMilk and eggs.\n- bread\n- butter\n> dont forget the receipt';
   }
+  syncHighlight();
   refreshPreview();
 
   if ('serviceWorker' in navigator) {

@@ -1,0 +1,32 @@
+{
+  "themes": [
+    {
+      "id": "1",
+      "name": "Theme 1",
+      "stylesheet": "01.css",
+      "swatch": ["#1B5CFF", "#0C0C0D"],
+      "print": { "font": "NotoSansMono Medium", "size": 24 }
+    },
+    {
+      "id": "2",
+      "name": "Theme 2",
+      "stylesheet": "02.css",
+      "swatch": ["#8A5A2B", "#EFEAE0"],
+      "print": { "font": "NimbusMonoPS", "size": 25 }
+    },
+    {
+      "id": "3",
+      "name": "Theme 3",
+      "stylesheet": "03.css",
+      "swatch": ["#FFD400", "#2563EB"],
+      "print": { "font": "NotoSansMono Black", "size": 24 }
+    },
+    {
+      "id": "4",
+      "name": "Theme 4",
+      "stylesheet": "04.css",
+      "swatch": ["#FFFFFF", "#0A0A0B"],
+      "print": { "font": "AdwaitaMono", "size": 24 }
+    }
+  ]
+}

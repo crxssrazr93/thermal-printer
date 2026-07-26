@@ -368,8 +368,13 @@ class MarkdownRenderer:
             for line in lines:
                 y = self._draw_line(draw, line, y, left, size, force_bold=True)
             if block.level <= 2:
-                draw.rectangle([left, y + 2, width - right_margin, y + 3], fill="black")
-                y += 8
+                # a heavier rule under a top-level heading, so the hierarchy is
+                # legible on paper where there is no colour to carry it
+                thickness = 3 if block.level == 1 else 1
+                draw.rectangle(
+                    [left, y + 2, width - right_margin, y + 2 + thickness], fill="black"
+                )
+                y += 8 + thickness
             return y + 4
 
         if block.kind == "quote":
@@ -451,7 +456,19 @@ class MarkdownRenderer:
                 x += column_width
             y += pitch
             if row_index == 0:
-                draw.rectangle([left, y, width - self.margin, y + 1], fill="black")
-                y += 4
+                draw.rectangle([left, y, width - self.margin, y + 2], fill="black")
+                y += 5
+            elif row_index < len(block.rows) - 1:
+                # dotted rather than solid between body rows: it separates the
+                # rows without the page turning into a grid of black bars
+                self._dotted_rule(draw, left, width - self.margin, y + 3)
+                y += 8
 
         return y + 6
+
+    @staticmethod
+    def _dotted_rule(draw, x0: int, x1: int, y: int, dash: int = 3, gap: int = 4) -> None:
+        x = x0
+        while x < x1:
+            draw.rectangle([x, y, min(x + dash, x1), y], fill="black")
+            x += dash + gap

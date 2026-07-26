@@ -10,7 +10,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;600&family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css">
+<!-- Layout and behaviour live in base.css; each theme file only sets variables
+     and the few rules its character needs. User themes are appended at runtime
+     from /api/themes, so nothing here has to know they exist. -->
+<link rel="stylesheet" href="base.css">
+<link rel="stylesheet" href="themes/01.css">
+<link rel="stylesheet" href="themes/02.css">
+<link rel="stylesheet" href="themes/03.css">
+<link rel="stylesheet" href="themes/04.css">
 </head>
 <body>
 
@@ -78,28 +85,51 @@
           <select id="fontQuick" class="control slim"></select>
           <label class="sr-only" for="sizeQuick">Font size</label>
           <input id="sizeQuick" class="control slim narrow" type="number" min="8" max="72" step="1" value="24">
+          <span class="tool-sep" aria-hidden="true"></span>
+          <div class="segmented" role="group" aria-label="Editor mode">
+            <button class="seg" id="modeRendered" aria-pressed="true">Rendered</button>
+            <button class="seg" id="modeRaw" aria-pressed="false">Raw</button>
+          </div>
         </div>
 
         <label class="sr-only" for="editor">Markdown source</label>
-        <textarea id="editor" class="editor-area" spellcheck="false"
-          placeholder="Type here. Markdown works: # heading, **bold**, - list, > quote, | tables |"></textarea>
+        <!-- The highlight layer is a mirror of the textarea, drawn behind it
+             with identical metrics. Keeping a real textarea underneath means
+             selection, undo and the whole toolbar keep working exactly as they
+             do in raw mode; only the paint changes. -->
+        <div class="editor-shell" id="editorShell">
+          <pre class="editor-hl" id="editorHL" aria-hidden="true"></pre>
+          <textarea id="editor" class="editor-area" spellcheck="false"
+            placeholder="Type here. Markdown works: # heading, **bold**, - list, > quote, | tables |"></textarea>
+        </div>
       </div>
 
-      <aside class="panel preview">
-        <div class="panel-head">
-          <h2>Preview</h2>
-          <span class="head-meta" id="previewMeta">&ndash;</span>
-        </div>
-        <div class="paper-stage">
-          <div class="paper-wrap">
-            <img id="preview" class="paper" alt="Print preview">
+      <div class="side">
+        <aside class="panel preview">
+          <div class="panel-head">
+            <h2>Preview</h2>
+            <span class="head-meta" id="previewMeta">&ndash;</span>
           </div>
-        </div>
-        <div class="actions">
-          <button id="printBtn" class="btn primary">Print</button>
-          <button id="savePresetBtn" class="btn">Save as preset</button>
-        </div>
-      </aside>
+          <div class="paper-stage">
+            <div class="paper-wrap">
+              <img id="preview" class="paper" alt="Print preview">
+            </div>
+          </div>
+          <div class="actions">
+            <button id="printBtn" class="btn primary">Print</button>
+            <button id="savePresetBtn" class="btn">Save as preset</button>
+          </div>
+        </aside>
+
+        <!-- the presets you actually reach for, one click from composing -->
+        <section class="panel quick">
+          <div class="panel-head">
+            <h2>Presets</h2>
+            <span class="head-meta" id="quickCount">0 saved</span>
+          </div>
+          <ul class="list" id="quickPresets"></ul>
+        </section>
+      </div>
     </section>
 
     <!-- to-dos -->

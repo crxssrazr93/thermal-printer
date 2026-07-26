@@ -1,0 +1,34 @@
+/* =========================================================================
+   THEME 2
+   Warm paper. Serif headings, rounded-but-soft edges, the preview presented
+   as a physical sheet rather than a panel.
+   ========================================================================= */
+:root[data-theme="2"]{
+  --font-ui:"IBM Plex Sans",system-ui,sans-serif;
+  --font-head:"IBM Plex Serif",Georgia,serif;
+  --font-mono:"IBM Plex Mono",monospace;
+  --radius:4px; --radius-sm:3px; --radius-paper:2px;
+  --shadow:0 1px 2px rgba(0,0,0,.05); --shadow-lift:0 16px 30px rgba(40,30,15,.20);
+  --bg:#EFEAE0; --panel:#FDFBF7; --panel-2:#F3EDE2;
+  --ink:#1A1A1A; --muted:#6B6459; --faint:#8B8377;
+  --line:#D2C9B8; --line-strong:#B8AC96;
+  --accent:#8A5A2B; --accent-ink:#FFFFFF; --ok:#3F6B4A;
+}
+:root[data-theme="2"][data-mode="dark"]{
+  --bg:#17150F; --panel:#211E17; --panel-2:#2A2620;
+  --ink:#EDE7DA; --muted:#9A9184; --faint:#7C7367;
+  --line:#332E24; --line-strong:#4A4335;
+  --accent:#C79A63; --accent-ink:#17150F; --ok:#7FB08A;
+}
+:root[data-theme="2"] .panel-head h2{
+  font-family:var(--font-head);font-size:14px;text-transform:none;letter-spacing:0;
+  font-style:italic;color:var(--ink);
+}
+:root[data-theme="2"] .btn,[data-theme="2"] .theme-btn{border-radius:999px}
+:root[data-theme="2"] .tab[aria-selected="true"]{font-style:italic}
+:root[data-theme="2"] .paper-wrap{border-radius:2px}
+
+:root[data-theme="2"]{--md-h-bg:rgba(138,90,43,.14);--md-quote-bg:rgba(138,90,43,.07)}
+:root[data-theme="2"][data-mode="dark"]{--md-h-bg:rgba(199,154,99,.18);--md-quote-bg:rgba(199,154,99,.09)}
+:root[data-theme="2"] .md-h{color:var(--accent)}
+:root[data-theme="2"] .seg{border-radius:999px}

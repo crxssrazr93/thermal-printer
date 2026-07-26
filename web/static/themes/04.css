@@ -1,0 +1,50 @@
+/* =========================================================================
+   THEME 4
+   Frosted panels floating over a neutral wash. Depth from blur and elevation,
+   no hue anywhere in the chrome.
+   ========================================================================= */
+:root[data-theme="4"]{
+  --font-ui:Inter,system-ui,sans-serif;
+  --font-mono:"JetBrains Mono",monospace;
+  --radius:16px; --radius-sm:10px; --radius-paper:8px;
+  --panel-blur:blur(20px) saturate(120%);
+  --shadow:0 12px 34px rgba(0,0,0,.5),0 2px 8px rgba(0,0,0,.35);
+  --shadow-lift:0 14px 32px rgba(0,0,0,.45);
+  --bg:#0A0A0B; --panel:rgba(24,24,27,.74); --panel-2:rgba(255,255,255,.05);
+  --ink:#F4F4F5; --muted:#A0A0A8; --faint:#74747C;
+  --line:rgba(255,255,255,.13); --line-strong:rgba(255,255,255,.22);
+  --accent:#F4F4F5; --accent-ink:#0B0B0C; --ok:#4ADE80;
+}
+:root[data-theme="4"][data-mode="light"]{
+  --bg:#EDEDEF; --panel:rgba(255,255,255,.78); --panel-2:rgba(11,11,12,.04);
+  --ink:#0B0B0C; --muted:#5C5C63; --faint:#8A8A92;
+  --line:rgba(11,11,12,.13); --line-strong:rgba(11,11,12,.22);
+  --accent:#0B0B0C; --accent-ink:#FFFFFF; --ok:#1E874B;
+  --shadow:0 10px 30px rgba(11,11,12,.10),0 2px 8px rgba(11,11,12,.06);
+  --shadow-lift:0 12px 28px rgba(11,11,12,.14);
+}
+/* neutral grey wash behind the frosted panels */
+:root[data-theme="4"] body::before,
+:root body[data-has-wash]::before{content:none}
+:root[data-theme="4"] .app::before{
+  content:"";position:fixed;inset:-20%;z-index:-1;
+  background:
+    radial-gradient(46% 46% at 16% 14%,var(--wash-a) 0,transparent 62%),
+    radial-gradient(40% 40% at 84% 24%,var(--wash-b) 0,transparent 64%),
+    radial-gradient(52% 52% at 60% 92%,var(--wash-c) 0,transparent 62%);
+  filter:blur(30px);opacity:.9;
+}
+:root[data-theme="4"]{--wash-a:#2A2A2E;--wash-b:#151517;--wash-c:#000000}
+:root[data-theme="4"][data-mode="light"]{--wash-a:#FFFFFF;--wash-b:#DCDCE0;--wash-c:#C8C8CE}
+:root[data-theme="4"] .topbar,[data-theme="4"] .tabs,[data-theme="4"] .statusbar{
+  background:var(--panel);backdrop-filter:var(--panel-blur);-webkit-backdrop-filter:var(--panel-blur);
+}
+:root[data-theme="4"] .tab[aria-selected="true"]{
+  background:var(--accent);color:var(--accent-ink);border-radius:999px;border-bottom-color:transparent;
+}
+:root[data-theme="4"] .btn,[data-theme="4"] .theme-btn{border-radius:999px}
+:root[data-theme="4"] .btn.primary{border-color:var(--accent)}
+
+:root[data-theme="4"]{--md-h-bg:rgba(255,255,255,.10);--md-quote-bg:rgba(255,255,255,.05)}
+:root[data-theme="4"][data-mode="light"]{--md-h-bg:rgba(11,11,12,.07);--md-quote-bg:rgba(11,11,12,.04)}
+:root[data-theme="4"] .segmented{border-radius:999px}

@@ -1,0 +1,72 @@
+/* =========================================================================
+   THEME 3
+   Hard borders and offset shadows. Everything reads as a physical block that
+   presses down when clicked.
+   ========================================================================= */
+:root[data-theme="3"]{
+  --font-ui:"Space Grotesk",system-ui,sans-serif;
+  --font-mono:"Space Mono",monospace;
+  --radius:0px; --radius-sm:0px; --radius-paper:0px;
+  --border:3px;
+  --shadow:5px 5px 0 var(--line-strong); --shadow-lift:5px 5px 0 var(--line-strong);
+  --press:translate(2px,2px);
+  --bg:#F4F1E8; --panel:#FFFFFF; --panel-2:#F4F1E8;
+  --ink:#0A0A0A; --muted:#4A4A4A; --faint:#6A6A6A;
+  --line:#0A0A0A; --line-strong:#0A0A0A;
+  --accent:#2563EB; --accent-ink:#FFFFFF; --ok:#22C55E; --danger:#EF3E36;
+}
+:root[data-theme="3"][data-mode="dark"]{
+  --bg:#121212; --panel:#1C1C1C; --panel-2:#121212;
+  --ink:#F5F5F5; --muted:#B0B0B0; --faint:#8A8A8A;
+  --line:#F5F5F5; --line-strong:#F5F5F5;
+  --accent:#5B8BFF; --accent-ink:#0A0A0A; --ok:#4ADE80; --danger:#FF6B62;
+}
+/* The palette is the point of this one, so the colour is structural rather
+   than decorative: yellow masthead, blue for the current section, green for
+   the action that commits, red for destructive. It stays the same in both
+   modes because the hues are what identify the theme. */
+:root[data-theme="3"] .topbar{background:#FFD400;border-bottom-width:3px}
+:root[data-theme="3"] .topbar,
+:root[data-theme="3"] .topbar .state,
+:root[data-theme="3"] .topbar .brand b{color:#0A0A0A}
+:root[data-theme="3"] .topbar .state .dot{background:#0A0A0A}
+:root[data-theme="3"] .topbar .state.on .dot{background:#15803D}
+:root[data-theme="3"] .logo{background:#0A0A0A;color:#FFD400}
+:root[data-theme="3"] .topbar .btn,
+:root[data-theme="3"] .topbar .control{
+  background:#FFFFFF;color:#0A0A0A;border-color:#0A0A0A;box-shadow:3px 3px 0 #0A0A0A;
+}
+:root[data-theme="3"] .btn.primary{background:#22C55E;color:#0A0A0A}
+:root[data-theme="3"] .btn.danger{background:#EF3E36;color:#FFFFFF}
+/* first button of each toolbar group carries the group's colour */
+:root[data-theme="3"] .tool[data-md="h1"]{background:#EF3E36;color:#FFFFFF}
+:root[data-theme="3"] .tool[data-md="bold"]{background:#2563EB;color:#FFFFFF}
+:root[data-theme="3"] .tool[data-md="ul"]{background:#FFD400;color:#0A0A0A}
+:root[data-theme="3"] .tool[data-md="link"]{background:#0A0A0A;color:#FFD400}
+:root[data-theme="3"] .panel-head{background:var(--line);color:var(--bg)}
+:root[data-theme="3"] .panel-head h2{color:var(--bg)}
+:root[data-theme="3"] .head-meta{color:var(--bg);opacity:.75}
+:root[data-theme="3"] .btn{border-width:3px;box-shadow:3px 3px 0 var(--line-strong);font-weight:700;
+  text-transform:uppercase;letter-spacing:.02em;font-size:12px}
+:root[data-theme="3"] .btn:active{box-shadow:1px 1px 0 var(--line-strong)}
+:root[data-theme="3"] .tool{border-width:2px;border-color:var(--line);background:var(--panel-2);
+  box-shadow:2px 2px 0 var(--line-strong);font-weight:700}
+:root[data-theme="3"] .tool:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--line-strong)}
+:root[data-theme="3"] .tab{border:3px solid transparent}
+:root[data-theme="3"] .tab[aria-selected="true"]{background:var(--accent);color:var(--accent-ink);
+  border-bottom-color:transparent}
+:root[data-theme="3"] .paper-wrap{border:3px solid #0A0A0A;box-shadow:5px 5px 0 #0A0A0A}
+:root[data-theme="3"] .theme-btn,[data-theme="3"] .theme-menu{border-radius:0;border-width:3px}
+:root[data-theme="3"] .item:hover{border-color:var(--line)}
+
+/* The mockup's editor is the theme at its loudest: the heading sits in yellow,
+   bold sits in blue, the quote carries the red. Backgrounds only, since a
+   border or padding here would slide the glyphs out from under the caret. */
+:root[data-theme="3"]{--md-h-bg:#FFD400;--md-strong-bg:#2563EB;--md-quote-bg:rgba(239,62,54,.18)}
+:root[data-theme="3"] .md-h{color:#0A0A0A}
+:root[data-theme="3"] .md-strong{color:#FFFFFF}
+:root[data-theme="3"] .md-quote{color:var(--danger);font-style:normal;font-weight:700}
+:root[data-theme="3"] .md-marker{color:var(--accent)}
+:root[data-theme="3"] .md-code{background:#0A0A0A;color:#FFD400}
+:root[data-theme="3"] .segmented{border-width:2px;border-radius:0}
+:root[data-theme="3"] .seg{text-transform:uppercase;letter-spacing:.03em}

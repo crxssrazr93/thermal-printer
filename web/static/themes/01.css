@@ -1,0 +1,28 @@
+/* =========================================================================
+   THEME 1
+   Hairline grid, monochrome with a single blue accent. Square corners,
+   nothing raised; the rules do the work.
+   ========================================================================= */
+:root[data-theme="1"]{
+  --font-ui:Inter,system-ui,sans-serif;
+  --font-mono:"JetBrains Mono",monospace;
+  --radius:0px; --radius-sm:0px; --radius-paper:0px;
+  --shadow:none; --shadow-lift:0 10px 26px rgba(0,0,0,.28);
+  --bg:#0C0C0D; --panel:#141416; --panel-2:#1B1B1F;
+  --ink:#F2F2F3; --muted:#9A9AA0; --faint:#6E6E77;
+  --line:#2A2A2E; --line-strong:#3A3A40;
+  --accent:#5B8BFF; --accent-ink:#FFFFFF;
+}
+:root[data-theme="1"][data-mode="light"]{
+  --bg:#FFFFFF; --panel:#FFFFFF; --panel-2:#F5F5F5;
+  --ink:#0A0A0A; --muted:#5A5A5A; --faint:#7C7C7C;
+  --line:#D8D8D8; --line-strong:#0A0A0A;
+  --accent:#1B5CFF; --shadow-lift:0 10px 26px rgba(0,0,0,.10);
+}
+:root[data-theme="1"] .theme-btn,[data-theme="1"] .theme-menu{border-radius:0}
+:root[data-theme="1"] .swatch{border-radius:0}
+
+/* editor decoration: colour only, so the mirror keeps the textarea's metrics */
+:root[data-theme="1"] .md-h{color:var(--accent)}
+:root[data-theme="1"] .md-marker{color:var(--accent)}
+:root[data-theme="1"] .seg{border-radius:0}

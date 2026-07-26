@@ -108,7 +108,18 @@ button{cursor:pointer;background:none;border:0}
 /* ---------------------------------------------------------------- views */
 .main{overflow:hidden;padding:var(--gap);display:flex}
 .view{flex:1;min-width:0;overflow:auto}
-.view.split{display:grid;grid-template-columns:minmax(0,1fr) 434px;gap:var(--gap);overflow:hidden}
+/* The preview column is sized by the paper rather than the other way round, so
+   it is max-content: whatever a 384 dot sheet plus its frame needs, exactly,
+   at whatever border width the current theme uses. Anything fixed here spills
+   the moment a theme changes its borders. */
+.view.split{display:grid;grid-template-columns:minmax(0,1fr) max-content;gap:var(--gap);overflow:hidden}
+/* hugs its content instead of stretching to a column of empty panel */
+.view.split > .preview{align-self:start;max-height:100%}
+.side{display:flex;flex-direction:column;gap:var(--gap);min-height:0;overflow:auto}
+.side .preview{flex:none}
+.panel.quick{flex:none}
+.panel.quick .list{max-height:210px;overflow:auto}
+.panel.quick .item{cursor:pointer}
 @media (max-width:1040px){.view.split{grid-template-columns:1fr;overflow:auto}}
 
 .panel{
@@ -142,15 +153,58 @@ button{cursor:pointer;background:none;border:0}
 .control.slim{min-height:30px;padding:4px 8px;font-size:12px;max-width:190px}
 .control.slim.narrow{width:64px}
 
-.editor-area{
-  flex:1;min-height:220px;resize:none;border:0;background:transparent;color:var(--ink);
-  padding:16px 18px;font-family:var(--font-mono);font-size:13px;line-height:1.85;
+.segmented{display:flex;border:var(--border) solid var(--line);border-radius:var(--radius-sm);
+  overflow:hidden}
+.seg{padding:5px 11px;font-size:11.5px;font-weight:600;color:var(--muted);
+  transition:background 160ms ease,color 160ms ease}
+.seg + .seg{border-left:var(--border) solid var(--line)}
+.seg[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+
+/* ------------------------------------------------------------ editor */
+/* The two layers must lay text out identically or the caret drifts away from
+   the glyphs, so every metric below is shared between them. */
+.editor-shell{position:relative;flex:1;min-height:220px;overflow:hidden}
+.editor-hl,.editor-area{
+  margin:0;border:0;padding:16px 18px;
+  font-family:var(--font-mono);font-size:13px;line-height:1.85;
+  white-space:pre-wrap;word-wrap:break-word;overflow-wrap:break-word;tab-size:2;
 }
+.editor-hl{
+  position:absolute;inset:0;overflow:auto;color:var(--ink);
+  pointer-events:none;
+}
+.editor-area{
+  position:absolute;inset:0;width:100%;height:100%;resize:none;
+  background:transparent;color:transparent;caret-color:var(--ink);overflow:auto;
+}
+.editor-area::selection{background:color-mix(in srgb,var(--accent) 35%,transparent);color:transparent}
 .editor-area:focus{outline:none}
 .editor-area::placeholder{color:var(--faint)}
+/* raw mode: hide the mirror and let the textarea paint its own text */
+.editor-shell.raw .editor-hl{display:none}
+.editor-shell.raw .editor-area{color:var(--ink)}
+.editor-shell.raw .editor-area::selection{color:var(--ink)}
+
+/* Markdown decoration, deliberately close to what the paper does with the same
+   markup: weight for emphasis, a tint for a heading, a muted italic for a
+   quote. Every rule here is metric-neutral on purpose - padding, borders or a
+   different font-size would move the glyphs out from under the caret, because
+   the mirror only lines up while it lays out exactly like the textarea. */
+.md-h{font-weight:700;color:var(--ink);background:var(--md-h-bg,transparent)}
+.md-marker{color:var(--accent);font-weight:700}
+.md-strong{font-weight:700;color:var(--ink);background:var(--md-strong-bg,transparent)}
+.md-em{font-style:italic}
+.md-del{text-decoration:line-through;color:var(--faint)}
+.md-code{color:var(--accent);background:var(--panel-2)}
+.md-quote{color:var(--muted);font-style:italic;background:var(--md-quote-bg,transparent)}
+.md-rule{color:var(--faint)}
+.md-table{color:var(--muted)}
+.md-link{color:var(--accent);text-decoration:underline}
+.md-token{color:var(--accent);background:var(--panel-2)}
 
 /* preview */
-.paper-stage{flex:1;overflow:auto;padding:10px;display:flex;justify-content:center;align-items:flex-start}
+.paper-stage{flex:1;min-height:0;overflow:auto;padding:10px;display:flex;
+  justify-content:center;align-items:flex-start}
 .paper-wrap{background:#fff;border-radius:var(--radius-paper);padding:14px 12px 20px;
   box-shadow:var(--shadow-lift);flex:none}
 /* Shown at 1:1, so one printer dot is one pixel. Scaling a 1-bit dithered
@@ -250,7 +304,7 @@ button{cursor:pointer;background:none;border:0}
   border-radius:var(--radius);box-shadow:var(--shadow-lift);
 }
 .modal .panel-head h2{font-size:12px}
-.modal-body{display:grid;grid-template-columns:minmax(0,1fr) 434px;gap:0;overflow:hidden;min-height:0}
+.modal-body{display:grid;grid-template-columns:minmax(0,1fr) max-content;gap:0;overflow:hidden;min-height:0}
 .modal-form{overflow:auto;padding:4px 4px 12px}
 .modal-preview{
   display:flex;flex-direction:column;min-height:0;
@@ -284,166 +338,3 @@ button{cursor:pointer;background:none;border:0}
 .toast.err{border-color:var(--danger);color:var(--danger)}
 
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
-
-
-/* =========================================================================
-   THEME 1
-   Hairline grid, monochrome with a single blue accent. Square corners,
-   nothing raised; the rules do the work.
-   ========================================================================= */
-:root[data-theme="1"]{
-  --font-ui:Inter,system-ui,sans-serif;
-  --font-mono:"JetBrains Mono",monospace;
-  --radius:0px; --radius-sm:0px; --radius-paper:0px;
-  --shadow:none; --shadow-lift:0 10px 26px rgba(0,0,0,.28);
-  --bg:#0C0C0D; --panel:#141416; --panel-2:#1B1B1F;
-  --ink:#F2F2F3; --muted:#9A9AA0; --faint:#6E6E77;
-  --line:#2A2A2E; --line-strong:#3A3A40;
-  --accent:#5B8BFF; --accent-ink:#FFFFFF;
-}
-:root[data-theme="1"][data-mode="light"]{
-  --bg:#FFFFFF; --panel:#FFFFFF; --panel-2:#F5F5F5;
-  --ink:#0A0A0A; --muted:#5A5A5A; --faint:#7C7C7C;
-  --line:#D8D8D8; --line-strong:#0A0A0A;
-  --accent:#1B5CFF; --shadow-lift:0 10px 26px rgba(0,0,0,.10);
-}
-:root[data-theme="1"] .theme-btn,[data-theme="1"] .theme-menu{border-radius:0}
-:root[data-theme="1"] .swatch{border-radius:0}
-
-/* =========================================================================
-   THEME 2
-   Warm paper. Serif headings, rounded-but-soft edges, the preview presented
-   as a physical sheet rather than a panel.
-   ========================================================================= */
-:root[data-theme="2"]{
-  --font-ui:"IBM Plex Sans",system-ui,sans-serif;
-  --font-head:"IBM Plex Serif",Georgia,serif;
-  --font-mono:"IBM Plex Mono",monospace;
-  --radius:4px; --radius-sm:3px; --radius-paper:2px;
-  --shadow:0 1px 2px rgba(0,0,0,.05); --shadow-lift:0 16px 30px rgba(40,30,15,.20);
-  --bg:#EFEAE0; --panel:#FDFBF7; --panel-2:#F3EDE2;
-  --ink:#1A1A1A; --muted:#6B6459; --faint:#8B8377;
-  --line:#D2C9B8; --line-strong:#B8AC96;
-  --accent:#8A5A2B; --accent-ink:#FFFFFF; --ok:#3F6B4A;
-}
-:root[data-theme="2"][data-mode="dark"]{
-  --bg:#17150F; --panel:#211E17; --panel-2:#2A2620;
-  --ink:#EDE7DA; --muted:#9A9184; --faint:#7C7367;
-  --line:#332E24; --line-strong:#4A4335;
-  --accent:#C79A63; --accent-ink:#17150F; --ok:#7FB08A;
-}
-:root[data-theme="2"] .panel-head h2{
-  font-family:var(--font-head);font-size:14px;text-transform:none;letter-spacing:0;
-  font-style:italic;color:var(--ink);
-}
-:root[data-theme="2"] .btn,[data-theme="2"] .theme-btn{border-radius:999px}
-:root[data-theme="2"] .tab[aria-selected="true"]{font-style:italic}
-:root[data-theme="2"] .paper-wrap{border-radius:2px}
-
-/* =========================================================================
-   THEME 3
-   Hard borders and offset shadows. Everything reads as a physical block that
-   presses down when clicked.
-   ========================================================================= */
-:root[data-theme="3"]{
-  --font-ui:"Space Grotesk",system-ui,sans-serif;
-  --font-mono:"Space Mono",monospace;
-  --radius:0px; --radius-sm:0px; --radius-paper:0px;
-  --border:3px;
-  --shadow:5px 5px 0 var(--line-strong); --shadow-lift:5px 5px 0 var(--line-strong);
-  --press:translate(2px,2px);
-  --bg:#F4F1E8; --panel:#FFFFFF; --panel-2:#F4F1E8;
-  --ink:#0A0A0A; --muted:#4A4A4A; --faint:#6A6A6A;
-  --line:#0A0A0A; --line-strong:#0A0A0A;
-  --accent:#2563EB; --accent-ink:#FFFFFF; --ok:#22C55E; --danger:#EF3E36;
-}
-:root[data-theme="3"][data-mode="dark"]{
-  --bg:#121212; --panel:#1C1C1C; --panel-2:#121212;
-  --ink:#F5F5F5; --muted:#B0B0B0; --faint:#8A8A8A;
-  --line:#F5F5F5; --line-strong:#F5F5F5;
-  --accent:#5B8BFF; --accent-ink:#0A0A0A; --ok:#4ADE80; --danger:#FF6B62;
-}
-/* The palette is the point of this one, so the colour is structural rather
-   than decorative: yellow masthead, blue for the current section, green for
-   the action that commits, red for destructive. It stays the same in both
-   modes because the hues are what identify the theme. */
-:root[data-theme="3"] .topbar{background:#FFD400;border-bottom-width:3px}
-:root[data-theme="3"] .topbar,
-:root[data-theme="3"] .topbar .state,
-:root[data-theme="3"] .topbar .brand b{color:#0A0A0A}
-:root[data-theme="3"] .topbar .state .dot{background:#0A0A0A}
-:root[data-theme="3"] .topbar .state.on .dot{background:#15803D}
-:root[data-theme="3"] .logo{background:#0A0A0A;color:#FFD400}
-:root[data-theme="3"] .topbar .btn,
-:root[data-theme="3"] .topbar .control{
-  background:#FFFFFF;color:#0A0A0A;border-color:#0A0A0A;box-shadow:3px 3px 0 #0A0A0A;
-}
-:root[data-theme="3"] .btn.primary{background:#22C55E;color:#0A0A0A}
-:root[data-theme="3"] .btn.danger{background:#EF3E36;color:#FFFFFF}
-/* first button of each toolbar group carries the group's colour */
-:root[data-theme="3"] .tool[data-md="h1"]{background:#EF3E36;color:#FFFFFF}
-:root[data-theme="3"] .tool[data-md="bold"]{background:#2563EB;color:#FFFFFF}
-:root[data-theme="3"] .tool[data-md="ul"]{background:#FFD400;color:#0A0A0A}
-:root[data-theme="3"] .tool[data-md="link"]{background:#0A0A0A;color:#FFD400}
-:root[data-theme="3"] .panel-head{background:var(--line);color:var(--bg)}
-:root[data-theme="3"] .panel-head h2{color:var(--bg)}
-:root[data-theme="3"] .head-meta{color:var(--bg);opacity:.75}
-:root[data-theme="3"] .btn{border-width:3px;box-shadow:3px 3px 0 var(--line-strong);font-weight:700;
-  text-transform:uppercase;letter-spacing:.02em;font-size:12px}
-:root[data-theme="3"] .btn:active{box-shadow:1px 1px 0 var(--line-strong)}
-:root[data-theme="3"] .tool{border-width:2px;border-color:var(--line);background:var(--panel-2);
-  box-shadow:2px 2px 0 var(--line-strong);font-weight:700}
-:root[data-theme="3"] .tool:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--line-strong)}
-:root[data-theme="3"] .tab{border:3px solid transparent}
-:root[data-theme="3"] .tab[aria-selected="true"]{background:var(--accent);color:var(--accent-ink);
-  border-bottom-color:transparent}
-:root[data-theme="3"] .paper-wrap{border:3px solid #0A0A0A;box-shadow:5px 5px 0 #0A0A0A}
-:root[data-theme="3"] .theme-btn,[data-theme="3"] .theme-menu{border-radius:0;border-width:3px}
-:root[data-theme="3"] .item:hover{border-color:var(--line)}
-
-/* =========================================================================
-   THEME 4
-   Frosted panels floating over a neutral wash. Depth from blur and elevation,
-   no hue anywhere in the chrome.
-   ========================================================================= */
-:root[data-theme="4"]{
-  --font-ui:Inter,system-ui,sans-serif;
-  --font-mono:"JetBrains Mono",monospace;
-  --radius:16px; --radius-sm:10px; --radius-paper:8px;
-  --panel-blur:blur(20px) saturate(120%);
-  --shadow:0 12px 34px rgba(0,0,0,.5),0 2px 8px rgba(0,0,0,.35);
-  --shadow-lift:0 14px 32px rgba(0,0,0,.45);
-  --bg:#0A0A0B; --panel:rgba(24,24,27,.74); --panel-2:rgba(255,255,255,.05);
-  --ink:#F4F4F5; --muted:#A0A0A8; --faint:#74747C;
-  --line:rgba(255,255,255,.13); --line-strong:rgba(255,255,255,.22);
-  --accent:#F4F4F5; --accent-ink:#0B0B0C; --ok:#4ADE80;
-}
-:root[data-theme="4"][data-mode="light"]{
-  --bg:#EDEDEF; --panel:rgba(255,255,255,.78); --panel-2:rgba(11,11,12,.04);
-  --ink:#0B0B0C; --muted:#5C5C63; --faint:#8A8A92;
-  --line:rgba(11,11,12,.13); --line-strong:rgba(11,11,12,.22);
-  --accent:#0B0B0C; --accent-ink:#FFFFFF; --ok:#1E874B;
-  --shadow:0 10px 30px rgba(11,11,12,.10),0 2px 8px rgba(11,11,12,.06);
-  --shadow-lift:0 12px 28px rgba(11,11,12,.14);
-}
-/* neutral grey wash behind the frosted panels */
-:root[data-theme="4"] body::before,
-:root body[data-has-wash]::before{content:none}
-:root[data-theme="4"] .app::before{
-  content:"";position:fixed;inset:-20%;z-index:-1;
-  background:
-    radial-gradient(46% 46% at 16% 14%,var(--wash-a) 0,transparent 62%),
-    radial-gradient(40% 40% at 84% 24%,var(--wash-b) 0,transparent 64%),
-    radial-gradient(52% 52% at 60% 92%,var(--wash-c) 0,transparent 62%);
-  filter:blur(30px);opacity:.9;
-}
-:root[data-theme="4"]{--wash-a:#2A2A2E;--wash-b:#151517;--wash-c:#000000}
-:root[data-theme="4"][data-mode="light"]{--wash-a:#FFFFFF;--wash-b:#DCDCE0;--wash-c:#C8C8CE}
-:root[data-theme="4"] .topbar,[data-theme="4"] .tabs,[data-theme="4"] .statusbar{
-  background:var(--panel);backdrop-filter:var(--panel-blur);-webkit-backdrop-filter:var(--panel-blur);
-}
-:root[data-theme="4"] .tab[aria-selected="true"]{
-  background:var(--accent);color:var(--accent-ink);border-radius:999px;border-bottom-color:transparent;
-}
-:root[data-theme="4"] .btn,[data-theme="4"] .theme-btn{border-radius:999px}
-:root[data-theme="4"] .btn.primary{border-color:var(--accent)}
