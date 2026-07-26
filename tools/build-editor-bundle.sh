@@ -22,11 +22,9 @@ npm install --no-audit --no-fund --silent \
   @tiptap/extension-image @tiptap/extension-link \
   @tiptap/extension-task-list @tiptap/extension-task-item \
   @tiptap/extension-character-count @tiptap/extension-placeholder \
-  @tiptap/extension-bubble-menu @tiptap/extension-floating-menu \
   @tiptap/extension-mention @tiptap/suggestion \
   @tiptap/extension-underline @tiptap/extension-highlight \
-  @tiptap/extension-subscript @tiptap/extension-superscript \
-  @tiptap/extension-text-align esbuild
+  @tiptap/extension-subscript @tiptap/extension-superscript esbuild
 
 npx esbuild entry.js --bundle --format=iife --minify --target=es2020 --outfile=tiptap.js
 cp tiptap.js "$out"

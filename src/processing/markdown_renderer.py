@@ -96,6 +96,20 @@ def _parse_directive(body: str) -> dict:
     )
 
 
+def _parse_shares(value: str) -> List[int]:
+    """Column widths as percentages, as dragged in the editor.
+
+    Widths are a view concern right up until someone deliberately sets them,
+    at which point they are a decision about the page and belong on the paper
+    too. Anything malformed is simply ignored and the table sizes itself.
+    """
+    try:
+        shares = [int(part) for part in value.split(",") if part.strip()]
+    except ValueError:
+        return []
+    return shares if shares and all(share > 0 for share in shares) else []
+
+
 def _split_image_target(target: str) -> Tuple[str, str]:
     """Separate a source from markdown's optional title.
 
@@ -139,6 +153,7 @@ class Block:
     rows: List[List[str]] = field(default_factory=list)   # table only
     align: List[str] = field(default_factory=list)        # table only: left|center|right
     borders: str = ""                                     # table only: all|header|none
+    shares: List[int] = field(default_factory=list)       # table only: column widths, in percent
     lines: List[str] = field(default_factory=list)        # code only
 
 
@@ -323,6 +338,7 @@ class MarkdownRenderer:
                 blocks.append(Block(
                     kind="table", rows=rows, align=align,
                     borders=pending_directive.get("borders", ""),
+                    shares=_parse_shares(pending_directive.get("widths", "")),
                 ))
                 pending_directive = {}
                 continue
@@ -894,72 +910,167 @@ class MarkdownRenderer:
         except (OSError, ValueError):
             return None
 
+    def _cell_pieces(self, cell: str, size: int, header: bool):
+        """A cell's text as drawable pieces, one per word, with its own font.
+
+        A cell is text like any other, so everything the body understands has
+        to work here too: bold, italic, code, highlight, underline and raised
+        or lowered runs. The span travels with the piece so the drawing code
+        can decorate it the same way it decorates a paragraph.
+        """
+        pieces = []
+        for span in self._parse_inline(cell):
+            piece_size = max(8, int(size * 0.7)) if span.raise_ else size
+            font = self._font(piece_size, span.bold or header, span.italic,
+                              mono=True if span.mono else True)
+            for word in re.split(r"(\s+)", span.text):
+                if not word:
+                    continue
+                try:
+                    piece_width = font.getlength(word)
+                except (AttributeError, OSError):
+                    piece_width = piece_size * len(word) * 0.6
+                pieces.append((word, font, piece_width, span))
+        return pieces
+
+    @staticmethod
+    def _wrap_pieces(pieces, limit: float):
+        """Break a cell's pieces into lines that fit the column.
+
+        Wrapping rather than truncating: a table that quietly drops the end of
+        a name is worse than one that is a line taller, and on 58 mm paper
+        something always has to give.
+        """
+        lines, line, used = [], [], 0.0
+        for word, font, piece_width, span in pieces:
+            if word.isspace():
+                if line:
+                    line.append((word, font, piece_width, span))
+                    used += piece_width
+                continue
+            if line and used + piece_width > limit:
+                lines.append(line)
+                line, used = [], 0.0
+            if piece_width > limit and not line:
+                # one word wider than the column: break it rather than spill
+                for character in word:
+                    try:
+                        character_width = font.getlength(character)
+                    except (AttributeError, OSError):
+                        character_width = piece_width / max(1, len(word))
+                    if line and used + character_width > limit:
+                        lines.append(line)
+                        line, used = [], 0.0
+                    line.append((character, font, character_width, span))
+                    used += character_width
+                continue
+            line.append((word, font, piece_width, span))
+            used += piece_width
+        if line:
+            lines.append(line)
+        return lines or [[]]
+
     def _draw_table(self, draw, block: Block, y: int, left: int, width: int) -> int:
         if not block.rows:
             return y
 
         columns = max(len(row) for row in block.rows)
         usable = width - left - self.margin
-        column_width = usable // max(1, columns)
         right = width - self.margin
 
         size = max(10, int(self.font_size * float(self.style["table_scale"])))
-        font = self._font(size, mono=True)
-        header_font = self._font(size, bold=True, mono=True)
         pad = int(self.style["table_cell_pad"])
-        pitch = self._line_height(font) + pad
+        font = self._font(size, mono=True)
+        pitch = self._line_height(font)
 
-        # "all" draws the full grid, "none" drops every rule, and anything else
-        # is the theme's own treatment: a rule under the header and whatever it
-        # asks for between body rows
-        borders = block.borders or "theme"
+        # Columns are sized to what is in them, not to the page: a table on a
+        # long strip should be as wide as its contents and no wider, and a table
+        # on 58 mm paper should give its room to the columns that need it. Only
+        # when the natural widths do not fit is anything taken away, and then
+        # proportionally, from the widest first.
+        cells = [
+            [self._cell_pieces(row[column] if column < len(row) else "", size, index == 0)
+             for column in range(columns)]
+            for index, row in enumerate(block.rows)
+        ]
+        natural = [
+            max((sum(piece[2] for piece in cells[row][column]) for row in range(len(cells))),
+                default=0) + 2 * pad
+            for column in range(columns)
+        ]
+        if block.shares and len(block.shares) == columns:
+            # the document says how the width is divided, so it is divided that
+            # way and the contents wrap into whatever room that leaves
+            share_total = sum(block.shares)
+            natural = [usable * share / share_total for share in block.shares]
+
+        total = sum(natural) or 1
+        if total > usable:
+            widths = [max(size * 2.0, value * usable / total) for value in natural]
+            # rounding can push it back over, so the last column absorbs it
+            overflow = sum(widths) - usable
+            if overflow > 0:
+                widths[-1] = max(size * 2.0, widths[-1] - overflow)
+        else:
+            widths = natural
+
+        # rules belong to the table, not to the page, so they stop where it does
+        right = min(right, left + int(sum(widths)))
+
+        # A grid is what a table is for, so it is what a table gets unless the
+        # document says otherwise. "theme" is still there for anyone who wants
+        # the lighter treatment a theme prescribes.
+        borders = block.borders or "all"
         top = y
 
-        for row_index, row in enumerate(block.rows):
+        for row_index, row_cells in enumerate(cells):
+            wrapped = [
+                self._wrap_pieces(cell, widths[column] - 2 * pad)
+                for column, cell in enumerate(row_cells)
+            ]
+            height = max(len(lines) for lines in wrapped)
+
             x = left
-            for column, cell in enumerate(row[:columns]):
-                # a cell is text like any other, so **bold** in one has to be
-                # drawn bold rather than printed with its asterisks showing
-                spans = self._parse_inline(cell)
-                drawn = []
-                used = 0
-                for span in spans:
-                    bold = span.bold or row_index == 0
-                    span_font = self._font(size, bold, span.italic, mono=True) \
-                        or (header_font if row_index == 0 else font)
-                    # hard truncate: wrapping inside a cell on a narrow strip
-                    # produces unreadable ragged columns
-                    text = span.text
-                    while text:
-                        try:
-                            if used + span_font.getlength(text) <= column_width - 2 * pad:
-                                break
-                        except (AttributeError, OSError):
-                            break
-                        text = text[:-1]
-                    if not text:
-                        continue
-                    try:
-                        span_width = span_font.getlength(text)
-                    except (AttributeError, OSError):
-                        span_width = size * len(text) * 0.6
-                    drawn.append((text, span_font, span_width))
-                    used += span_width
-
+            for column, lines in enumerate(wrapped):
                 alignment = block.align[column] if column < len(block.align) else "left"
-                if alignment == "right":
-                    cursor = x + column_width - pad - used
-                elif alignment == "center":
-                    cursor = x + (column_width - used) / 2
-                else:
-                    cursor = x + pad
+                for line_index, line in enumerate(lines):
+                    used = sum(piece[2] for piece in line)
+                    if alignment == "right":
+                        cursor = x + widths[column] - pad - used
+                    elif alignment == "center":
+                        cursor = x + (widths[column] - used) / 2
+                    else:
+                        cursor = x + pad
+                    line_top = y + pad + line_index * pitch
+                    for text, piece_font, piece_width, span in line:
+                        offset = 0
+                        if span.raise_ > 0:
+                            offset = -int(size * 0.18)
+                        elif span.raise_ < 0:
+                            offset = int(size * 0.20)
 
-                for text, span_font, span_width in drawn:
-                    draw.text((cursor, y + pad), text, font=span_font, fill="black")
-                    cursor += span_width
-                x += column_width
+                        if span.highlight:
+                            # reverse video, the only "colour" paper has
+                            draw.rectangle(
+                                [cursor - 1, line_top,
+                                 cursor + piece_width + 1, line_top + pitch - 2],
+                                fill="black",
+                            )
+                            draw.text((cursor, line_top + offset), text,
+                                      font=piece_font, fill="white")
+                        else:
+                            draw.text((cursor, line_top + offset), text,
+                                      font=piece_font, fill="black")
 
-            y += pitch + pad
+                        if span.underline:
+                            baseline = line_top + int(pitch * 0.82)
+                            draw.rectangle([cursor, baseline,
+                                            cursor + piece_width, baseline + 1], fill="black")
+
+                        cursor += piece_width
+                x += widths[column]
+
+            y += pitch * height + 2 * pad
 
             if borders == "none":
                 continue
@@ -980,8 +1091,9 @@ class MarkdownRenderer:
             # the outer frame and the column rules, drawn once the height of
             # the whole table is known
             draw.rectangle([left, top, right, y], outline="black", width=1)
-            for column in range(1, columns):
-                x = left + column * column_width
+            x = left
+            for column in range(columns - 1):
+                x += widths[column]
                 draw.rectangle([x, top, x, y], fill="black")
 
         return y

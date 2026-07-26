@@ -59,7 +59,9 @@ async function loadThemes() {
   if (!themes.length) {
     // the four built-ins are linked statically, so the UI still works if the
     // manifest is missing or unreadable
-    themes = ['1', '2', '3', '4'].map((id) => ({ id, name: `Theme ${id}`, print: {} }));
+    // the manifest's order is the menu's order and its first entry is the
+    // default, so a fallback list keeps the same order the manifest has
+    themes = ['4', '2', '3', '1'].map((id) => ({ id, name: `Theme ${id}`, print: {} }));
   }
 
   themes.forEach((theme) => {
@@ -167,6 +169,8 @@ function showView(name) {
   });
   if (name === 'compose') $('editor').focus();
   if (name === 'todos') refreshTodoPreview();
+  if (name === 'calendar') refreshCalendar();
+  if (name === 'labels') refreshLabel();
 }
 
 /* --------------------------------------------------------------- markdown */
@@ -223,22 +227,55 @@ function inlineToHtml(text) {
       (_m, body) => `<em>${body}</em>`);
 }
 
-function tableToHtml(rows, align = [], borders = '') {
+function tableToHtml(rows, align = [], borders = 'all', shares = []) {
   const head = rows[0] || [];
   const body = rows.slice(1);
   const width = Math.max(...rows.map((r) => r.length), 1);
-  const attribute = (i) => (align[i] && align[i] !== 'left'
-    ? ` data-align="${align[i]}" style="text-align:${align[i]}"` : '');
+  const attribute = (i) => {
+    const parts = [];
+    if (align[i] && align[i] !== 'left') {
+      parts.push(` data-align="${align[i]}" style="text-align:${align[i]}"`);
+    }
+    // The share also rides on the cell, since that is where the editor reads a
+    // column width from. The editor counts in pixels, so a share becomes one
+    // against a nominal table width; only the ratio between them matters,
+    // because it is normalised back to percentages on the way out.
+    if (shares[i]) parts.push(` colwidth="${Math.round(shares[i] * 6)}"`);
+    return parts.join('');
+  };
   const cells = (row, tag) => Array.from({ length: width }, (_v, i) =>
     `<${tag}${attribute(i)}>${inlineToHtml(row[i] || '') || '<br>'}</${tag}>`).join('');
   // A colgroup plus a fixed layout is what stops the columns jumping about
   // while a cell is being typed into; without it every keystroke re-measures
   // the whole table.
-  const cols = Array.from({ length: width },
-    () => `<col style="width:${(100 / width).toFixed(4)}%">`).join('');
-  const flag = borders ? ` data-borders="${borders}" class="borders-${borders}"` : '';
+  // the shares the document carries, or an even split if it carries none
+  const spread = shares.length === width && shares.every(Boolean)
+    ? shares.map((share) => (share * 100) / shares.reduce((sum, v) => sum + v, 0))
+    : Array.from({ length: width }, () => 100 / width);
+  const cols = spread.map((share) => `<col style="width:${share.toFixed(4)}%">`).join('');
+  const flag = ` data-borders="${borders}" class="borders-${borders}"`;
   return `<table${flag}><colgroup>${cols}</colgroup><thead><tr>${cells(head, 'th')}</tr></thead><tbody>${
     body.map((row) => `<tr>${cells(row, 'td')}</tr>`).join('')}</tbody></table>`;
+}
+
+/* A dragged column is a width in pixels, which means nothing on paper: what
+ * carries over is the share of the table it takes. Shares only travel if they
+ * were actually set, so a table nobody has dragged still prints sized to its
+ * contents. */
+function columnShares(table) {
+  const cols = Array.from(table.querySelectorAll('col'));
+  const widths = cols.map((col) => parseFloat(col.style.width) || 0);
+  const row = table.querySelector('tr');
+  const cells = row ? Array.from(row.children) : [];
+  const measured = cells.map((cell) => Number(cell.getAttribute('colwidth')) || 0);
+  const source = measured.some(Boolean) ? measured : widths;
+  const total = source.reduce((sum, value) => sum + value, 0);
+  if (!total || source.some((value) => !value)) return '';
+  const shares = source.map((value) => Math.round((value / total) * 100));
+  // an even split is what happens by default, so it is not worth recording
+  const even = Math.round(100 / shares.length);
+  if (shares.every((share) => Math.abs(share - even) <= 1)) return '';
+  return shares.join(',');
 }
 
 const cellAlignment = (cell) => {
@@ -252,7 +289,8 @@ const cellAlignment = (cell) => {
 function mdToHtml(md) {
   const lines = (md || '').replace(/\r\n/g, '\n').split('\n');
   const out = [];
-  let borders = '';
+  let borders = 'all';
+  let shares = [];
   let i = 0;
 
   while (i < lines.length) {
@@ -277,6 +315,8 @@ function mdToHtml(md) {
     const directive = /^<!--\s*table\s+(.*?)\s*-->$/.exec(trimmed);
     if (directive) {
       borders = (/borders=(\w+)/.exec(directive[1]) || [])[1] || '';
+      shares = ((/widths=([\d,]+)/.exec(directive[1]) || [])[1] || '')
+        .split(',').map(Number).filter(Boolean);
       i += 1;
       continue;
     }
@@ -299,8 +339,9 @@ function mdToHtml(md) {
         else rows.push(tableCells(lines[i]));
         i += 1;
       }
-      out.push(tableToHtml(rows, align, borders));
-      borders = '';
+      out.push(tableToHtml(rows, align, borders, shares));
+      borders = 'all';
+      shares = [];
       continue;
     }
 
@@ -420,13 +461,20 @@ function blockToMd(node) {
     const rows = Array.from(node.querySelectorAll('tr'))
       .map((tr) => Array.from(tr.children).map(cellText));
     if (!rows.length) return [];
-    // alignment rides in the separator row, where any other reader finds it;
-    // the border treatment has no markdown syntax, so it goes in a directive
+    // alignment rides in the separator row, where any other reader finds it.
+    // Borders and column widths have no markdown syntax at all, so they go in
+    // a directive comment: any other reader ignores it, and this one prints
+    // the table the width you dragged it to.
     const align = Array.from(node.querySelector('tr')?.children || [])
       .map((cell) => cell.dataset.align || 'left');
     const out = formatTable([rows[0], null, ...rows.slice(1)], align).split('\n');
-    const borders = node.dataset.borders;
-    return borders ? [`<!-- table borders=${borders} -->`, ...out] : out;
+    const parts = [];
+    // "all" is the default but it is still written down: a table that says
+    // nothing would otherwise be at the mercy of whatever the default becomes
+    parts.push(`borders=${node.dataset.borders || 'all'}`);   // theme|all|none
+    const widths = columnShares(node);
+    if (widths) parts.push(`widths=${widths}`);
+    return parts.length ? [`<!-- table ${parts.join(' ')} -->`, ...out] : out;
   }
   if (node.querySelector?.('img') && name !== 'IMG') {
     return Array.from(node.childNodes).flatMap(blockToMd);
@@ -503,11 +551,16 @@ function tableExtensions() {
     addAttributes() {
       return {
         ...this.parent?.(),
+        // A grid is what a table is for, so a table that says nothing gets
+        // one. The class rides along with the attribute, since the editor's
+        // own rules are drawn in CSS while the printer's are drawn in dots.
         borders: {
-          default: null,
-          parseHTML: (element) => element.dataset.borders || null,
-          renderHTML: (attributes) => (attributes.borders
-            ? { 'data-borders': attributes.borders } : {}),
+          default: 'all',
+          parseHTML: (element) => element.dataset.borders || 'all',
+          renderHTML: (attributes) => ({
+            'data-borders': attributes.borders || 'all',
+            class: `borders-${attributes.borders || 'all'}`,
+          }),
         },
       };
     },
@@ -635,6 +688,7 @@ function initRichEditor() {
       positionTableTools();
       positionImageTools();
       syncToolbarState();
+      syncTableBorders();
       updateCounts();
     },
     onSelectionUpdate: () => {
@@ -644,7 +698,8 @@ function initRichEditor() {
       syncToolbarState();
     },
     onBlur: () => setTimeout(() => {
-      if (!$('tableTools').contains(document.activeElement)) $('tableTools').hidden = true;
+      const ribbon = $('tableRibbon');
+      if (ribbon && !ribbon.contains(document.activeElement)) ribbon.hidden = true;
     }, 150),
   });
 }
@@ -653,7 +708,10 @@ function initEditorModes() {
   initRichEditor();
   $('modeRendered').addEventListener('click', () => setEditorMode('rendered'));
   $('modeRaw').addEventListener('click', () => setEditorMode('raw'));
-  setEditorMode(localStorage.getItem(EDITOR_MODE_KEY) === 'raw' ? 'raw' : 'rendered');
+  // Always open in the rendered editor. Raw markdown is there when you want
+  // it, but it is a view of the document rather than a mode to be left in, and
+  // opening in it is a surprise every time.
+  setEditorMode('rendered');
   initTableTools();
   initImageTools();
   tt.on('focus', positionSelectionMenus);
@@ -664,6 +722,7 @@ function initEditorModes() {
     }, 150);
   });
   syncToolbarState();
+  syncTableBorders();
 }
 
 /* ---------------------------------------------------------------- pictures */
@@ -914,19 +973,44 @@ function setCellAlign(align) {
 
 const BORDER_MODES = ['theme', 'all', 'none'];
 
-function cycleBorders() {
-  const table = currentTableElement();
-  if (!table) return;
-  const now = table.dataset.borders || 'theme';
-  const next = BORDER_MODES[(BORDER_MODES.indexOf(now) + 1) % BORDER_MODES.length];
-  if (next === 'theme') delete table.dataset.borders;
-  else table.dataset.borders = next;
-  table.classList.toggle('borders-all', next === 'all');
-  table.classList.toggle('borders-none', next === 'none');
-  tt.commands.setContent(tt.view.dom.innerHTML, false);
-  toast(`Table borders: ${next}`);
-  schedulePreview();
+/* Borders are set outright now rather than cycled: a menu can say what the
+ * three choices are, where a button that changes on every press cannot. */
+function setBorders(mode) {
+  if (!tt?.isActive('table')) return;
+  // set on the node rather than on the element: the element is a rendering of
+  // the node, and setting it there is undone the moment anything re-renders
+  tt.commands.updateAttributes('table', { borders: mode || 'theme' });
+  syncTableBorders();
 }
+
+/* The editor draws tables through a node view of its own, which does not carry
+ * our attribute onto the element, so the element is told separately. The node
+ * stays the truth; this only decides which rules are painted on screen. */
+function syncTableBorders() {
+  if (!tt) return;
+  const tables = [];
+  tt.state.doc.descendants((node, pos) => {
+    if (node.type.name === 'table') tables.push([node, pos]);
+    return true;
+  });
+  tables.forEach(([node, pos]) => {
+    let element = tt.view.nodeDOM(pos);
+    if (element && element.nodeType === 1 && element.tagName !== 'TABLE') {
+      element = element.querySelector('table') || element;
+    }
+    if (!element || element.tagName !== 'TABLE') return;
+    const mode = node.attrs.borders || 'all';
+    element.dataset.borders = mode;
+    element.classList.toggle('borders-all', mode === 'all');
+    element.classList.toggle('borders-none', mode === 'none');
+  });
+}
+
+const cycleBorders = () => {
+  const now = currentTableElement()?.dataset.borders || 'all';
+  setBorders(now === 'all' ? 'none' : (now === 'none' ? 'theme' : 'all'));
+  schedulePreview();
+};
 
 function currentTableElement() {
   if (!tt || !tt.isActive('table')) return null;
@@ -939,20 +1023,147 @@ function currentTableElement() {
  * to the table it covered whatever line sat above it, which is usually the one
  * being worked on. */
 function positionTableTools() {
-  const tools = $('tableTools');
   const table = isRendered() ? currentTableElement() : null;
-  tools.hidden = !table;
+  const column = $('tableAddColumn');
+  const row = $('tableAddRow');
+  const ribbon = $('tableRibbon');
+  if (!column || !row || !ribbon) return;
+
+  if (!table) {
+    [column, row, ribbon].forEach((element) => { element.hidden = true; });
+    return;
+  }
+
+  // positioned against the editor shell, which is the nearest thing with a
+  // position of its own; the table's own box moves as rows are added
+  const shell = $('rich').closest('.editor-shell') || $('rich').parentElement;
+  const frame = shell.getBoundingClientRect();
+  const box = table.getBoundingClientRect();
+
+  [column, row, ribbon].forEach((element) => { element.hidden = false; });
+  // inside the right edge: a table usually runs the full width of the editor,
+  // so a plus placed beyond it would be clipped by the panel
+  column.style.left = `${Math.min(box.right - frame.left - 28, frame.width - 34)}px`;
+  column.style.top = `${box.top - frame.top + (box.height - 24) / 2}px`;
+  row.style.left = `${box.left - frame.left}px`;
+  row.style.top = `${box.bottom - frame.top + 6}px`;
+
+  const width = ribbon.offsetWidth || 260;
+  ribbon.style.left = `${Math.max(6, Math.min(box.right - frame.left - width, frame.width - width - 6))}px`;
+  ribbon.style.top = `${Math.max(2, box.top - frame.top - ribbon.offsetHeight - 6)}px`;
+
+  describeTable();
 }
 
 function initTableTools() {
-  $('tableTools').querySelectorAll('[data-table]').forEach((button) => {
-    // mousedown, so the command runs before the caret is lost to the button
-    button.addEventListener('mousedown', (event) => {
-      event.preventDefault();
-      TABLE_TOOLS[button.dataset.table]?.();
+  const run = (action) => {
+    TABLE_TOOLS[action]?.();
+    positionTableTools();
+    schedulePreview();
+  };
+
+  // mousedown throughout, so a command runs before the caret is lost to the
+  // button that ran it
+  const press = (element, handler) => element?.addEventListener('mousedown', (event) => {
+    event.preventDefault();
+    handler();
+  });
+
+  press($('tableAddColumn'), () => run('col-after'));
+  press($('tableAddRow'), () => run('row-after'));
+
+  document.querySelectorAll('#tableRibbon [data-table]').forEach((button) => {
+    press(button, () => run(button.dataset.table));
+  });
+  document.querySelectorAll('#tableRibbon [data-borders]').forEach((button) => {
+    press(button, () => {
+      setBorders(button.dataset.borders || 'theme');
       positionTableTools();
+      schedulePreview();
     });
   });
+  press($('tableWidthsEven'), () => applyWidthFields(true));
+}
+
+/* The ribbon reflects the table it is sitting on: which border treatment is in
+ * force, and how the width is divided. */
+function describeTable() {
+  const table = currentTableElement();
+  if (!table) return;
+  const mode = table.dataset.borders || 'all';
+  document.querySelectorAll('#tableRibbon [data-borders]').forEach((button) => {
+    button.classList.toggle('is-active', (button.dataset.borders || 'theme') === mode);
+  });
+  buildWidthFields(table, table.querySelector('tr')?.children.length || 0);
+}
+
+/* One field per column, in percent. A number is a poorer gesture than dragging
+ * an edge, but it is one that survives being saved: the shares travel with the
+ * document and the renderer prints the table divided the same way. */
+function buildWidthFields(table, columns) {
+  const host = $('tableWidths');
+  if (!host) return;
+  const current = readShares(table, columns);
+  // rebuilding on every keystroke would take the caret out of the field being
+  // typed into, so it is only rebuilt when the shape changes
+  if (host.children.length === columns
+      && Array.from(host.children).every((field, index) => Number(field.value) === current[index])) {
+    return;
+  }
+  if (document.activeElement?.parentElement === host) return;
+
+  host.innerHTML = '';
+  current.forEach((share, index) => {
+    const field = document.createElement('input');
+    field.className = 'rib-width';
+    field.type = 'number';
+    field.min = '5';
+    field.max = '90';
+    field.step = '5';
+    field.value = String(share);
+    field.title = `Column ${index + 1}, as a percentage of the table`;
+    field.addEventListener('change', () => applyWidthFields());
+    host.append(field);
+  });
+}
+
+function readShares(table, columns) {
+  const cells = Array.from(table.querySelector('tr')?.children || []);
+  const measured = cells.map((cell) => Number(cell.getAttribute('colwidth')) || 0);
+  if (measured.some(Boolean) && measured.every(Boolean)) {
+    const total = measured.reduce((sum, value) => sum + value, 0);
+    return measured.map((value) => Math.round((value / total) * 100));
+  }
+  const even = Math.round(100 / Math.max(1, columns));
+  return Array.from({ length: columns }, () => even);
+}
+
+function applyWidthFields(even = false) {
+  const table = currentTableElement();
+  const host = $('tableWidths');
+  if (!table || !host) return;
+  const fields = Array.from(host.children);
+  const columns = fields.length || 1;
+  const shares = even
+    ? Array.from({ length: columns }, () => Math.round(100 / columns))
+    : fields.map((field) => Math.max(5, Number(field.value) || 0));
+  const total = shares.reduce((sum, value) => sum + value, 0) || 1;
+
+  // pixels, because that is what the editor's own column widths are in
+  const span = table.clientWidth || 600;
+  Array.from(table.querySelectorAll('tr')).forEach((row) => {
+    Array.from(row.children).forEach((cell, index) => {
+      if (!shares[index]) return;
+      cell.setAttribute('colwidth', String(Math.round((shares[index] / total) * span)));
+    });
+  });
+  Array.from(table.querySelectorAll('col')).forEach((col, index) => {
+    col.style.width = `${((shares[index] || 0) * 100 / total).toFixed(4)}%`;
+  });
+
+  tt.commands.setContent(tt.view.dom.innerHTML, false);
+  positionTableTools();
+  schedulePreview();
 }
 
 /* ---------------------------------------------------------- rich commands */
@@ -1627,8 +1838,14 @@ function debounce(key, fn, wait = 260) {
 const refreshPreview = () => renderInto('compose', editorMarkdown(), $('preview'), $('previewMeta'));
 const schedulePreview = () => debounce('compose', refreshPreview);
 
+/* Direction is a property of the document being composed, not of the printer,
+ * so the panes that write their own document keep their own: a to-do list is
+ * always set across the roll, whatever Compose is doing. */
+const acrossOptions = () => ({ ...renderOptions(), orientation: 'portrait' });
+
 const refreshTodoPreview = () =>
-  renderInto('todos', todosAsMarkdown(), $('todoPreview'), $('todoPreviewMeta'));
+  renderInto('todos', todosAsMarkdown(), $('todoPreview'), $('todoPreviewMeta'),
+             acrossOptions());
 const scheduleTodoPreview = () => debounce('todos', refreshTodoPreview);
 
 /* -------------------------------------------------------------- connection */
@@ -1796,9 +2013,452 @@ function openPreset(preset) {
     setPrintFont(preset.options.font, preset.options.size, { pin: true });
   }
   if (preset.options?.darkness) $('darkness').value = preset.options.darkness;
+  // direction is part of the design, not of the machine: a banner opened into
+  // Compose should arrive turned the way it was drawn
+  if (preset.options?.orientation) {
+    if (preset.options.page_length) setLength(preset.options.page_length);
+    setDirection(preset.options.orientation);
+  }
   showView('compose');
   refreshPreview();
   toast(`Opened "${preset.name}"`);
+}
+
+
+/* ------------------------------------------------------------------ symbols */
+/* Nine hundred glyphs is a reference work, not a menu, so the search is the
+ * interface: the table is fetched once and filtered in the browser, and the
+ * groups are there for the times you would rather browse than name a thing. */
+let symbolGroups = [];
+
+async function loadSymbols() {
+  if (symbolGroups.length) return;
+  try {
+    const data = await api('/api/symbols');
+    symbolGroups = data.groups || [];
+  } catch (error) {
+    symbolGroups = [];
+  }
+}
+
+function symbolMatches(query) {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return symbolGroups;
+  return symbolGroups
+    .map((group) => ({
+      name: group.name,
+      symbols: group.symbols.filter((symbol) =>
+        symbol.char === needle
+        || symbol.name.toLowerCase().includes(needle)
+        || symbol.use.toLowerCase().includes(needle)
+        || group.name.toLowerCase().includes(needle)),
+    }))
+    .filter((group) => group.symbols.length);
+}
+
+function renderSymbols(query = '') {
+  const results = $('symbolResults');
+  const groups = symbolMatches(query);
+  results.innerHTML = '';
+  if (!groups.length) {
+    results.innerHTML = '<p class="hint">Nothing by that name.</p>';
+    return;
+  }
+  groups.forEach((group) => {
+    const section = document.createElement('section');
+    section.className = 'symbol-group';
+    section.innerHTML = `<h3>${escapeHtml(group.name)}</h3><div class="symbol-grid"></div>`;
+    const grid = section.querySelector('.symbol-grid');
+    group.symbols.forEach((symbol) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'symbol';
+      button.textContent = symbol.char;
+      button.title = `${symbol.name} - ${symbol.use}`;
+      button.addEventListener('click', () => insertSymbol(symbol.char));
+      grid.append(button);
+    });
+    results.append(section);
+  });
+}
+
+function insertSymbol(character) {
+  if (isRendered() && tt) {
+    tt.chain().focus().insertContent(character).run();
+  } else {
+    const area = editor();
+    replaceRange(area.selectionStart, area.selectionEnd, character);
+  }
+  schedulePreview();
+}
+
+/* The overflow menu. Opened from its button, closed by choosing something,
+ * clicking away, or Escape, and positioned under the button rather than in a
+ * corner so the connection between the two is obvious. */
+function initToolMenu() {
+  const button = $('moreTools');
+  const menu = $('toolMenu');
+  if (!button || !menu) return;
+
+  const close = () => {
+    menu.hidden = true;
+    button.setAttribute('aria-expanded', 'false');
+  };
+
+  button.addEventListener('mousedown', (event) => {
+    event.preventDefault();
+    if (!menu.hidden) { close(); return; }
+    const frame = button.offsetParent?.getBoundingClientRect();
+    const box = button.getBoundingClientRect();
+    if (frame) {
+      menu.style.left = `${Math.max(6, box.left - frame.left)}px`;
+      menu.style.top = `${box.bottom - frame.top + 4}px`;
+    }
+    menu.hidden = false;
+    button.setAttribute('aria-expanded', 'true');
+  });
+
+  menu.addEventListener('mousedown', () => setTimeout(close, 0));
+  document.addEventListener('mousedown', (event) => {
+    if (!menu.hidden && !menu.contains(event.target) && event.target !== button) close();
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') close();
+  });
+}
+
+function initSymbols() {
+  const dialog = $('symbolPicker');
+  const search = $('symbolSearch');
+  if (!dialog) return;
+
+  $('symbolsBtn')?.addEventListener('click', async () => {
+    await loadSymbols();
+    renderSymbols(search.value);
+    dialog.showModal();
+    search.focus();
+    search.select();
+  });
+  search.addEventListener('input', () => debounce('symbols', () => renderSymbols(search.value), 120));
+  $('symbolClose').addEventListener('click', () => dialog.close());
+}
+
+/* ----------------------------------------------------------------- calendar */
+/* A calendar is drawn, not written, so it does not pass through the markdown
+ * renderer: the server draws the grid at the paper's width and hands back a
+ * page. What is left here is choosing which weeks to ask for. */
+const calendarBody = () => ({
+  range: $('calRange').value,
+  year: Number($('calYear').value) || new Date().getFullYear(),
+  month: Number($('calMonth').value) || (new Date().getMonth() + 1),
+  date: $('calDate').value,
+  size: Number($('calSize').value) || 14,
+});
+
+async function refreshCalendar() {
+  await renderImageInto('calendar', '/api/calendar', calendarBody(),
+                        $('calPreview'), $('calPreviewMeta'));
+}
+
+function initCalendar() {
+  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
+    'August', 'September', 'October', 'November', 'December'];
+  const today = new Date();
+  const select = $('calMonth');
+  if (!select) return;
+
+  months.forEach((name, index) => select.append(new Option(name, String(index + 1))));
+  select.value = String(today.getMonth() + 1);
+  $('calYear').value = today.getFullYear();
+  $('calDate').value = today.toISOString().slice(0, 10);
+
+  const onChange = () => {
+    const week = $('calRange').value === 'week';
+    $('calMonthFields').hidden = week;
+    $('calWeekFields').hidden = !week;
+    debounce('calendar', refreshCalendar, 150);
+  };
+  ['calRange', 'calMonth', 'calYear', 'calDate', 'calSize']
+    .forEach((id) => $(id).addEventListener('change', onChange));
+
+  $('calPrint').addEventListener('click', async () => {
+    if (!state.printer.connected) { toast('Not connected to a printer', true); return; }
+    try {
+      const result = await api('/api/calendar',
+        { method: 'POST', body: JSON.stringify({ ...calendarBody(), print: true }) });
+      toast('Printed the calendar');
+      status(result.message || 'Ready');
+    } catch (error) {
+      toast(`Could not print: ${error.message}`, true);
+    }
+  });
+  onChange();
+}
+
+/* ------------------------------------------------------------------- labels */
+/* A label is a printed background with your words placed on it, so placing is
+ * done by pointing at the label rather than by typing coordinates into a form.
+ * Coordinates are in the background's own pixels, which is why the click is
+ * scaled by however large the preview happens to be drawn. */
+const labelState = { template: null, areas: [], selected: null };
+
+async function loadTemplates() {
+  try {
+    const data = await api('/api/templates');
+    const select = $('labelTemplate');
+    if (!select) return;
+    select.innerHTML = '';
+    (data.templates || []).forEach((template) => {
+      const option = new Option(template.name.replace(/^CTP500_/, ''), template.file);
+      option.dataset.width = template.width;
+      option.dataset.height = template.height;
+      select.append(option);
+    });
+    labelState.template = data.templates?.[0] || null;
+  } catch (error) {
+    toast('Could not list the label backgrounds', true);
+  }
+}
+
+function currentTemplate() {
+  const select = $('labelTemplate');
+  const option = select?.selectedOptions?.[0];
+  if (!option) return null;
+  return { file: option.value, width: Number(option.dataset.width),
+           height: Number(option.dataset.height) };
+}
+
+function labelAreaRow(area, index) {
+  const row = document.createElement('div');
+  row.className = 'item label-area';
+  row.innerHTML = `
+    <div class="row-form">
+      <input class="control" data-field="text" value="${escapeHtml(area.text)}"
+             placeholder="Text for this block">
+      <input class="control narrow" data-field="font_size" type="number" min="8" max="90"
+             step="1" value="${area.font_size}" title="Type size">
+      <button class="btn subtle" data-act="remove" title="Remove this block">Remove</button>
+    </div>
+    <p class="hint">at ${area.x}, ${area.y} - drag it on the label to move it</p>`;
+  row.querySelector('[data-field="text"]').addEventListener('input', (event) => {
+    area.text = event.target.value;
+    debounce('label', refreshLabel, 200);
+  });
+  row.querySelector('[data-field="font_size"]').addEventListener('change', (event) => {
+    area.font_size = Number(event.target.value) || 24;
+    refreshLabel();
+  });
+  row.querySelector('[data-act="remove"]').addEventListener('click', () => {
+    labelState.areas.splice(index, 1);
+    renderLabelAreas();
+    refreshLabel();
+  });
+  return row;
+}
+
+function renderLabelAreas() {
+  const list = $('labelAreas');
+  list.innerHTML = '';
+  if (!labelState.areas.length) {
+    list.innerHTML = '<p class="hint">No text yet. Click the label where you want some.</p>';
+    return;
+  }
+  labelState.areas.forEach((area, index) => list.append(labelAreaRow(area, index)));
+}
+
+function labelBody(extra = {}) {
+  const template = currentTemplate();
+  return {
+    template: template?.file,
+    areas: labelState.areas,
+    darkness: Number($('darkness')?.value) || 1.5,
+    ...extra,
+  };
+}
+
+async function refreshLabel() {
+  const template = currentTemplate();
+  if (!template) return;
+  $('labelMeta').textContent = `${template.width} x ${template.height}`;
+  await renderImageInto('label', '/api/label', labelBody(),
+                        $('labelPreview'), $('labelPreviewMeta'));
+}
+
+/* the preview is drawn at whatever width fits, so a click has to be put back
+ * into the background's own coordinates before it means anything */
+function labelPointFromEvent(event) {
+  const image = $('labelPreview');
+  const template = currentTemplate();
+  if (!image.naturalWidth || !template) return null;
+  const box = image.getBoundingClientRect();
+  const scale = template.width / box.width;
+  return {
+    x: Math.max(0, Math.round((event.clientX - box.left) * scale)),
+    y: Math.max(0, Math.round((event.clientY - box.top) * scale)),
+  };
+}
+
+function initLabels() {
+  const stage = $('labelStage');
+  if (!stage) return;
+
+  $('labelTemplate').addEventListener('change', refreshLabel);
+  $('labelAdd').addEventListener('click', () => {
+    labelState.areas.push({ x: 20, y: 20, text: 'Text', font_size: 28,
+                            font_family: currentFont(), alignment: 'left' });
+    renderLabelAreas();
+    refreshLabel();
+  });
+  $('labelClear').addEventListener('click', () => {
+    labelState.areas = [];
+    renderLabelAreas();
+    refreshLabel();
+  });
+
+  // A click on empty label makes a block; a drag that starts on one moves it.
+  // Which of the two it was is only known on release, so the decision waits.
+  let dragging = null;
+  let moved = false;
+
+  const nearestArea = (point) => {
+    const template = currentTemplate();
+    const reach = template ? template.width * 0.18 : 60;
+    let best = null;
+    let bestDistance = reach;
+    labelState.areas.forEach((area) => {
+      const distance = Math.hypot(area.x - point.x, area.y - point.y);
+      if (distance < bestDistance) { best = area; bestDistance = distance; }
+    });
+    return best;
+  };
+
+  stage.addEventListener('pointerdown', (event) => {
+    if (event.target.id !== 'labelPreview') return;
+    const point = labelPointFromEvent(event);
+    if (!point) return;
+    moved = false;
+    dragging = nearestArea(point);
+    if (dragging) {
+      dragging.grabX = point.x - dragging.x;
+      dragging.grabY = point.y - dragging.y;
+      stage.setPointerCapture(event.pointerId);
+    }
+  });
+
+  stage.addEventListener('pointermove', (event) => {
+    if (!dragging) return;
+    const point = labelPointFromEvent(event);
+    if (!point) return;
+    moved = true;
+    dragging.x = Math.max(0, point.x - dragging.grabX);
+    dragging.y = Math.max(0, point.y - dragging.grabY);
+    debounce('label', refreshLabel, 90);
+  });
+
+  stage.addEventListener('pointerup', (event) => {
+    if (dragging) {
+      delete dragging.grabX;
+      delete dragging.grabY;
+      dragging = null;
+      if (moved) { renderLabelAreas(); refreshLabel(); }
+      return;
+    }
+    if (event.target.id !== 'labelPreview') return;
+    const point = labelPointFromEvent(event);
+    if (!point) return;
+    labelState.areas.push({ ...point, text: 'Text', font_size: 28,
+                            font_family: currentFont(), alignment: 'left' });
+    renderLabelAreas();
+    refreshLabel();
+  });
+
+  $('labelPrint').addEventListener('click', async () => {
+    if (!state.printer.connected) { toast('Not connected to a printer', true); return; }
+    try {
+      const result = await api('/api/label',
+        { method: 'POST', body: JSON.stringify(labelBody({ print: true })) });
+      toast('Printed the label');
+      status(result.message || 'Ready');
+    } catch (error) {
+      toast(`Could not print: ${error.message}`, true);
+    }
+  });
+
+  renderLabelAreas();
+}
+
+/* ------------------------------------------------- pages that are pictures */
+/* Calendars and labels come back as a PNG rather than as JSON, so they share
+ * one fetch that swaps the image and reports the paper it will use. */
+async function renderImageInto(key, url, body, img, meta) {
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) throw new Error('render failed');
+    const blob = await response.blob();
+    if (previewUrls[key]) URL.revokeObjectURL(previewUrls[key]);
+    previewUrls[key] = URL.createObjectURL(blob);
+    img.src = previewUrls[key];
+    img.onload = () => {
+      meta.textContent =
+        `${img.naturalWidth} x ${img.naturalHeight} - ${toMm(img.naturalHeight)} mm`;
+    };
+  } catch (error) {
+    meta.textContent = 'preview failed';
+  }
+}
+
+/* --------------------------------------------------- tear-off calibration */
+/* How far the paper has to come out to clear the tear bar is a fact about the
+ * printer's body, so it is measured rather than guessed: print a strip that
+ * ends in a line, tear it, and see where the tear landed. */
+let tearMm = 1;
+
+function initTearWizard() {
+  const test = $('tearTestBtn');
+  if (!test) return;
+  const label = $('tearTestMm');
+  const accept = $('tearAcceptBtn');
+  const next = $('tearNextBtn');
+  const hint = $('tearWizardHint');
+
+  const show = () => { label.textContent = String(tearMm); };
+
+  test.addEventListener('click', async () => {
+    if (!state.printer.connected) { toast('Not connected to a printer', true); return; }
+    try {
+      await api('/api/tear-test', { method: 'POST', body: JSON.stringify({ mm: tearMm }) });
+      accept.disabled = false;
+      next.disabled = false;
+      hint.textContent = 'Tear it off. Did the tear land on the printed line?';
+    } catch (error) {
+      toast(`Could not print the test: ${error.message}`, true);
+    }
+  });
+
+  accept.addEventListener('click', async () => {
+    try {
+      await api('/api/tear-gap', { method: 'POST', body: JSON.stringify({ mm: tearMm }) });
+      $('tearGap').value = tearMm;
+      hint.textContent = `Saved. Every print now feeds ${tearMm} mm after it finishes.`;
+      accept.disabled = true;
+      next.disabled = true;
+      toast(`Tear-off gap set to ${tearMm} mm`);
+    } catch (error) {
+      toast(`Could not save: ${error.message}`, true);
+    }
+  });
+
+  next.addEventListener('click', () => {
+    tearMm = Math.min(40, tearMm + 1);
+    show();
+    hint.textContent = 'Print again at the new gap and judge the tear once more.';
+  });
+
+  show();
 }
 
 /* --------------------------------------------------------- preset editor */
@@ -1813,6 +2473,10 @@ function openPresetEditor(preset) {
   $('presetFont').value = preset?.options?.font || currentFont();
   $('presetSize').value = preset?.options?.size || $('fontSize').value || 24;
   $('presetDarkness').value = preset?.options?.darkness || $('darkness').value || 1;
+  $('presetDirection').value = preset?.options?.orientation || currentDirection();
+  $('presetStrip').value = toMm(preset?.options?.page_length
+    || Number(localStorage.getItem(LENGTH_KEY)) || 1200);
+  syncPresetDirection();
 
   $('presetDelete').hidden = !preset;
   $('presetDuplicate').hidden = !preset;
@@ -1827,11 +2491,19 @@ function closePresetEditor() {
   editingPreset = null;
 }
 
+/* the strip fields only mean anything along the roll */
+function syncPresetDirection() {
+  const along = $('presetDirection')?.value === 'landscape';
+  if ($('presetAlongFields')) $('presetAlongFields').hidden = !along;
+}
+
 function presetEditorOptions() {
   return {
     font: $('presetFont').value || currentFont(),
     size: Number($('presetSize').value) || 24,
     darkness: Number($('presetDarkness').value) || 1,
+    orientation: $('presetDirection')?.value || 'portrait',
+    page_length: toDots(Number($('presetStrip')?.value) || 150),
   };
 }
 
@@ -2046,7 +2718,7 @@ function initTodos() {
 
   $('printTodosBtn').addEventListener('click', () => {
     if (!state.todos.length) { toast('Nothing to print', true); return; }
-    printText(todosAsMarkdown(), 'Printed to-do list');
+    printText(todosAsMarkdown(), 'Printed to-do list', acrossOptions());
   });
 
   $('todoToPresetBtn').addEventListener('click', () => {
@@ -2171,6 +2843,11 @@ async function boot() {
   initFontControls();
   initOrientation();
   initPresetEditor();
+  initSymbols();
+  initToolMenu();
+  initCalendar();
+  initLabels();
+  initTearWizard();
   initShortcuts();
 
   editor().addEventListener('input', () => {
@@ -2182,7 +2859,8 @@ async function boot() {
 
   try {
     await refreshState();
-    await Promise.all([loadFonts(), loadDitherModes(), loadPresets(), loadTodos()]);
+    await Promise.all([loadFonts(), loadDitherModes(), loadPresets(), loadTodos(),
+                       loadTemplates()]);
   } catch (error) {
     toast(`Could not reach the server: ${error.message}`, true);
   }

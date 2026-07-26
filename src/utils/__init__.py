@@ -1,4 +1,4 @@
-# utilities module for ctp500 printer control
+# utilities
 
 from .font_manager import FontManager, FontInfo, get_font_manager
 from .validators import (
@@ -14,7 +14,6 @@ from .validators import (
     is_valid_image_extension,
     is_valid_text_extension,
 )
-from .file_dialogs import open_file_dialog, save_file_dialog
 
 __all__ = [
     "FontManager",
@@ -31,6 +30,4 @@ __all__ = [
     "sanitize_filename",
     "is_valid_image_extension",
     "is_valid_text_extension",
-    "open_file_dialog",
-    "save_file_dialog",
 ]

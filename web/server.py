@@ -12,6 +12,7 @@
 
 import base64
 import binascii
+import datetime
 import hashlib
 import io
 import json
@@ -30,6 +31,10 @@ from typing import Any, Callable, Dict, Optional, Tuple
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from src.config.defaults import (                # noqa: E402
+    MAX_TEAR_GAP_MM,
+    TEAR_CALIBRATION_LINES,
+)
 from src.config.printer_profile import (          # noqa: E402
     get_dpi,
     get_printer_width,
@@ -53,7 +58,13 @@ from src.processing.image_dither import (                     # noqa: E402
     DITHER_LABELS,
     DITHER_MODES,
 )
+from src.processing.calendar_renderer import CalendarRenderer   # noqa: E402
 from src.processing.image_processor import ImageProcessor      # noqa: E402
+from src.processing.label_renderer import (                    # noqa: E402
+    LabelRenderer,
+    TextAreaConfig,
+)
+from src.processing.symbols import SYMBOL_GROUPS               # noqa: E402
 from src.processing.markdown_renderer import MarkdownRenderer  # noqa: E402
 from src.utils.font_manager import get_font_manager            # noqa: E402
 
@@ -77,6 +88,9 @@ USER_THEMES_DIR = DATA_DIR / "themes"
 # Images live beside the presets rather than in the document: markdown carries
 # a reference, and the renderer loads the file when it prints.
 IMAGES_DIR = DATA_DIR / "images"
+
+# label backgrounds ship with the app; a user's own go beside them
+TEMPLATES_DIR = ROOT / "gallery" / "templates"
 
 DEFAULT_FONT = "DejaVuSansMono"   # family names carry no spaces; a miss falls back silently
 DEFAULT_SIZE = 24
@@ -291,12 +305,30 @@ class Session:
                 self.printer.disconnect()
 
     # --- printing ------------------------------------------------------------
+    def print_image(self, image, feed_dots: int = 0) -> Tuple[bool, str]:
+        """Print a page that is already a picture.
+
+        Calendars, labels and calibration strips are drawn rather than set from
+        markdown, so they come here instead of through print_text. Everything
+        after the rendering is the same, and lives in one place.
+        """
+        if not self.printer.is_connected:
+            return False, "Not connected to a printer"
+
+        processor = ImageProcessor(
+            brightness=1.0, contrast=1.0, auto_resize=False,
+            printer_width=get_printer_width(),
+        )
+        return self._send(processor.process(image), feed_dots or None)
+
     def print_text(self, text: str, options: Dict[str, Any]) -> Tuple[bool, str]:
         if not self.printer.is_connected:
             return False, "Not connected to a printer"
 
-        image = self.render_for_print(text, options)
-        gap_mm = get_tear_gap_mm()
+        return self._send(self.render_for_print(text, options), None)
+
+    def _send(self, image, feed_dots: Optional[int]) -> Tuple[bool, str]:
+        gap_dots = feed_dots if feed_dots is not None else mm_to_dots(get_tear_gap_mm())
 
         with self.lock:
             try:
@@ -304,10 +336,8 @@ class Session:
                 self.printer.start_print()
                 for band in PrinterProtocol.build_raster_bands(image):
                     self.printer.send_image(band)
-                if gap_mm:
-                    self.printer.send_raw(
-                        PrinterProtocol.build_feed_dots(mm_to_dots(gap_mm))
-                    )
+                if gap_dots:
+                    self.printer.send_raw(PrinterProtocol.build_feed_dots(gap_dots))
                 self.printer.end_print()
             except Exception as error:
                 logger.warning("Print failed: %s", error)
@@ -359,6 +389,53 @@ def route(method: str, pattern: str):
     return register
 
 
+# --- helpers shared by the picture-shaped endpoints --------------------------
+def _png(handler, image: Image.Image):
+    buffer = io.BytesIO()
+    image.convert("L").save(buffer, format="PNG", optimize=True)
+    return 200, ("image/png", buffer.getvalue())
+
+
+def _fit(image: Image.Image) -> Image.Image:
+    """Scale a rendered page to the paper, and never past it."""
+    width = get_printer_width()
+    if image.width == width:
+        return image
+    height = max(1, round(image.height * width / image.width))
+    return image.resize((width, height), Image.LANCZOS)
+
+
+def _parse_date(value) -> Optional[datetime.datetime]:
+    try:
+        return datetime.datetime.strptime(str(value), "%Y-%m-%d")
+    except (TypeError, ValueError):
+        return None
+
+
+def _print_image(image: Image.Image, feed_dots: int = 0):
+    ok, message = SESSION.print_image(image, feed_dots=feed_dots)
+    return (200 if ok else 400), {"ok": ok, "message": message}
+
+
+def _tear_sample(mm: float) -> Image.Image:
+    """A short page whose last line is where the tear should land."""
+    from PIL import ImageDraw
+
+    width = get_printer_width()
+    font = get_font_manager().load_font(family=DEFAULT_FONT, size=22)
+    line_height = 32
+    height = line_height * (TEAR_CALIBRATION_LINES + 1) + 12
+    image = Image.new("RGB", (width, height), "white")
+    draw = ImageDraw.Draw(image)
+
+    draw.text((10, 6), f"TEAR TEST {mm:g}mm", font=font, fill="black")
+    for line in range(1, TEAR_CALIBRATION_LINES):
+        draw.text((10, 6 + line * line_height), "." * 24, font=font, fill="black")
+    rule_y = height - 8
+    draw.line([(0, rule_y), (width, rule_y)], fill="black", width=3)
+    return image
+
+
 # --- state ---
 @route("GET", "/api/state")
 def api_state(handler, match, body):
@@ -390,6 +467,107 @@ def api_dither(handler, match, body):
         "modes": [{"id": mode, "label": DITHER_LABELS.get(mode, mode)} for mode in DITHER_MODES],
         "default": "floyd-steinberg",
     }
+
+
+@route("GET", "/api/symbols")
+def api_symbols(handler, match, body):
+    """The glyph table, grouped, for the picker.
+
+    Sent whole rather than searched here: it is a few tens of kilobytes and
+    never changes, so the browser can hold it and search it as you type.
+    """
+    return 200, {
+        "groups": [
+            {"name": name,
+             "symbols": [{"char": char, "name": label, "use": use}
+                         for char, label, use in symbols]}
+            for name, symbols in SYMBOL_GROUPS.items()
+        ]
+    }
+
+
+@route("POST", "/api/calendar")
+def api_calendar(handler, match, body):
+    """Render a month or a week as a page, in the paper's own width."""
+    renderer = CalendarRenderer(font_size=int(body.get("size") or 14))
+    try:
+        if (body.get("range") or "month") == "week":
+            image = renderer.render_week(_parse_date(body.get("date")))
+        else:
+            today = datetime.date.today()
+            image = renderer.render_month(
+                int(body.get("year") or today.year),
+                int(body.get("month") or today.month),
+            )
+    except (ValueError, IndexError, KeyError) as error:
+        return 400, {"error": str(error)}
+
+    if body.get("print"):
+        return _print_image(_fit(image))
+    return _png(handler, _fit(image))
+
+
+@route("GET", "/api/templates")
+def api_templates(handler, match, body):
+    """The label backgrounds on offer, with their sizes.
+
+    A caller needs the size to place text on one, since the coordinates are in
+    the template's own pixels rather than the paper's.
+    """
+    entries = []
+    for path in sorted(TEMPLATES_DIR.glob("*.png")):
+        try:
+            with Image.open(path) as picture:
+                width, height = picture.size
+        except OSError:
+            continue
+        entries.append({"name": path.stem, "file": path.name,
+                        "width": width, "height": height})
+    return 200, {"templates": entries}
+
+
+@route("GET", r"/templates/(?P<name>[A-Za-z0-9._-]+\.png)")
+def api_template_file(handler, match, body):
+    target = (TEMPLATES_DIR / match.group("name")).resolve()
+    if target.parent != TEMPLATES_DIR.resolve() or not target.is_file():
+        return 404, {"error": "not found"}
+    return 200, ("image/png", target.read_bytes())
+
+
+@route("POST", "/api/label")
+def api_label(handler, match, body):
+    """Compose text onto a label background and preview or print it."""
+    name = str(body.get("template") or "")
+    target = (TEMPLATES_DIR / name).resolve()
+    if target.parent != TEMPLATES_DIR.resolve() or not target.is_file():
+        return 400, {"error": "no such template"}
+
+    with Image.open(target) as picture:
+        background = picture.convert("RGB")
+
+    renderer = LabelRenderer(template=background, target_width=get_printer_width())
+    areas = [TextAreaConfig.from_dict(area) for area in body.get("areas") or []]
+    darkness = float(body.get("darkness") or 1.5)
+    image = renderer.get_print_image(areas, darkness=darkness)
+    if image is None:
+        return 400, {"error": "nothing to render"}
+
+    if body.get("print"):
+        return _print_image(image)
+    return _png(handler, image)
+
+
+@route("POST", "/api/tear-test")
+def api_tear_test(handler, match, body):
+    """Print a strip that ends in a line, then feed the gap being tried.
+
+    Calibration is a physical question, so it is answered physically: print
+    this, tear it off, and see whether the tear landed on the line.
+    """
+    gap = max(0.0, min(MAX_TEAR_GAP_MM, float(body.get("mm") or 0)))
+    image = _tear_sample(gap)
+    ok, message = SESSION.print_image(image, feed_dots=mm_to_dots(gap))
+    return (200 if ok else 400), {"ok": ok, "message": message, "mm": gap}
 
 
 @route("POST", "/api/images")

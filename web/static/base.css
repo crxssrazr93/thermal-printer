@@ -365,8 +365,9 @@ select.control.slim{padding-right:26px}
 .swatch.s3{background:linear-gradient(135deg,#FFD400 50%,#2563EB 50%)}
 .swatch.s4{background:linear-gradient(135deg,#FFFFFF 50%,#0A0A0B 50%)}
 
-/* display:flex below would otherwise beat the [hidden] attribute */
-.theme-menu[hidden],.toast[hidden],.view[hidden],.floating-menu[hidden]{display:none}
+/* Any display rule beats the [hidden] attribute, and this file sets display on
+   nearly everything, so hidden is made to mean hidden once and for all. */
+[hidden]{display:none !important}
 .theme-menu{
   position:absolute;right:0;bottom:calc(100% + 9px);min-width:186px;padding:6px;
   background:var(--panel);border:var(--border) solid var(--line-strong);border-radius:var(--radius);
@@ -475,7 +476,88 @@ input[type=range]:focus-visible{outline:2px solid var(--accent);outline-offset:3
    has room to be seen at a readable size. */
 .view.split.stacked{grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto}
 .view.split.stacked .side{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--gap)}
-.view.split.stacked .paper-stage{max-height:none;justify-content:flex-start}
+.view.split.stacked .paper-stage{max-height:none;justify-content:center}
+/* full width belongs to the paper, not to the buttons under it: stretched to a
+   metre wide they read as banners rather than controls */
+.view.split.stacked .actions{justify-content:center}
+.view.split.stacked .actions .btn{flex:0 0 auto;min-width:180px}
+.view.split.stacked .quick .list{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:6px}
 /* stacked, the editor no longer has a column to itself, so it gives up the
    height it does not need and the strip below stays on screen */
 .view.split.stacked .editor-shell{min-height:180px;max-height:40vh;overflow:auto}
+
+/* The symbol picker. A modal because it is used and dismissed, and a grid
+   because a glyph is recognised by its shape rather than read by its name. */
+.sheet{
+  width:min(760px,92vw);max-height:82vh;padding:0;border:var(--border);
+  border-radius:var(--radius);background:var(--panel);color:var(--ink);overflow:hidden}
+.sheet::backdrop{background:rgb(0 0 0 / .45)}
+.sheet-head{
+  display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:var(--border)}
+.sheet-head h2{margin:0;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.sheet-head .control{flex:1}
+.sheet-body{padding:12px 14px;overflow:auto;max-height:60vh}
+.sheet-foot{margin:0;padding:10px 14px;border-top:var(--border)}
+.symbol-group h3{
+  margin:14px 0 6px;font-size:12px;font-weight:600;color:var(--muted)}
+.symbol-group:first-child h3{margin-top:0}
+.symbol-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(44px,1fr));gap:4px}
+.symbol{
+  appearance:none;border:var(--border);border-radius:var(--radius-sm);background:var(--panel-2);
+  color:var(--ink);font-size:19px;line-height:1;padding:9px 0;cursor:pointer;
+  transition:background .12s,border-color .12s}
+.symbol:hover{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.symbol:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* Labels: the background is the canvas, so it takes the room and the click. */
+.label-wrap{cursor:crosshair}
+.label-area .row-form{gap:6px}
+.label-area .hint{margin:4px 0 0}
+
+/* Table controls, placed on the table rather than above it. The pluses sit at
+   the edge a new column or row would appear at, so what they do needs no
+   label; everything else is behind one button and a panel. */
+.table-plus,.table-cog{
+  position:absolute;z-index:5;appearance:none;cursor:pointer;
+  border:var(--border);border-radius:var(--radius-sm);background:var(--panel-2);
+  color:var(--muted);font:inherit;line-height:1;transition:background .12s,color .12s}
+.table-plus{width:24px;height:24px;font-size:15px;padding:0}
+.table-cog{height:24px;padding:0 10px;font-size:12px}
+.table-plus:hover,.table-cog:hover{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.table-plus:focus-visible,.table-cog:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.narrow-sheet{width:min(460px,92vw)}
+.narrow-sheet .sheet-body{max-height:66vh}
+.narrow-sheet .row-form{flex-wrap:wrap;gap:6px}
+
+/* The toolbar's overflow: a menu, not a second row, so the bar stays one line
+   however narrow the window gets. */
+.tool-menu{
+  position:absolute;z-index:20;display:flex;flex-direction:column;gap:2px;
+  padding:6px;border:var(--border);border-radius:var(--radius-sm);
+  background:var(--panel);box-shadow:var(--shadow-lift)}
+.tool-menu .tool{text-align:left;white-space:nowrap}
+
+/* The table ribbon: two rows of small square buttons sitting just above the
+   table, so the thing being changed is never covered. */
+.table-ribbon{
+  position:absolute;z-index:6;display:flex;flex-direction:column;gap:3px;
+  padding:4px;border:var(--border);border-radius:var(--radius-sm);
+  background:var(--panel);box-shadow:var(--shadow-lift)}
+.ribbon-row{display:flex;align-items:center;gap:3px}
+.rib{
+  appearance:none;cursor:pointer;min-width:26px;height:24px;padding:0 5px;
+  border:1px solid transparent;border-radius:4px;background:transparent;
+  color:var(--muted);font:inherit;font-size:13px;line-height:1;
+  transition:background .12s,color .12s}
+.rib:hover{background:var(--panel-2);color:var(--ink)}
+.rib.is-active{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.rib.danger:hover{background:var(--danger);border-color:var(--danger);color:#fff}
+.rib:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.rib-sep{width:1px;height:16px;background:var(--line);margin:0 2px}
+.rib-widths{display:flex;gap:3px}
+.rib-width{
+  width:38px;height:24px;padding:0 4px;border:var(--border);border-radius:4px;
+  background:var(--panel-2);color:var(--ink);font:inherit;font-size:11px;text-align:center}
+.rib-width::-webkit-outer-spin-button,.rib-width::-webkit-inner-spin-button{
+  -webkit-appearance:none;margin:0}

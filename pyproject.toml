@@ -12,21 +12,16 @@ license = { text = "AGPL-3.0-or-later" }
 authors = [{ name = "crxssrazr93" }]
 keywords = ["thermal", "printer", "escpos", "receipt", "bluetooth"]
 
-# The server and the renderer need only these. CustomTkinter is not here: the
-# legacy desktop app is an extra, so a web install does not pull in a GUI
-# toolkit it will never open.
+# The whole app needs only these. There is no GUI toolkit here, because there
+# is no longer a desktop app: the browser is the interface.
 dependencies = [
     "pillow>=10.0.0",
     "PyYAML>=6.0",
     "numpy>=1.24.0",
 ]
 
-[project.optional-dependencies]
-desktop = ["customtkinter>=5.2.0"]
-
 [project.scripts]
 thermal-print-studio = "web.server:main"
-thermal-print-studio-desktop = "src.main:main"
 
 [project.urls]
 Homepage = "https://github.com/crxssrazr93/thermal-print-studio"

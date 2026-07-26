@@ -10,13 +10,21 @@ import logging
 import os
 import socket
 import subprocess
+import sys
 import time
 from typing import List, Optional
 
 logger = logging.getLogger(__name__)
 
-# usblp character devices exposed by the kernel for USB class-7 printers
-USB_PRINTER_GLOB = "/dev/usb/lp*"
+# Where a printer turns up as something you can open and write bytes to. Linux
+# gives USB class-7 printers a usblp node; macOS gives a bonded Bluetooth
+# serial device a call-out node, which behaves the same way from here. Windows
+# has neither, and is handled by WindowsRawTransport instead.
+DEVICE_GLOBS = {
+    "linux": ["/dev/usb/lp*"],
+    "darwin": ["/dev/cu.*"],
+}
+USB_PRINTER_GLOB = "/dev/usb/lp*"   # kept: callers and profiles still name it
 
 # Rough consumption rate of a 203 dpi thermal head, used only to size the drain
 # pause before closing. Deliberately conservative - overshooting costs a moment,
@@ -173,12 +181,101 @@ class CupsTransport:
             self._buffer.clear()
 
 
+class WindowsRawTransport:
+    """Raw passthrough to a Windows print queue.
+
+    The same shape as the others: a job is opened, the ESC/POS goes through the
+    spooler untouched because the datatype is RAW, and closing it ends the job.
+    Untested by the author, who has no Windows machine; the sequence is the one
+    every raw-printing example on Windows uses.
+    """
+
+    def __init__(self, queue_name: str):
+        self.queue_name = queue_name
+        self._handle = None
+        self._job = None
+
+    def connect(self, _address=None) -> None:
+        try:
+            import win32print                              # type: ignore
+        except ImportError:
+            raise TransportError(
+                "Printing to a Windows queue needs pywin32: pip install pywin32"
+            )
+        try:
+            self._handle = win32print.OpenPrinter(self.queue_name)
+            self._job = win32print.StartDocPrinter(
+                self._handle, 1, ("Thermal Print Studio", None, "RAW")
+            )
+            win32print.StartPagePrinter(self._handle)
+        except Exception as error:                          # pywin32 raises its own
+            self._handle = None
+            raise TransportError(f"Could not open {self.queue_name}: {error}")
+
+    def send(self, data: bytes) -> int:
+        import win32print                                  # type: ignore
+        if self._handle is None:
+            raise socket.error("Windows transport is not open")
+        win32print.WritePrinter(self._handle, data)
+        return len(data)
+
+    def recv(self, _size: int) -> bytes:
+        return b""                                          # the spooler answers nothing
+
+    def flush(self) -> None:
+        pass
+
+    def shutdown(self, _how=None) -> None:
+        pass
+
+    def close(self) -> None:
+        if self._handle is None:
+            return
+        import win32print                                  # type: ignore
+        try:
+            win32print.EndPagePrinter(self._handle)
+            win32print.EndDocPrinter(self._handle)
+        finally:
+            win32print.ClosePrinter(self._handle)
+            self._handle = None
+            self._job = None
+
+
 # -----------------------------------------------------------------------------
 # discovery
 # -----------------------------------------------------------------------------
 def list_usb_printers() -> List[str]:
-    """Character devices that look like USB printers, newest first."""
-    return sorted(glob.glob(USB_PRINTER_GLOB))
+    """Devices that can be opened and written to, in name order.
+
+    On macOS this also turns up bonded Bluetooth serial devices, which is the
+    supported way to reach a printer there: Darwin has no Bluetooth socket
+    layer, so a paired printer is reached through its call-out node instead.
+    """
+    patterns = DEVICE_GLOBS.get(sys.platform, [USB_PRINTER_GLOB])
+    found: List[str] = []
+    for pattern in patterns:
+        found.extend(glob.glob(pattern))
+    return sorted(found)
+
+
+def list_windows_printers() -> List[str]:
+    """Printer queues Windows knows about, for raw passthrough.
+
+    Windows has no character device for a USB printer: the vendor driver owns
+    it, and raw bytes reach it through the spooler. This needs pywin32, which
+    is not a dependency of the app, so a machine without it simply lists
+    nothing rather than failing to start.
+    """
+    if sys.platform != "win32":
+        return []
+    try:
+        import win32print                                  # type: ignore
+    except ImportError:
+        logger.info("pywin32 is not installed, so no Windows printers are listed")
+        return []
+    level = 2
+    flags = win32print.PRINTER_ENUM_LOCAL | win32print.PRINTER_ENUM_CONNECTIONS
+    return [entry["pPrinterName"] for entry in win32print.EnumPrinters(flags, None, level)]
 
 
 def list_cups_queues() -> List[str]:

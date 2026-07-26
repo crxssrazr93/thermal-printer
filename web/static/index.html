@@ -46,9 +46,27 @@
   <nav class="tabs" role="tablist" aria-label="Sections">
     <button class="tab" role="tab" aria-selected="true"  data-view="compose">Compose</button>
     <button class="tab" role="tab" aria-selected="false" data-view="todos">To-dos</button>
+    <button class="tab" role="tab" aria-selected="false" data-view="labels">Labels</button>
+    <button class="tab" role="tab" aria-selected="false" data-view="calendar">Calendar</button>
     <button class="tab" role="tab" aria-selected="false" data-view="presets">Presets</button>
     <button class="tab" role="tab" aria-selected="false" data-view="settings">Settings</button>
   </nav>
+
+  <!-- The glyph table. Nine hundred characters is too many to browse, so the
+       search is the interface and the groups are for when you do want to
+       browse. Kept out of the editor's own DOM so opening it cannot disturb
+       the document or the selection. -->
+  <dialog id="symbolPicker" class="sheet">
+    <div class="sheet-head">
+      <h2>Symbols</h2>
+      <input id="symbolSearch" class="control" type="search"
+             placeholder="integral, alpha, arrow, degree" autocomplete="off">
+      <button class="btn subtle" id="symbolClose">Close</button>
+    </div>
+    <div class="sheet-body" id="symbolResults"></div>
+    <p class="hint sheet-foot">Whether a symbol prints depends on the paper font
+      carrying it. The preview is the honest answer.</p>
+  </dialog>
 
   <!-- ------------------------------------------------ views -->
   <main class="main">
@@ -62,31 +80,40 @@
         </div>
 
         <div class="toolbar" role="toolbar" aria-label="Markdown formatting">
+          <!-- Three groups in the order a page is actually written: what a
+               block is, how the words inside it are marked, and what gets put
+               in. Everything rarer sits behind More, so the common half fits
+               on one line at any window width. -->
           <button class="tool" data-md="h1">H1</button>
           <button class="tool" data-md="h2">H2</button>
           <button class="tool" data-md="h3">H3</button>
+          <button class="tool" data-md="ul" title="Bulleted list">List</button>
+          <button class="tool" data-md="ol" title="Numbered list">1.</button>
+          <button class="tool" data-md="tasks" title="Checklist">Tasks</button>
+          <button class="tool" data-md="quote">Quote</button>
           <span class="tool-sep" aria-hidden="true"></span>
           <button class="tool strong" data-md="bold" title="Bold">B</button>
           <button class="tool em" data-md="italic" title="Italic">I</button>
+          <button class="tool" data-md="underline" title="Underline"><u>U</u></button>
           <button class="tool del" data-md="strike" title="Strikethrough">S</button>
-          <button class="tool code" data-md="code" title="Inline code">&lt;/&gt;</button>
-          <span class="tool-sep" aria-hidden="true"></span>
-          <button class="tool" data-md="ul">List</button>
-          <button class="tool" data-md="ol">1.</button>
-          <button class="tool" data-md="quote">Quote</button>
+          <button class="tool" data-md="highlight" title="Highlight">Mark</button>
           <span class="tool-sep" aria-hidden="true"></span>
           <button class="tool" data-md="link">Link</button>
           <button class="tool" data-md="image">Image</button>
-          <span class="tool-sep" aria-hidden="true"></span>
-          <button class="tool" data-md="tasks" title="Checklist">Tasks</button>
-          <button class="tool" data-md="underline" title="Underline"><u>U</u></button>
-          <button class="tool" data-md="highlight" title="Highlight">Mark</button>
-          <button class="tool" data-md="sup" title="Superscript">x&sup2;</button>
-          <button class="tool" data-md="sub" title="Subscript">x&#8322;</button>
           <button class="tool" data-md="table">Table</button>
-          <button class="tool" data-md="codeblock">Code</button>
-          <button class="tool" data-md="rule">Rule</button>
-          <button class="tool" data-md="math">Math</button>
+          <button class="tool" id="symbolsBtn" title="Insert a symbol">&Omega;</button>
+          <button class="tool" id="moreTools" aria-expanded="false"
+                  title="Code, rules, maths, superscript and subscript">More</button>
+
+          <!-- the overflow, positioned under its button -->
+          <div class="tool-menu" id="toolMenu" hidden>
+            <button class="tool code" data-md="code" title="Inline code">&lt;/&gt; Code</button>
+            <button class="tool" data-md="codeblock">Code block</button>
+            <button class="tool" data-md="rule">Rule</button>
+            <button class="tool" data-md="math">Maths</button>
+            <button class="tool" data-md="sup" title="Superscript">x&sup2;</button>
+            <button class="tool" data-md="sub" title="Subscript">x&#8322;</button>
+          </div>
           <span class="tool-sep" aria-hidden="true"></span>
           <label class="sr-only" for="fontQuick">Font</label>
           <select id="fontQuick" class="control slim"></select>
@@ -137,18 +164,33 @@
             <button class="tool" data-image="reset" title="Back to the page default">Reset</button>
           </div>
 
-          <div class="table-tools" id="tableTools" hidden>
-            <button class="tool" data-table="row-after" title="Add a row below">+ Row</button>
-            <button class="tool" data-table="col-after" title="Add a column after">+ Column</button>
-            <button class="tool" data-table="row-delete" title="Delete this row">&minus; Row</button>
-            <button class="tool" data-table="col-delete" title="Delete this column">&minus; Column</button>
-            <span class="tool-sep" aria-hidden="true"></span>
-            <button class="tool" data-table="align-left" title="Align this column left">&#8676;</button>
-            <button class="tool" data-table="align-center" title="Centre this column">&#8596;</button>
-            <button class="tool" data-table="align-right" title="Align this column right">&#8677;</button>
-            <span class="tool-sep" aria-hidden="true"></span>
-            <button class="tool" data-table="borders" title="Borders: theme, all, none">Borders</button>
-            <button class="tool" data-table="table-delete" title="Delete this table">Remove</button>
+          <!-- Table controls where the table is, rather than in a strip
+               above it: a plus at the right edge adds a column, a plus under
+               the bottom left adds a row, and everything else is behind one
+               button so the page is not covered in chrome. -->
+          <button class="table-plus" id="tableAddColumn" hidden
+                  title="Add a column">+</button>
+          <button class="table-plus" id="tableAddRow" hidden
+                  title="Add a row">+</button>
+          <!-- Table options as a ribbon on the table, not a dialog over it:
+               the choices are few and visual, and a dialog would hide the
+               thing being changed. -->
+          <div class="table-ribbon" id="tableRibbon" hidden role="toolbar"
+               aria-label="Table">
+            <div class="ribbon-row">
+              <button class="rib" data-borders="all" title="Every rule">&#9638;</button>
+              <button class="rib" data-borders="theme" title="Rules the theme's way">&#9636;</button>
+              <button class="rib" data-borders="none" title="No rules">&#9633;</button>
+              <span class="rib-sep" aria-hidden="true"></span>
+              <button class="rib" data-table="align-left" title="Align column left">&#8676;</button>
+              <button class="rib" data-table="align-center" title="Centre column">&#8596;</button>
+              <button class="rib" data-table="align-right" title="Align column right">&#8677;</button>
+              <span class="rib-sep" aria-hidden="true"></span>
+              <span class="rib-widths" id="tableWidths" title="Column widths, in percent"></span>
+              <button class="rib" id="tableWidthsEven" title="Even columns">&#8801;</button>
+              <span class="rib-sep" aria-hidden="true"></span>
+              <button class="rib danger" data-table="table-delete" title="Delete this table">&#10005;</button>
+            </div>
           </div>
         </div>
       </div>
@@ -159,12 +201,16 @@
             <h2>Preview</h2>
             <!-- direction belongs next to what it changes, not in Settings -->
             <div class="segmented" role="group" aria-label="Print direction">
+              <!-- what the direction does to the words, rather than a word for
+                   it: A to B across the paper, or A to B down it -->
               <button type="button" class="seg" data-direction="portrait"
-                      aria-pressed="true" title="Lines run across the paper, the usual way">
-                Across</button>
+                      aria-pressed="true" title="Across the roll: lines run across the paper, the usual way">
+                <span aria-hidden="true">A&rarr;B</span>
+                <span class="sr-only">Across the roll</span></button>
               <button type="button" class="seg" data-direction="landscape"
-                      aria-pressed="false" title="Lines run down the length of the paper">
-                Along</button>
+                      aria-pressed="false" title="Along the roll: lines run down the length of the paper">
+                <span aria-hidden="true">A&darr;B</span>
+                <span class="sr-only">Along the roll</span></button>
             </div>
             <span class="head-meta" id="previewMeta">&ndash;</span>
           </div>
@@ -252,6 +298,83 @@
       </aside>
     </section>
 
+    <!-- labels: text composed onto a printed background, which is what the
+         desktop app called templates. Placing is done by clicking the label
+         where the text should go, since coordinates in a form are a poor way
+         to describe a position. -->
+    <section class="view split" id="view-labels" role="tabpanel" hidden>
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Label</h2>
+          <span class="head-meta" id="labelMeta">&ndash;</span>
+        </div>
+        <div class="field">
+          <label for="labelTemplate">Background</label>
+          <select id="labelTemplate" class="control"></select>
+          <p class="hint">Click the label where text should go, then type. Drag a
+            block to move it.</p>
+        </div>
+        <div id="labelAreas" class="list"></div>
+        <div class="actions">
+          <button class="btn" id="labelAdd">Add text</button>
+          <button class="btn subtle" id="labelClear">Clear all</button>
+        </div>
+      </div>
+
+      <aside class="panel preview">
+        <div class="panel-head"><h2>Preview</h2>
+          <span class="head-meta" id="labelPreviewMeta">&ndash;</span></div>
+        <div class="paper-stage">
+          <div class="paper-wrap label-wrap" id="labelStage">
+            <img id="labelPreview" class="paper" alt="Label preview">
+          </div>
+        </div>
+        <div class="actions">
+          <button id="labelPrint" class="btn primary">Print label</button>
+        </div>
+      </aside>
+    </section>
+
+    <!-- calendar -->
+    <section class="view split" id="view-calendar" role="tabpanel" hidden>
+      <div class="panel">
+        <div class="panel-head"><h2>Calendar</h2></div>
+        <div class="field">
+          <label for="calRange">Range</label>
+          <select id="calRange" class="control">
+            <option value="month">A month</option>
+            <option value="week">A week, with room to write</option>
+          </select>
+        </div>
+        <div class="field" id="calMonthFields">
+          <label for="calMonth">Month</label>
+          <div class="slider-row">
+            <select id="calMonth" class="control"></select>
+            <input id="calYear" class="control" type="number" min="1970" max="2999" step="1">
+          </div>
+        </div>
+        <div class="field" id="calWeekFields" hidden>
+          <label for="calDate">Any day in the week</label>
+          <input id="calDate" class="control" type="date">
+        </div>
+        <div class="field">
+          <label for="calSize">Type size</label>
+          <input id="calSize" class="control" type="number" min="8" max="30" step="1" value="14">
+        </div>
+      </div>
+
+      <aside class="panel preview">
+        <div class="panel-head"><h2>Preview</h2>
+          <span class="head-meta" id="calPreviewMeta">&ndash;</span></div>
+        <div class="paper-stage">
+          <div class="paper-wrap"><img id="calPreview" class="paper" alt="Calendar preview"></div>
+        </div>
+        <div class="actions">
+          <button id="calPrint" class="btn primary">Print calendar</button>
+        </div>
+      </aside>
+    </section>
+
     <!-- presets -->
     <section class="view" id="view-presets" role="tabpanel" hidden>
       <div class="panel narrow">
@@ -280,6 +403,38 @@
             <button id="saveTearBtn" class="btn">Save</button>
           </div>
           <p class="hint">Feed after each print so the paper clears the tear bar.</p>
+        </div>
+
+        <!-- The gap is a fact about the printer's body, not a preference, so
+             it is measured rather than guessed: print, tear, judge, repeat. -->
+        <div class="field">
+          <label>Find the gap</label>
+          <div class="row-form">
+            <button id="tearTestBtn" class="btn">Print test at <span id="tearTestMm">1</span> mm</button>
+            <button id="tearAcceptBtn" class="btn primary" disabled>Tore on the line</button>
+            <button id="tearNextBtn" class="btn" disabled>Not yet, try 1 mm more</button>
+          </div>
+          <p class="hint" id="tearWizardHint">Print the strip, tear it off, and look at
+            where the tear landed. On the line means the gap is right; above it means
+            the paper needs to come out further.</p>
+        </div>
+
+        <div class="field">
+          <label>Fonts</label>
+          <p class="hint">The picker lists the fonts installed on this machine.
+            Install one the usual way and it appears here.</p>
+          <div class="row-form">
+            <button id="fontRescanBtn" class="btn">Rescan fonts</button>
+            <span class="hint" id="fontCount"></span>
+          </div>
+          <details class="hint">
+            <summary>How to install a font</summary>
+            <p>Copy the file into <code>~/.local/share/fonts</code> and run
+              <code>fc-cache -f</code>. On Arch and CachyOS a packaged font is
+              <code>sudo pacman -S ttf-jetbrains-mono</code>; on Debian and Ubuntu
+              <code>sudo apt install fonts-jetbrains-mono</code>; on Fedora
+              <code>sudo dnf install jetbrains-mono-fonts</code>.</p>
+          </details>
         </div>
 
         <div class="field">
@@ -457,6 +612,19 @@
             <label for="presetSize">Font size</label>
             <input id="presetSize" class="control" type="number" min="8" max="72" step="1" value="24">
           </div>
+          <div class="field">
+            <label for="presetDirection">Direction</label>
+            <select id="presetDirection" class="control">
+              <option value="portrait">Across the roll</option>
+              <option value="landscape">Along the roll</option>
+            </select>
+          </div>
+
+          <div class="field" id="presetAlongFields" hidden>
+            <label for="presetStrip">Strip (mm)</label>
+            <input id="presetStrip" class="control" type="number" min="48" max="500" step="5" value="150">
+          </div>
+
           <div class="field">
             <label for="presetDarkness">Darkness</label>
             <input id="presetDarkness" class="control" type="number" min="0.5" max="2" step="0.05" value="1">

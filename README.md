@@ -1,34 +1,18 @@
 # Thermal Print Studio
 
-> **A fork that changed shape.** It began as
-> [n3m0-22/thermal-printer](https://github.com/n3m0-22/thermal-printer), a
-> CustomTkinter desktop app for the Core Innovation CTP-500. What it is now is a
-> **print server with a browser front end**: you install it once, it runs in the
-> background, and you use it from a tab, from a phone on the same network, or as
-> an installed web app with its own window.
->
-> The desktop GUI is still here and still works, but it is no longer where the
-> work happens. New features land in the web app.
->
-> Also generalised well beyond the CTP-500: capability profiles in the
-> [escpos-printer-db](https://github.com/receipt-print-hq/escpos-printer-db)
-> schema, USB and CUPS transports alongside Bluetooth, and native
-> QR, barcode and paper cut.
->
-> Fork history: [`doc/FORK-CHANGES.md`](doc/FORK-CHANGES.md) ·
-> Attribution: [`doc/CREDITS.md`](doc/CREDITS.md)
->
-> Tested on a 58 mm MPT-II over both Bluetooth RFCOMM and USB.
+[![License](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.9%2B-yellow)](pyproject.toml)
+[![Platform](https://img.shields.io/badge/platform-Linux-blue)](docs/platforms.md)
 
-![License](https://img.shields.io/badge/license-AGPL--3.0-blue)
-![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20WSL-blue)
-![Python](https://img.shields.io/badge/python-3.9%2B-yellow)
+A print server with a browser front end for 58 mm ESC/POS thermal printers.
+Install it once and it stays running, reachable at a fixed address from any tab
+on the machine, from a phone on the same network, or as an installed web app
+with its own window.
 
 Write in a real editor, watch the exact bitmap the print head will receive, and
-print it. Markdown, tables you can type into, checklists, pictures with eleven
-screening methods, right to left scripts, four themes that change the paper as
-well as the screen, presets that fill in today's date, and a to-do list that
-prints.
+print it.
+
+![Composing a page, with the print preview beside it](docs/images/compose.jpg)
 
 ## Install
 
@@ -38,534 +22,81 @@ cd thermal-print-studio
 ./install.sh
 ```
 
-That installs the app for your user (using `uv`, `pipx` or `pip`, whichever it
-finds), registers a **systemd user service**, and starts it. The server comes
-back on its own after a reboot, so there is nothing to launch: it is simply
-there, at
+That installs the app for your user, registers a **systemd user service** and
+starts it, so there is nothing to launch afterwards. It is simply there, at
 
 **<http://127.0.0.1:8760>**
 
 Chrome and Edge offer **Install** in the address bar, which gives it its own
-window, its own icon and no browser chrome. That is the desktop app, and it
-stays up to date with the server on its own.
+window and icon. Network access, updating and removal are covered in
+[docs/install.md](docs/install.md).
 
-A user service, not a system one, deliberately: the printer is paired to your
-Bluetooth session and your presets live in your home directory, so a root
-service would reach neither. It starts when you log in. To keep it running when
-nobody is logged in:
+## What it does
 
-```bash
-sudo loginctl enable-linger $USER
-```
-
-### From your phone, or another machine
-
-The server listens on localhost only, so nothing outside this machine can print
-without being invited. To open it to the network:
-
-```bash
-systemctl --user edit --full thermal-print-studio     # THERMAL_WEB_HOST=0.0.0.0
-systemctl --user restart thermal-print-studio
-```
-
-Then use `http://<this machine>:8760` from anything on the same network, and
-install it there too. There is no authentication, so whoever can reach it can
-print.
-
-### Managing it
-
-```bash
-systemctl --user status thermal-print-studio      # is it running
-systemctl --user restart thermal-print-studio     # after changing settings
-journalctl --user -u thermal-print-studio -f      # what it is doing
-./uninstall.sh                              # remove it, keeping your data
-```
-
-Your presets, to-dos, images and themes live in
-`~/.local/share/thermal-printer/` and are never touched by installing,
-updating or removing the app.
-
-### Without systemd
-
-`./install.sh` still installs the app; run `thermal-print-studio` yourself, or use
-`./web/run-web.sh` from a checkout.
-
-## The web app
-
-Full documentation: [web/README.md](web/README.md). In short:
-
-- **Compose** in a rich editor, or in raw markdown, with the preview showing the
-  actual print bitmap rather than a CSS impression of it
-- **Tables** you type into, with rows, columns, alignment and borders
-- **Pictures**, by button, paste or drop, screened with any of eleven methods
-- **Checklists**, highlight, underline, superscript, subscript
+- **Compose** in a rich editor or in raw markdown, with a preview that is the
+  print bitmap rather than a CSS impression of one
+- **Tables** you type into, with rows, columns, alignment, borders and column
+  widths that are printed as you set them
+- **Pictures** by button, paste or drop, screened with any of eleven methods
+  and a cutoff and amount you control
+- **Checklists**, highlight, underline, superscript, subscript, and a picker
+  for nine hundred symbols
 - **Right to left scripts** shaped and set from the right, mixed freely with
   English
-- **Presets** that remember their own font and size and fill in `{{date}}`
-- **To-dos** with their own preview and one tap to print
-- **Four themes**, each with light and dark, each setting the paper as well as
-  the screen, and all of them replaceable: see
-  [web/static/themes/README.md](web/static/themes/README.md)
-- **Along the roll** printing, for banners and labels
+- **Along the roll** printing, for banners and tickets that run down the paper
+- **Labels** composed onto printed backgrounds, and **calendars** by month or
+  week
+- **Presets** that carry their own font, size and direction and fill in
+  `{{date}}`, and a **to-do list** that prints
+- **Four themes**, light and dark, each setting the paper as well as the
+  screen, and all of them replaceable
 
-## The desktop app (legacy)
+## Documentation
 
-The original GUI is still in the repository and still runs:
-
-```bash
-pip install -e '.[desktop]'
-thermal-print-studio-desktop
-```
-
-It keeps a few things the web app has not yet been given: the banner and
-template composers, the calendar, the symbol picker, and the tear-off
-calibration wizard. It shares `config.yaml` with the server, so a device saved
-in one appears in the other.
-
-## Screenshots
-
-![Text Tab](screenshots/01_text.png)
-
-<details>
-<summary>More screenshots</summary>
-
-![Banner Tab](screenshots/02_banner.png)
-![Template Tab](screenshots/03_template.png)
-![Template Tab with Text Areas](screenshots/04_template.png)
-![Image Tab](screenshots/05_image.png)
-![Settings Tab](screenshots/06_settings.png)
-
-</details>
-
-## Running from a checkout
-
-```bash
-python3 -m venv .venv_print
-source .venv_print/bin/activate
-pip install -r requirements.txt
-./web/run-web.sh          # the server
-./run.sh                  # the legacy desktop app
-```
+| Document | What is in it |
+|----------|---------------|
+| [Install](docs/install.md) | Installing, the service, network access, updating, removing |
+| [Using it](docs/usage.md) | The editor, tables, pictures, direction, languages, labels, calendars, presets |
+| [Printers](docs/printers.md) | Transports, device profiles, the tear-off gap, capability profiles |
+| [Themes](web/static/themes/README.md) | Writing your own theme, on screen and on paper |
+| [Platforms](docs/platforms.md) | What runs where, and what a Windows or macOS contributor would need |
+| [Development](docs/development.md) | Layout, running from a checkout, the HTTP API, the editor bundle |
+| [Troubleshooting](docs/troubleshooting.md) | When it will not connect, print, or find a font |
+| [Fork changes](docs/FORK-CHANGES.md) | What this fork changed, and why |
+| [Credits](docs/CREDITS.md) | Whose work this builds on |
 
 ## Requirements
 
-Python 3.10+, a Bluetooth adapter (for the Bluetooth transport), BlueZ, and
-tkinter. `matplotlib` is optional and only needed for LaTeX math in the Text
-tab.
-
-## Requirements (detail)
-
-- Linux (or Windows with WSL2)
-- Python 3.10 or higher
-- Bluetooth adapter
-- BlueZ (Linux Bluetooth stack)
-
-## Installation
-
-### 1. Clone the Repository
-
-```bash
-git clone https://github.com/n3m0-22/thermal-printer.git
-cd thermal-printer
-```
-
-### 2. Install System Dependencies
-
-**Fedora/RHEL:**
-
-```bash
-sudo dnf install python3 python3-pip python3-tkinter bluez
-```
-
-**Ubuntu/Debian:**
-
-```bash
-sudo apt install python3 python3-pip python3-tk bluez
-```
-
-**Arch Linux:**
-
-```bash
-sudo pacman -S python python-pip tk bluez
-```
-
-**Wayland Systems (GNOME, KDE Plasma, Sway, Hyprland, etc.):**
-
-If you are running a Wayland desktop environment, you also need `wl-clipboard` for clipboard operations to work correctly:
-
-```bash
-# Fedora/RHEL
-sudo dnf install wl-clipboard
-
-# Ubuntu/Debian
-sudo apt install wl-clipboard
-
-# Arch Linux
-sudo pacman -S wl-clipboard
-```
-
-This is required because tkinter runs under XWayland, and the native X11 clipboard does not reliably communicate with Wayland applications. The app automatically detects Wayland and uses `wl-copy`/`wl-paste` for clipboard operations.
-
-**X11 Systems (X.org, i3, XFCE, etc.):**
-
-For X11 clipboard operations, you need either `xclip` (preferred) or `xsel`:
-
-```bash
-# Fedora/RHEL
-sudo dnf install xclip
-
-# Ubuntu/Debian
-sudo apt install xclip
-
-# Arch Linux
-sudo pacman -S xclip
-```
-
-The app tries xclip first and falls back to xsel if not available. If neither is installed, clipboard operations will use tkinter's built-in clipboard which may have limited functionality.
-
-### 3. Create Virtual Environment and Install Python Dependencies
-
-```bash
-python3 -m venv .venv_print
-source .venv_print/bin/activate
-pip install -r requirements.txt
-```
-
-### 4. Run the Application
-
-```bash
-./run.sh
-```
-
-### 5. (Optional) Install Desktop Entry
-
-To add the app to your application launcher:
-
-```bash
-./install-desktop.sh
-```
-
-The app will appear in your applications menu. You may need to log out and back in for it to show up.
-
-## Windows (WSL2)
-
-This application can run on Windows using WSL2 with a Linux GUI environment:
-
-1. Install WSL2 with a Linux distribution (Ubuntu recommended)
-2. Install an X server like [VcXsrv](https://sourceforge.net/projects/vcxsrv/) or use WSLg (Windows 11)
-3. Follow the Linux installation steps above
-4. For Bluetooth, you may need to use USB/IP to pass through your Bluetooth adapter to WSL
-
-## Usage
-
-### Connecting to Your Printer
-
-1. Launch the application
-2. Click "Scan" to find nearby printers
-3. Select your printer from the list (CTP printers are highlighted in green)
-4. Click "Connect"
-
-> **Note:** After connecting once, the app remembers your printer. On future launches, simply click "Print" and it will auto-connect to your last used printer.
-
-### Text Mode
-
-1. Go to the "Text" tab
-2. Type your text or click "Load" to open a text file
-3. Adjust font, size, alignment, and darkness as needed
-4. Use the symbol picker to insert special characters
-5. Click "Preview" to see the output
-6. Click "Print" to send to printer
-
-### Banner Mode
-
-1. Go to the "Banner" tab
-2. Enter text for vertical printing (rotated 90 degrees)
-3. Choose vertical alignment (Top, Center, Bottom)
-4. Adjust font and size for banner display
-5. Preview and print
-
-### Template Mode
-
-1. Go to the "Template" tab
-2. Click "Gallery" to browse saved templates, or load a custom image
-3. Click "+ Add" to create text areas on the template
-4. Drag text areas to position them on the template
-5. Select each area to edit its text, font, size, and alignment
-6. Use Ctrl+C/Ctrl+V to copy/paste text areas
-7. Save your template for future use (.pcfg format)
-8. Preview and print
-
-### Image Mode
-
-1. Go to the "Image" tab
-2. Click "Load Image" to select an image file
-3. Adjust brightness, contrast, rotation, and dithering algorithm
-4. Available dithering modes: None, Floyd-Steinberg, Ordered, Atkinson, Burkes, Sierra, Stucki
-5. Click "Preview" to see how it will print
-6. Click "Print" to send to printer
-
-### Calendar Printing
-
-1. From the Text or Template tab, click the calendar button
-2. Choose calendar type:
-   - **Current Week** - Weekly planner with note areas
-   - **Individual Months** - Select specific months to print
-   - **Full Year** - All 12 months
-3. Click "Generate" to create calendar images
-4. Preview and print
-
-### Symbol Picker
-
-1. From any text input, click the symbol button
-2. Browse 63 categories including:
-   - Basic arithmetic and calculus
-   - Greek letters (uppercase and lowercase)
-   - Logic and set theory
-   - Arrows and geometry
-   - Statistics and probability notation
-3. Click a symbol to insert it, or use the search bar
-4. Symbols are rendered with automatic font fallback
-
-## Templates
-
-The `gallery/templates/` directory contains sample print templates from [ThirtyThreeDown's CTP500PrinterApp](https://github.com/thirtythreedown/CTP500PrinterApp) that you can use or modify.
-
-### Template Format
-
-Templates are saved as `.pcfg` (Print Configuration) files containing:
-
-- Template background image path
-- Text area positions and dimensions
-- Font settings per text area
-- Alignment and formatting options
-
-Thumbnails are automatically generated and stored in the `thumbs/` subdirectory.
-
-## Configuration
-
-Settings are automatically saved to `config.yaml` and include:
-
-### Printer Settings
-
-- Last connected printer (MAC address and name)
-- RFCOMM channel
-
-### Text and Banner Settings
-
-- Font family, size, bold, italic
-- Text alignment and darkness
-- Date format and auto-insertion
-
-### Image Settings
-
-- Brightness and contrast (0.0 - 2.0)
-- Dithering algorithm
-- Rotation and invert options
-
-### GUI Settings
-
-- Window size and position
-- Appearance mode (System/Light/Dark)
-- Color theme
-- Preview scale (0.5x - 3.0x)
-- Gallery thumbnail size
-
-### Timing Settings
-
-- Command delay between printer operations
-- Bluetooth scan timeout
-
-### Printing Settings
-
-- Feed lines before print (0-20)
-- Feed lines after print (0-20)
-
-## Troubleshooting
-
-### "Connection refused" or "No route to host"
-
-- Make sure the printer is turned on and paired
-- Check that Bluetooth is enabled: `bluetoothctl power on`
-- Try re-pairing the printer
-
-### "Permission denied" on Bluetooth
-
-Add your user to the `bluetooth` group:
-
-```bash
-sudo usermod -aG bluetooth $USER
-```
-
-Then log out and back in.
-
-### Printer not found during scan
-
-- Ensure the printer is in pairing mode (turned on, not connected to another device)
-- Check Bluetooth is working: `bluetoothctl scan on`
-- Increase scan timeout in Settings tab
-
-### Fonts not showing up
-
-Install additional fonts:
-
-```bash
-# Fedora
-sudo dnf install dejavu-sans-mono-fonts google-noto-sans-mono-fonts
-
-# Ubuntu/Debian
-sudo apt install fonts-dejavu fonts-noto-mono
-```
-
-### Unicode symbols showing as boxes
-
-- Install the bundled Catrinity font from the `fonts/` directory
-- Or select a Unicode-capable font in Settings (DejaVu Sans, Noto Sans)
-
-### Clipboard not working on Wayland
-
-Install wl-clipboard:
-
-```bash
-# Fedora
-sudo dnf install wl-clipboard
-
-# Ubuntu/Debian
-sudo apt install wl-clipboard
-```
-
-### Preview works but print fails
-
-- Check Bluetooth connection status in the Connection tab
-- Verify printer has paper and is powered on
-- Try increasing command delay in Settings
-
-## Unicode Font Support
-
-For best Unicode symbol support (math operators, arrows, Greek letters, etc.), the application includes **Catrinity** font in the `fonts/` directory, licensed under the [SIL Open Font License](http://scripts.sil.org/OFL).
-
-### Bundled Font
-
-| Font | License | Notes |
-|------|---------|-------|
-| **Catrinity** | SIL OFL (Free) | Bundled with app, 80,000+ characters ([catrinity-font.de](https://catrinity-font.de/)) |
-
-### Recommended System Fonts (Not Bundled)
-
-These fonts provide excellent Unicode coverage and are recommended for installation on your system:
-
-| Font | License | Notes |
-|------|---------|-------|
-| DejaVu Sans | Free | Usually pre-installed on Linux |
-| Noto Sans | SIL OFL (Free) | Google's comprehensive Unicode font |
-| STIX Two | SIL OFL (Free) | Excellent math symbol support |
-
-Install these fonts using your package manager:
-
-```bash
-# Fedora/RHEL
-sudo dnf install dejavu-sans-fonts google-noto-sans-fonts stix-fonts
-
-# Ubuntu/Debian
-sudo apt install fonts-dejavu fonts-noto ttf-stix
-
-# Arch Linux
-sudo pacman -S ttf-dejavu noto-fonts otf-stix
-```
-
-### Additional Fonts (Optional)
-
-These fonts have excellent Unicode coverage but require manual download:
-
-| Font | License | Link |
-|------|---------|------|
-| Quivira | Freeware | [quivira-font.com](http://www.quivira-font.com/) |
-| Everson Mono | Shareware | [evertype.com/emono](https://www.evertype.com/emono/) |
-| Code2000 | Shareware | [code2001.com](https://www.code2001.com/code2000_page.htm) |
-
-To use these fonts, download and install them to your system fonts directory or place them in the project's `fonts/` folder.
-
-### Automatic Font Fallback
-
-When you type special characters, the app automatically:
-
-1. Detects Unicode characters that your selected font cannot render
-2. Searches fallback fonts (Catrinity, Noto Sans Math, STIX Two, etc.)
-3. Renders each character with the best available font
-4. Optionally shows a notification (can be disabled in Settings)
-
-## Credits and Acknowledgments
-
-This project builds upon the incredible reverse engineering work of the maker and hacker community who cracked the Core Innovation CTP-500 Bluetooth thermal printer protocol.
-
-### Original Research and Development
-
-**Mel (ThirtyThreeDown Studio)** - Primary developer of the original CTP500PrinterApp, Bluetooth protocol analysis and GUI implementation.
-
-- [thirtythreedown.com](https://thirtythreedown.com)
-- [CTP500PrinterApp on GitHub](https://github.com/thirtythreedown/CTP500PrinterApp)
-
-**voidsshadows** - Creator of CorePrint print server, stripped-down Python implementation that formed the foundation.
-
-- [CorePrint on GitHub](https://github.com/voidsshadows/CorePrint-print-server)
-
-### SECKC Contributors
-
-Kansas City's Hacker Hive - [seckc.org](https://seckc.org)
-
-- **bitflip** - Shared critical code resources and collaboration
-- **Tsathoggualware** - Research and development support
-- **Reid** - Research and development support
-
-### Community Contributors
-
-- **onezeronull, MaikelChan, rbaron, WerWolv** - Prior thermal printer research and documentation
-- **Nathaniel (Doodad/Dither Me This)** - Dithering algorithm inspiration
-- **Hacking Modern Life (YouTube)** - Bluetooth reverse engineering tutorials
-
-### Special Thanks
-
-> *"To all the mad lasses and lads in the maker community whose thermal
-> printer research since 2014 made this possible."*
->
-> -- Mel, ThirtyThreeDown Studio
-
-## License
-
-This project is licensed under the **GNU Affero General Public License v3.0** (AGPL-3.0).
-
-Based on work from:
-
-- [CTP500PrinterApp](https://github.com/thirtythreedown/CTP500PrinterApp) by ThirtyThreeDown Studio
-- [CorePrint](https://github.com/voidsshadows/CorePrint-print-server) by voidsshadows (AGPL-3.0)
+Python 3.9 or newer, Pillow, PyYAML and numpy. A Bluetooth adapter and BlueZ
+for the Bluetooth transport; nothing extra for USB or CUPS. Linux is the tested
+platform: see [docs/platforms.md](docs/platforms.md).
+
+## Where things live
+
+Presets, to-dos, uploaded pictures and your own themes are kept in
+`~/.local/share/thermal-printer/`, and printer profiles in `config.yaml` beside
+the code. Installing, updating and removing the app never touch either.
+
+## Origins
+
+This began as
+[n3m0-22/thermal-printer](https://github.com/n3m0-22/thermal-printer), a
+CustomTkinter desktop app for the Core Innovation CTP-500, which in turn built
+on the community that reverse engineered that printer. It has since become a
+different thing: a server and a web app, generalised to any 58 mm ESC/POS
+printer through capability profiles in the
+[escpos-printer-db](https://github.com/receipt-print-hq/escpos-printer-db)
+schema, with USB and CUPS transports alongside Bluetooth. The desktop GUI has
+been retired and everything it did lives in the web app.
+
+Tested on a 58 mm MPT-II over Bluetooth RFCOMM and USB.
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit issues or pull requests.
+Issues and pull requests are welcome, particularly for printers other than the
+one this was built against and for the platforms listed in
+[docs/platforms.md](docs/platforms.md).
 
-## Related Projects
+## License
 
-- [CTP500PrinterApp](https://github.com/thirtythreedown/CTP500PrinterApp) - Original project by ThirtyThreeDown
-- [CorePrint-print-server](https://github.com/voidsshadows/CorePrint-print-server) - Minimal Python implementation
-
-## Related Projects (this fork)
-
-- [escpos-printer-db](https://github.com/receipt-print-hq/escpos-printer-db) - printer capability schema (CC BY 4.0)
-- [python-escpos](https://github.com/python-escpos/python-escpos) - reference for the ESC/POS command encodings
-
-## TODO
-
-- [x] Markdown support
-- [x] LaTeX math support (via matplotlib mathtext; MathML deliberately out of
-      scope - no usable pure-Python renderer exists)
-- [x] Various bug fixes - see `doc/FORK-CHANGES.md`
-- [x] Browser front end (PWA) with presets, to-dos and switchable themes
-- [x] Rich editor with real tables, pictures and checklists
-- [x] Install as a background service, reachable at a fixed address
-- [ ] Port the remaining desktop tabs to the web app: banner, template,
-      calendar, symbol picker, tear-off calibration
-- [ ] Retire the desktop GUI once those land
-- [ ] Windows and macOS transports (the Bluetooth and USB paths are Linux only;
-      CUPS already works anywhere CUPS does)
-- [ ] Refactor out duplicate code (render/process/print paths still repeat
-      across the desktop text, image, template and calendar frames)
-- [ ] Verify the CTP-500 vendor command sequences on real CTP-500 hardware
+AGPL-3.0-or-later. See [LICENSE](LICENSE) and [docs/CREDITS.md](docs/CREDITS.md).

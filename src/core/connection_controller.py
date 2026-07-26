@@ -1,7 +1,4 @@
-from typing import Optional, Callable, TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from ..gui.interfaces import SettingsService
+from typing import Optional, Callable
 
 from .printer import PrinterConnection, ConnectionState
 from ..config.settings import get_settings
@@ -12,7 +9,7 @@ class ConnectionController:
     def __init__(
         self,
         printer: Optional[PrinterConnection] = None,
-        settings_service: Optional["SettingsService"] = None,
+        settings_service: Optional[object] = None,
     ) -> None:
         self._printer = printer if printer is not None else PrinterConnection()
         self._settings = settings_service if settings_service is not None else get_settings()
