@@ -73,6 +73,11 @@
           <button class="tool" data-md="codeblock">Code</button>
           <button class="tool" data-md="rule">Rule</button>
           <button class="tool" data-md="math">Math</button>
+          <span class="tool-sep" aria-hidden="true"></span>
+          <label class="sr-only" for="fontQuick">Font</label>
+          <select id="fontQuick" class="control slim"></select>
+          <label class="sr-only" for="sizeQuick">Font size</label>
+          <input id="sizeQuick" class="control slim narrow" type="number" min="8" max="72" step="1" value="24">
         </div>
 
         <label class="sr-only" for="editor">Markdown source</label>
@@ -98,23 +103,51 @@
     </section>
 
     <!-- to-dos -->
-    <section class="view" id="view-todos" role="tabpanel" hidden>
-      <div class="panel narrow">
+    <section class="view split" id="view-todos" role="tabpanel" hidden>
+      <div class="panel">
         <div class="panel-head">
           <h2>To-dos</h2>
           <span class="head-meta" id="todoCount">0 open</span>
         </div>
+
+        <div class="row-form">
+          <label class="sr-only" for="todoTitle">List title</label>
+          <input id="todoTitle" class="control grow" value="To-do"
+                 placeholder="List title" autocomplete="off">
+          <label class="check">
+            <input type="checkbox" id="todoDate" checked>
+            <span>Date &amp; time</span>
+          </label>
+        </div>
+
         <form class="row-form" id="todoForm">
           <label class="sr-only" for="todoInput">New item</label>
           <input id="todoInput" class="control grow" placeholder="Add an item and press Enter" autocomplete="off">
           <button class="btn" type="submit">Add</button>
         </form>
-        <ul class="list" id="todoList"></ul>
-        <div class="actions spread">
+
+        <ul class="list scroll" id="todoList"></ul>
+
+        <div class="actions">
           <button id="clearDoneBtn" class="btn subtle">Clear done</button>
-          <button id="printTodosBtn" class="btn primary">Print list</button>
         </div>
       </div>
+
+      <aside class="panel preview">
+        <div class="panel-head">
+          <h2>Preview</h2>
+          <span class="head-meta" id="todoPreviewMeta">&ndash;</span>
+        </div>
+        <div class="paper-stage">
+          <div class="paper-wrap">
+            <img id="todoPreview" class="paper" alt="To-do list print preview">
+          </div>
+        </div>
+        <div class="actions">
+          <button id="printTodosBtn" class="btn primary">Print list</button>
+          <button id="todoToPresetBtn" class="btn">Save as preset</button>
+        </div>
+      </aside>
     </section>
 
     <!-- presets -->
@@ -123,8 +156,12 @@
         <div class="panel-head">
           <h2>Presets</h2>
           <span class="head-meta" id="presetCount">0 saved</span>
+          <button id="newPresetBtn" class="btn" style="margin-left:12px">New preset</button>
         </div>
-        <p class="hint">Open a preset to load it into Compose, edit, and print. Saving with the same name overwrites it.</p>
+        <p class="hint">Open a preset to load it into Compose, or edit it in place.
+          Presets remember their own font, size and darkness, and
+          <code>{{date}}</code>, <code>{{time}}</code>, <code>{{datetime}}</code> and
+          <code>{{weekday}}</code> are filled in when it prints.</p>
         <ul class="list" id="presetList"></ul>
       </div>
     </section>
@@ -141,6 +178,11 @@
             <button id="saveTearBtn" class="btn">Save</button>
           </div>
           <p class="hint">Feed after each print so the paper clears the tear bar.</p>
+        </div>
+
+        <div class="field">
+          <label for="fontFamily">Font</label>
+          <select id="fontFamily" class="control"></select>
         </div>
 
         <div class="field">
@@ -192,28 +234,100 @@
     <span class="status-right">
       <span id="statusProfile"></span>
       <span id="statusWidth"></span>
+
+      <div class="theme-switcher">
+        <button id="themeToggle" class="theme-btn" aria-haspopup="true" aria-expanded="false" aria-controls="themeMenu">
+          <span class="swatch" aria-hidden="true"></span>
+          <span id="themeLabel">Theme 1</span>
+          <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg>
+        </button>
+
+        <div class="theme-menu" id="themeMenu" role="menu" hidden>
+          <button class="theme-item" role="menuitemradio" data-theme="1"><span class="swatch s1" aria-hidden="true"></span>Theme 1</button>
+          <button class="theme-item" role="menuitemradio" data-theme="2"><span class="swatch s2" aria-hidden="true"></span>Theme 2</button>
+          <button class="theme-item" role="menuitemradio" data-theme="3"><span class="swatch s3" aria-hidden="true"></span>Theme 3</button>
+          <button class="theme-item" role="menuitemradio" data-theme="4"><span class="swatch s4" aria-hidden="true"></span>Theme 4</button>
+          <div class="theme-sep" role="separator"></div>
+          <button class="theme-item" id="modeToggle" role="menuitem">
+            <svg class="mode-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+            <span id="modeLabel">Light mode</span>
+          </button>
+        </div>
+      </div>
     </span>
   </footer>
 </div>
 
-<!-- ------------------------------------------------ theme switcher (bottom right) -->
-<div class="theme-switcher">
-  <button id="themeToggle" class="theme-btn" aria-haspopup="true" aria-expanded="false" aria-controls="themeMenu">
-    <span class="swatch" aria-hidden="true"></span>
-    <span id="themeLabel">Theme 1</span>
-    <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg>
-  </button>
+<!-- ------------------------------------------------ preset editor -->
+<div class="backdrop" id="presetModal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="presetModalTitle">
+    <div class="panel-head">
+      <h2 id="presetModalTitle">New preset</h2>
+      <button class="iconbtn" id="presetClose" aria-label="Close">Close</button>
+    </div>
 
-  <div class="theme-menu" id="themeMenu" role="menu" hidden>
-    <button class="theme-item" role="menuitemradio" data-theme="1"><span class="swatch s1" aria-hidden="true"></span>Theme 1</button>
-    <button class="theme-item" role="menuitemradio" data-theme="2"><span class="swatch s2" aria-hidden="true"></span>Theme 2</button>
-    <button class="theme-item" role="menuitemradio" data-theme="3"><span class="swatch s3" aria-hidden="true"></span>Theme 3</button>
-    <button class="theme-item" role="menuitemradio" data-theme="4"><span class="swatch s4" aria-hidden="true"></span>Theme 4</button>
-    <div class="theme-sep" role="separator"></div>
-    <button class="theme-item" id="modeToggle" role="menuitem">
-      <svg class="mode-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
-      <span id="modeLabel">Light mode</span>
-    </button>
+    <div class="modal-body">
+      <div class="modal-form">
+        <div class="field">
+          <label for="presetName">Name</label>
+          <input id="presetName" class="control" placeholder="Shopping list" autocomplete="off">
+        </div>
+
+        <div class="field">
+          <label for="presetDesc">Description <span class="opt">optional</span></label>
+          <input id="presetDesc" class="control" placeholder="What this is for" autocomplete="off">
+        </div>
+
+        <div class="field">
+          <label for="presetText">Content</label>
+          <div class="toolbar compact" role="toolbar" aria-label="Markdown formatting">
+            <button class="tool" data-pmd="h1">H1</button>
+            <button class="tool" data-pmd="h2">H2</button>
+            <button class="tool strong" data-pmd="bold">B</button>
+            <button class="tool em" data-pmd="italic">I</button>
+            <button class="tool" data-pmd="ul">List</button>
+            <button class="tool" data-pmd="quote">Quote</button>
+            <button class="tool" data-pmd="table">Table</button>
+            <button class="tool" data-pmd="rule">Rule</button>
+            <span class="tool-sep" aria-hidden="true"></span>
+            <button class="tool" data-token="{{date}}">date</button>
+            <button class="tool" data-token="{{time}}">time</button>
+            <button class="tool" data-token="{{weekday}}">weekday</button>
+          </div>
+          <textarea id="presetText" class="control mono-area" rows="10" spellcheck="false"></textarea>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label for="presetFont">Font</label>
+            <select id="presetFont" class="control"></select>
+          </div>
+          <div class="field">
+            <label for="presetSize">Font size</label>
+            <input id="presetSize" class="control" type="number" min="8" max="72" step="1" value="24">
+          </div>
+          <div class="field">
+            <label for="presetDarkness">Darkness</label>
+            <input id="presetDarkness" class="control" type="number" min="0.5" max="2" step="0.05" value="1">
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-preview">
+        <div class="panel-head"><h2>Preview</h2><span class="head-meta" id="presetPreviewMeta">&ndash;</span></div>
+        <div class="paper-stage">
+          <div class="paper-wrap"><img id="presetPreview" class="paper" alt="Preset preview"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="actions modal-actions">
+      <button id="presetDelete" class="btn danger">Delete</button>
+      <span class="spacer"></span>
+      <button id="presetDuplicate" class="btn subtle">Duplicate</button>
+      <button id="presetCancel" class="btn">Cancel</button>
+      <button id="presetSave" class="btn primary">Save preset</button>
+    </div>
   </div>
 </div>
 

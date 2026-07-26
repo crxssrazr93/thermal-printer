@@ -108,8 +108,8 @@ button{cursor:pointer;background:none;border:0}
 /* ---------------------------------------------------------------- views */
 .main{overflow:hidden;padding:var(--gap);display:flex}
 .view{flex:1;min-width:0;overflow:auto}
-.view.split{display:grid;grid-template-columns:1fr 380px;gap:var(--gap);overflow:hidden}
-@media (max-width:900px){.view.split{grid-template-columns:1fr;overflow:auto}}
+.view.split{display:grid;grid-template-columns:minmax(0,1fr) 434px;gap:var(--gap);overflow:hidden}
+@media (max-width:1040px){.view.split{grid-template-columns:1fr;overflow:auto}}
 
 .panel{
   background:var(--panel);border:var(--border) solid var(--line);border-radius:var(--radius);
@@ -139,6 +139,8 @@ button{cursor:pointer;background:none;border:0}
 .tool.del{text-decoration:line-through}
 .tool.code{font-family:var(--font-mono)}
 .tool-sep{width:1px;background:var(--line);margin:4px 5px}
+.control.slim{min-height:30px;padding:4px 8px;font-size:12px;max-width:190px}
+.control.slim.narrow{width:64px}
 
 .editor-area{
   flex:1;min-height:220px;resize:none;border:0;background:transparent;color:var(--ink);
@@ -148,9 +150,13 @@ button{cursor:pointer;background:none;border:0}
 .editor-area::placeholder{color:var(--faint)}
 
 /* preview */
-.paper-stage{flex:1;overflow:auto;padding:18px;display:flex;justify-content:center;align-items:flex-start}
-.paper-wrap{background:#fff;border-radius:var(--radius-paper);padding:10px;box-shadow:var(--shadow-lift)}
-.paper{display:block;width:288px;image-rendering:pixelated}
+.paper-stage{flex:1;overflow:auto;padding:10px;display:flex;justify-content:center;align-items:flex-start}
+.paper-wrap{background:#fff;border-radius:var(--radius-paper);padding:14px 12px 20px;
+  box-shadow:var(--shadow-lift);flex:none}
+/* Shown at 1:1, so one printer dot is one pixel. Scaling a 1-bit dithered
+   bitmap to fit resamples it into mush, which is why this pane is sized to
+   the paper rather than the paper to the pane. */
+.paper{display:block;width:384px;image-rendering:pixelated}
 .actions{display:flex;gap:9px;padding:13px 15px;border-top:var(--border) solid var(--line)}
 .actions .btn{flex:1}
 .actions.spread{border-top:0}
@@ -175,7 +181,12 @@ button{cursor:pointer;background:none;border:0}
 .item .iconbtn.del:hover{color:var(--danger)}
 .empty{padding:22px 14px;text-align:center;color:var(--faint);font-size:13px}
 
-.row-form{display:flex;gap:8px;padding:12px 14px;flex-wrap:wrap}
+.list.scroll{flex:1;overflow:auto;min-height:0}
+.row-form{display:flex;gap:8px;padding:12px 14px;flex-wrap:wrap;align-items:center}
+.check{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;color:var(--muted);
+  cursor:pointer;white-space:nowrap}
+.check input{width:16px;height:16px;accent-color:var(--accent);cursor:pointer}
+.check:hover{color:var(--ink)}
 .field{padding:10px 14px;display:flex;flex-direction:column;gap:6px}
 .field > label{font-size:12px;font-weight:600;color:var(--muted)}
 .field .row-form{padding:0}
@@ -187,21 +198,19 @@ button{cursor:pointer;background:none;border:0}
 
 /* status bar */
 .statusbar{
-  display:flex;align-items:center;gap:16px;padding:8px var(--pad);
+  display:flex;align-items:center;gap:16px;padding:6px var(--pad);
   border-top:var(--border) solid var(--line);background:var(--panel);
   font-size:11.5px;color:var(--muted);
-  /* keep the last item clear of the floating theme switcher */
-  padding-right:210px;
 }
-.status-right{margin-left:auto;display:flex;gap:16px;color:var(--faint)}
+.status-right{margin-left:auto;display:flex;align-items:center;gap:16px;color:var(--faint)}
 
 /* ------------------------------------------------------- theme switcher */
-.theme-switcher{position:fixed;right:18px;bottom:18px;z-index:50}
+/* lives in the footer, so the menu opens upward out of it */
+.theme-switcher{position:relative;z-index:50}
 .theme-btn{
-  display:flex;align-items:center;gap:9px;padding:9px 13px;font-size:12.5px;font-weight:500;
-  background:var(--panel);border:var(--border) solid var(--line-strong);border-radius:999px;
-  box-shadow:var(--shadow-lift);color:var(--ink);
-  transition:border-color 180ms ease;
+  display:flex;align-items:center;gap:8px;padding:5px 11px;font-size:12px;font-weight:500;
+  background:var(--panel-2);border:var(--border) solid var(--line);border-radius:999px;
+  color:var(--ink);transition:border-color 180ms ease;
 }
 .theme-btn:hover{border-color:var(--accent)}
 .theme-btn .chev{width:14px;height:14px;transition:transform 200ms ease}
@@ -228,6 +237,43 @@ button{cursor:pointer;background:none;border:0}
 .theme-item[aria-checked="true"]{background:var(--panel-2);font-weight:600}
 .theme-item .mode-icon{width:15px;height:15px}
 .theme-sep{height:1px;background:var(--line);margin:5px 3px}
+
+/* ---------------------------------------------------------- preset modal */
+.backdrop{
+  position:fixed;inset:0;z-index:70;display:flex;align-items:center;justify-content:center;
+  padding:24px;background:rgba(0,0,0,.55);backdrop-filter:blur(3px);
+}
+.backdrop[hidden]{display:none}
+.modal{
+  width:min(1100px,100%);max-height:100%;display:flex;flex-direction:column;overflow:hidden;
+  background:var(--panel);border:var(--border) solid var(--line-strong);
+  border-radius:var(--radius);box-shadow:var(--shadow-lift);
+}
+.modal .panel-head h2{font-size:12px}
+.modal-body{display:grid;grid-template-columns:minmax(0,1fr) 434px;gap:0;overflow:hidden;min-height:0}
+.modal-form{overflow:auto;padding:4px 4px 12px}
+.modal-preview{
+  display:flex;flex-direction:column;min-height:0;
+  border-left:var(--border) solid var(--line);
+}
+.modal-preview .paper-stage{padding:10px}
+.modal-actions{border-top:var(--border) solid var(--line)}
+.modal-actions .spacer{flex:1}
+.modal-actions .btn{flex:0 0 auto}
+.field-row{display:flex;gap:0;flex-wrap:wrap}
+.field-row .field{flex:1;min-width:150px}
+.opt{font-weight:400;color:var(--faint);text-transform:none;letter-spacing:0}
+.mono-area{
+  font-family:var(--font-mono);font-size:12.5px;line-height:1.8;resize:vertical;width:100%;
+  padding:12px;
+}
+.toolbar.compact{padding:8px 0;border-bottom:0;gap:3px}
+.hint code{
+  font-family:var(--font-mono);font-size:11.5px;padding:1px 5px;border-radius:4px;
+  background:var(--panel-2);border:var(--border) solid var(--line);
+}
+@media (max-width:980px){.modal-body{grid-template-columns:1fr}
+  .modal-preview{border-left:0;border-top:var(--border) solid var(--line)}}
 
 /* toast */
 .toast{
@@ -317,6 +363,28 @@ button{cursor:pointer;background:none;border:0}
   --line:#F5F5F5; --line-strong:#F5F5F5;
   --accent:#5B8BFF; --accent-ink:#0A0A0A; --ok:#4ADE80; --danger:#FF6B62;
 }
+/* The palette is the point of this one, so the colour is structural rather
+   than decorative: yellow masthead, blue for the current section, green for
+   the action that commits, red for destructive. It stays the same in both
+   modes because the hues are what identify the theme. */
+:root[data-theme="3"] .topbar{background:#FFD400;border-bottom-width:3px}
+:root[data-theme="3"] .topbar,
+:root[data-theme="3"] .topbar .state,
+:root[data-theme="3"] .topbar .brand b{color:#0A0A0A}
+:root[data-theme="3"] .topbar .state .dot{background:#0A0A0A}
+:root[data-theme="3"] .topbar .state.on .dot{background:#15803D}
+:root[data-theme="3"] .logo{background:#0A0A0A;color:#FFD400}
+:root[data-theme="3"] .topbar .btn,
+:root[data-theme="3"] .topbar .control{
+  background:#FFFFFF;color:#0A0A0A;border-color:#0A0A0A;box-shadow:3px 3px 0 #0A0A0A;
+}
+:root[data-theme="3"] .btn.primary{background:#22C55E;color:#0A0A0A}
+:root[data-theme="3"] .btn.danger{background:#EF3E36;color:#FFFFFF}
+/* first button of each toolbar group carries the group's colour */
+:root[data-theme="3"] .tool[data-md="h1"]{background:#EF3E36;color:#FFFFFF}
+:root[data-theme="3"] .tool[data-md="bold"]{background:#2563EB;color:#FFFFFF}
+:root[data-theme="3"] .tool[data-md="ul"]{background:#FFD400;color:#0A0A0A}
+:root[data-theme="3"] .tool[data-md="link"]{background:#0A0A0A;color:#FFD400}
 :root[data-theme="3"] .panel-head{background:var(--line);color:var(--bg)}
 :root[data-theme="3"] .panel-head h2{color:var(--bg)}
 :root[data-theme="3"] .head-meta{color:var(--bg);opacity:.75}

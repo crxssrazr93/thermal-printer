@@ -46,6 +46,7 @@ from src.core.printer import PrinterConnection    # noqa: E402
 from src.core.protocol import PrinterProtocol     # noqa: E402
 from src.processing.image_processor import ImageProcessor      # noqa: E402
 from src.processing.markdown_renderer import MarkdownRenderer  # noqa: E402
+from src.utils.font_manager import get_font_manager            # noqa: E402
 
 logger = logging.getLogger("thermal.web")
 
@@ -58,7 +59,7 @@ DATA_DIR = Path(
 PRESETS_FILE = DATA_DIR / "presets.json"
 TODOS_FILE = DATA_DIR / "todos.json"
 
-DEFAULT_FONT = "DejaVu Sans Mono"
+DEFAULT_FONT = "DejaVuSansMono"   # family names carry no spaces; a miss falls back silently
 DEFAULT_SIZE = 24
 DEFAULT_LINE_SPACING = 1.1
 
@@ -98,6 +99,29 @@ def load_todos():
 
 
 # -----------------------------------------------------------------------------
+# template tokens
+# -----------------------------------------------------------------------------
+# Expanded at render time rather than when a preset is saved, so a stored
+# preset stays a template and prints today's date every time it is used.
+_TOKENS = {
+    "date": "%d %b %Y",
+    "time": "%H:%M",
+    "datetime": "%d %b %Y, %H:%M",
+    "weekday": "%A",
+}
+_TOKEN_RE = re.compile(r"\{\{\s*(" + "|".join(_TOKENS) + r")\s*\}\}", re.IGNORECASE)
+
+
+def expand_tokens(text: str) -> str:
+    if not text or "{{" not in text:
+        return text
+    now = time.localtime()
+    return _TOKEN_RE.sub(
+        lambda m: time.strftime(_TOKENS[m.group(1).lower()], now), text
+    )
+
+
+# -----------------------------------------------------------------------------
 # printer session
 # -----------------------------------------------------------------------------
 class Session:
@@ -117,6 +141,7 @@ class Session:
     # --- rendering -----------------------------------------------------------
     def _pipeline(self, text: str, options: Dict[str, Any]):
         """Render markdown and return (rendered image, configured processor)."""
+        text = expand_tokens(text)
         renderer = MarkdownRenderer(
             font_family=options.get("font") or DEFAULT_FONT,
             font_size=int(options.get("size") or DEFAULT_SIZE),
@@ -253,6 +278,12 @@ def api_state(handler, match, body):
     return 200, SESSION.state()
 
 
+@route("GET", "/api/fonts")
+def api_fonts(handler, match, body):
+    families = get_font_manager().get_available_families() or [DEFAULT_FONT]
+    return 200, {"fonts": families, "default": DEFAULT_FONT}
+
+
 @route("GET", "/api/devices")
 def api_devices(handler, match, body):
     transport = handler.query.get("transport", [profiles.TRANSPORT_BLUETOOTH])[0]
@@ -340,7 +371,15 @@ def api_preset_save(handler, match, body):
         entry = {
             "id": body.get("id") or uuid.uuid4().hex[:12],
             "name": name,
+            "description": (body.get("description") or "").strip(),
             "text": body.get("text", ""),
+            # a preset carries the render settings it was designed against, so
+            # reopening one does not silently print at whatever size was last used
+            "options": {
+                "font": body.get("options", {}).get("font") or DEFAULT_FONT,
+                "size": int(body.get("options", {}).get("size") or DEFAULT_SIZE),
+                "darkness": float(body.get("options", {}).get("darkness") or 1.0),
+            },
             "updated": time.time(),
         }
         for index, existing in enumerate(presets):

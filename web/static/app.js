@@ -52,6 +52,7 @@ function applyTheme(theme, mode) {
   });
   localStorage.setItem(THEME_KEY, theme);
   localStorage.setItem(MODE_KEY, mode);
+  applyThemePrintDefaults(theme);
 }
 
 function initTheme() {
@@ -105,30 +106,189 @@ function showView(name) {
     view.hidden = view.id !== `view-${name}`;
   });
   if (name === 'compose') $('editor').focus();
+  if (name === 'todos') refreshTodoPreview();
 }
 
 /* --------------------------------------------------------------- markdown */
 /* Mirrors the desktop toolbar: wrap a selection, prefix whole lines, or drop
  * in a skeleton with the placeholder selected so typing replaces it. */
-const editor = () => $('editor');
+/* Indirection so the same helpers can drive the compose textarea or the one
+ * in the preset editor; withPresetTextarea swaps this for one action. */
+let editorTarget = () => $('editor');
+const editor = () => editorTarget();
 
 function replaceRange(start, end, text, selStart, selEnd) {
   const el = editor();
   el.setRangeText(text, start, end, 'end');
   if (selStart !== undefined) el.setSelectionRange(selStart, selEnd ?? selStart);
   el.focus();
-  schedulePreview();
+  if (el.id === 'editor') schedulePreview();
 }
 
-function wrap(prefix, suffix, placeholder) {
+const isWrapped = (text, prefix, suffix) =>
+  text.length >= prefix.length + suffix.length &&
+  text.startsWith(prefix) && text.endsWith(suffix);
+
+/* Find the marked-up span the caret is sitting inside, so pressing the button
+ * again with no selection removes the markers rather than nesting new ones. */
+function enclosingSpan(value, caret, prefix, suffix) {
+  const lineStart = value.lastIndexOf('\n', caret - 1) + 1;
+  let lineEnd = value.indexOf('\n', caret);
+  if (lineEnd === -1) lineEnd = value.length;
+
+  const open = value.lastIndexOf(prefix, caret - 1);
+  if (open < lineStart) return null;
+
+  const close = value.indexOf(suffix, Math.max(open + prefix.length, caret));
+  if (close === -1 || close + suffix.length > lineEnd) return null;
+
+  // a single "*" sitting next to another is part of "**", a different marker
+  if (prefix.length === 1 &&
+      (value[open - 1] === prefix || value[open + 1] === prefix ||
+       value[close - 1] === suffix || value[close + 1] === suffix)) {
+    return null;
+  }
+  return { start: open, end: close + suffix.length };
+}
+
+/* Inline emphasis. Applying it twice takes it off again, and the behaviour
+ * follows what is selected: nothing, part of a line, or several lines. */
+function toggleWrap(prefix, suffix, placeholder) {
+  const el = editor();
+  const value = el.value;
+  const a = el.selectionStart;
+  const b = el.selectionEnd;
+
+  // --- no selection: unwrap where the caret is, else drop in a placeholder
+  if (a === b) {
+    const span = enclosingSpan(value, a, prefix, suffix);
+    if (span) {
+      const inner = value.slice(span.start + prefix.length, span.end - suffix.length);
+      replaceRange(span.start, span.end, inner, span.start, span.start + inner.length);
+    } else {
+      replaceRange(a, b, `${prefix}${placeholder}${suffix}`,
+        a + prefix.length, a + prefix.length + placeholder.length);
+    }
+    return;
+  }
+
+  const selected = value.slice(a, b);
+
+  // --- several lines: emphasis does not survive a newline in markdown, so
+  //     each line is marked on its own, and indentation is left alone.
+  //     The range snaps out to whole lines first, since a drag that stops
+  //     mid-word would otherwise emphasise half of it.
+  if (selected.includes('\n')) {
+    const start = value.lastIndexOf('\n', a - 1) + 1;
+    let end = value.indexOf('\n', b);
+    if (end === -1) end = value.length;
+
+    const lines = value.slice(start, end).split('\n');
+    const filled = lines.filter((line) => line.trim());
+    const allWrapped = filled.length > 0 &&
+      filled.every((line) => isWrapped(line.trim(), prefix, suffix));
+
+    const next = lines.map((line) => {
+      const body = line.trim();
+      if (!body) return line;
+      const indent = line.slice(0, line.indexOf(body));
+      return indent + (allWrapped
+        ? body.slice(prefix.length, body.length - suffix.length)
+        : `${prefix}${body}${suffix}`);
+    }).join('\n');
+
+    replaceRange(start, end, next, start, start + next.length);
+    return;
+  }
+
+  // --- the selection itself carries the markers
+  if (isWrapped(selected, prefix, suffix)) {
+    const inner = selected.slice(prefix.length, selected.length - suffix.length);
+    replaceRange(a, b, inner, a, a + inner.length);
+    return;
+  }
+
+  // --- the markers sit just outside the selection
+  if (value.slice(a - prefix.length, a) === prefix &&
+      value.slice(b, b + suffix.length) === suffix) {
+    const start = a - prefix.length;
+    replaceRange(start, b + suffix.length, selected, start, start + selected.length);
+    return;
+  }
+
+  replaceRange(a, b, `${prefix}${selected}${suffix}`,
+    a, a + prefix.length + selected.length + suffix.length);
+}
+
+/* Not a toggle: the closing half carries the url, so there is nothing
+ * symmetrical to detect and removing it would silently drop the target. */
+function insertLink() {
   const el = editor();
   const { selectionStart: a, selectionEnd: b } = el;
-  const body = el.value.slice(a, b);
-  if (body) {
-    replaceRange(a, b, `${prefix}${body}${suffix}`, a, a + prefix.length + body.length + suffix.length);
-  } else {
-    replaceRange(a, b, `${prefix}${placeholder}${suffix}`, a + prefix.length, a + prefix.length + placeholder.length);
+  const label = el.value.slice(a, b) || 'text';
+  const text = `[${label}](https://)`;
+  // leave the url selected, since that is what still needs typing
+  const urlAt = a + label.length + 3;
+  replaceRange(a, b, text, urlAt, urlAt + 8);
+}
+
+/* Split one line into cells. Commas, tabs and semicolons all count as
+ * separators, and quotes protect a comma that belongs to the value. */
+function splitCells(line) {
+  const cells = [];
+  let cell = '';
+  let quoted = false;
+
+  for (const char of line) {
+    if (char === '"') { quoted = !quoted; continue; }
+    if (!quoted && (char === ',' || char === '\t' || char === ';')) {
+      cells.push(cell.trim());
+      cell = '';
+      continue;
+    }
+    cell += char;
   }
+  cells.push(cell.trim());
+  return cells;
+}
+
+/* Turn a pasted comma or tab separated list into a markdown table, so the
+ * usual way this data arrives does not have to be retyped by hand. */
+function listToTable(text) {
+  const rows = text.split('\n').map((l) => l.trim()).filter(Boolean).map(splitCells);
+  if (!rows.length) return null;
+
+  const width = Math.max(...rows.map((r) => r.length));
+  // a single cell is just a word; there is no table to build from it
+  if (width < 2 && rows.length < 2) return null;
+
+  const padded = rows.map((row) => {
+    const cells = row.slice();
+    while (cells.length < width) cells.push('');
+    return cells;
+  });
+
+  // one line of values reads as headings, so leave an empty row to type into
+  const header = padded[0];
+  const body = padded.length > 1 ? padded.slice(1) : [new Array(width).fill(' ')];
+
+  const line = (cells) => `| ${cells.join(' | ')} |`;
+  return [line(header), `|${' --- |'.repeat(width)}`, ...body.map(line)].join('\n');
+}
+
+function insertTable() {
+  const el = editor();
+  const { selectionStart: a, selectionEnd: b } = el;
+  const selected = el.value.slice(a, b).trim();
+
+  if (selected) {
+    const table = listToTable(selected);
+    if (table) {
+      replaceRange(a, b, table, a, a + table.length);
+      return;
+    }
+  }
+  insertBlock('| Item | Qty |\n|---|---|\n| tea | 2 |\n| jam | 1 |');
 }
 
 const BLOCK_MARKER = /^(#{1,6}\s+|>\s*|[-*+]\s+|\d+[.)]\s+)/;
@@ -171,18 +331,18 @@ const MD_ACTIONS = {
   h1: () => prefixLines('# '),
   h2: () => prefixLines('## '),
   h3: () => prefixLines('### '),
-  bold: () => wrap('**', '**', 'bold'),
-  italic: () => wrap('*', '*', 'italic'),
-  strike: () => wrap('~~', '~~', 'strike'),
-  code: () => wrap('`', '`', 'code'),
+  bold: () => toggleWrap('**', '**', 'bold'),
+  italic: () => toggleWrap('*', '*', 'italic'),
+  strike: () => toggleWrap('~~', '~~', 'strike'),
+  code: () => toggleWrap('`', '`', 'code'),
   ul: () => prefixLines('- '),
   ol: () => prefixLines('1. ', true),
   quote: () => prefixLines('> '),
-  link: () => wrap('[', '](https://)', 'text'),
-  table: () => insertBlock('| Item | Qty |\n|---|---|\n| tea | 2 |\n| jam | 1 |'),
+  link: () => insertLink(),
+  table: () => insertTable(),
   codeblock: () => insertBlock('```\ncode\n```'),
   rule: () => insertBlock('---'),
-  math: () => wrap('$', '$', 'x^2'),
+  math: () => toggleWrap('$', '$', 'x^2'),
 };
 
 function initToolbar() {
@@ -192,42 +352,133 @@ function initToolbar() {
 }
 
 /* ---------------------------------------------------------------- preview */
-let previewTimer = null;
-let previewUrl = null;
+/* Three panes want previews (compose, to-dos, the preset editor) and they all
+ * render the same way, so one function serves all of them. Each keeps its own
+ * object URL so revoking one cannot blank another. */
+const previewUrls = {};
+
+/* Each theme carries its own printing voice, not just its own chrome. The
+ * font is what the paper actually looks like, so a theme that does not change
+ * it only ever skin-deep. These are all families installed on this machine;
+ * anything not found silently falls back, so they are checked at load. */
+const THEME_PRINT = {
+  '1': { font: 'NotoSansMono Medium', size: 24 },   // neutral, precise
+  '2': { font: 'NimbusMonoPS',        size: 25 },   // typewriter, warm
+  '3': { font: 'NotoSansMono Black',  size: 24 },   // heavy, loud
+  '4': { font: 'AdwaitaMono',         size: 24 },   // modern, even
+};
+
+const FONT_KEY = 'tp.font';
+const SIZE_KEY = 'tp.size';
+const FONT_PINNED = 'tp.fontPinned';
+
+function currentFont() {
+  return $('fontFamily').value || localStorage.getItem(FONT_KEY) || 'DejaVuSansMono';
+}
 
 function renderOptions() {
   return {
+    font: currentFont(),
     size: Number($('fontSize').value) || 24,
     darkness: Number($('darkness').value) || 1,
   };
 }
 
-function schedulePreview() {
-  clearTimeout(previewTimer);
-  previewTimer = setTimeout(refreshPreview, 260);
+/* keep the Settings pane and the compose toolbar showing the same thing */
+function setPrintFont(font, size, { pin = false } = {}) {
+  [['fontFamily', font], ['fontQuick', font],
+   ['fontSize', size], ['sizeQuick', size]].forEach(([id, value]) => {
+    if ($(id) && value !== undefined && value !== null) $(id).value = value;
+  });
+  if (font) localStorage.setItem(FONT_KEY, font);
+  if (size) localStorage.setItem(SIZE_KEY, size);
+  if (pin) localStorage.setItem(FONT_PINNED, '1');
+  refreshPreview();
 }
 
-async function refreshPreview() {
+/* Applied on theme change unless the font was chosen by hand, since silently
+ * overriding a deliberate choice is worse than a theme looking less distinct. */
+function applyThemePrintDefaults(theme) {
+  if (localStorage.getItem(FONT_PINNED) === '1') return;
+  const preset = THEME_PRINT[theme];
+  if (!preset || !fontList.length) return;
+  const font = fontList.includes(preset.font) ? preset.font : currentFont();
+  setPrintFont(font, preset.size);
+}
+
+let fontList = [];
+
+async function loadFonts() {
+  const data = await api('/api/fonts');
+  fontList = data.fonts || [];
+
+  ['fontFamily', 'fontQuick', 'presetFont'].forEach((id) => {
+    const select = $(id);
+    if (!select) return;
+    select.innerHTML = '';
+    fontList.forEach((name) => select.append(new Option(name, name)));
+  });
+
+  const theme = document.documentElement.dataset.theme;
+  const pinned = localStorage.getItem(FONT_PINNED) === '1';
+  const saved = localStorage.getItem(FONT_KEY);
+  const savedSize = Number(localStorage.getItem(SIZE_KEY)) || undefined;
+
+  if (pinned && saved && fontList.includes(saved)) {
+    setPrintFont(saved, savedSize || 24);
+  } else {
+    const preset = THEME_PRINT[theme] || {};
+    const font = fontList.includes(preset.font) ? preset.font
+      : (fontList.includes('DejaVuSansMono') ? 'DejaVuSansMono' : fontList[0]);
+    setPrintFont(font, preset.size || 24);
+  }
+}
+
+function initFontControls() {
+  const pinAndRender = (font, size) => setPrintFont(font, size, { pin: true });
+
+  $('fontFamily').addEventListener('change', () =>
+    pinAndRender($('fontFamily').value, undefined));
+  $('fontQuick').addEventListener('change', () =>
+    pinAndRender($('fontQuick').value, undefined));
+  $('fontSize').addEventListener('change', () =>
+    pinAndRender(undefined, Number($('fontSize').value)));
+  $('sizeQuick').addEventListener('change', () =>
+    pinAndRender(undefined, Number($('sizeQuick').value)));
+}
+
+async function renderInto(key, text, img, meta, options) {
   try {
     const response = await fetch('/api/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: editor().value, options: renderOptions() }),
+      body: JSON.stringify({ text, options: options || renderOptions() }),
     });
     if (!response.ok) throw new Error('render failed');
     const blob = await response.blob();
-    // revoke the previous object URL or every keystroke leaks a bitmap
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    previewUrl = URL.createObjectURL(blob);
-    const img = $('preview');
-    img.src = previewUrl;
-    img.onload = () => {
-      $('previewMeta').textContent = `${img.naturalWidth} x ${img.naturalHeight}`;
-    };
+    // revoke the previous URL or every keystroke leaks a bitmap
+    if (previewUrls[key]) URL.revokeObjectURL(previewUrls[key]);
+    previewUrls[key] = URL.createObjectURL(blob);
+    img.src = previewUrls[key];
+    img.onload = () => { meta.textContent = `${img.naturalWidth} x ${img.naturalHeight}`; };
   } catch (error) {
-    $('previewMeta').textContent = 'preview failed';
+    meta.textContent = 'preview failed';
   }
 }
+
+/* debounce per pane so typing in one does not cancel another's refresh */
+const timers = {};
+function debounce(key, fn, wait = 260) {
+  clearTimeout(timers[key]);
+  timers[key] = setTimeout(fn, wait);
+}
+
+const refreshPreview = () => renderInto('compose', editor().value, $('preview'), $('previewMeta'));
+const schedulePreview = () => debounce('compose', refreshPreview);
+
+const refreshTodoPreview = () =>
+  renderInto('todos', todosAsMarkdown(), $('todoPreview'), $('todoPreviewMeta'));
+const scheduleTodoPreview = () => debounce('todos', refreshTodoPreview);
 
 /* -------------------------------------------------------------- connection */
 async function refreshState() {
@@ -286,7 +537,7 @@ function initConnection() {
 }
 
 /* ------------------------------------------------------------------ print */
-async function printText(text, label = 'Printed') {
+async function printText(text, label = 'Printed', options) {
   if (!state.printer.connected) { toast('Not connected to a printer', true); return; }
   const button = $('printBtn');
   button.disabled = true;
@@ -294,7 +545,7 @@ async function printText(text, label = 'Printed') {
   try {
     const result = await api('/api/print', {
       method: 'POST',
-      body: JSON.stringify({ text, options: renderOptions() }),
+      body: JSON.stringify({ text, options: options || renderOptions() }),
     });
     toast(label);
     status(result.message || 'Ready');
@@ -319,7 +570,7 @@ function renderPresets() {
   $('presetCount').textContent = `${state.presets.length} saved`;
 
   if (!state.presets.length) {
-    list.innerHTML = '<li class="empty">No presets yet. Write something in Compose and hit "Save as preset".</li>';
+    list.innerHTML = '<li class="empty">No presets yet. Use "New preset", or write something in Compose and hit "Save as preset".</li>';
     return;
   }
 
@@ -328,31 +579,28 @@ function renderPresets() {
     .sort((a, b) => (b.updated || 0) - (a.updated || 0))
     .forEach((preset) => {
       const lines = (preset.text || '').split('\n').filter(Boolean).length;
+      const bits = [`${lines} line${lines === 1 ? '' : 's'}`];
+      if (preset.description) bits.unshift(preset.description);
+      if (preset.options?.size) bits.push(`${preset.options.size}px`);
+
       const li = document.createElement('li');
       li.className = 'item';
       li.innerHTML = `
         <div>
           <div class="name"></div>
-          <div class="sub">${lines} line${lines === 1 ? '' : 's'}</div>
+          <div class="sub"></div>
         </div>
         <span class="spacer"></span>
         <button class="iconbtn" data-act="open">Open</button>
-        <button class="iconbtn" data-act="print">Print</button>
-        <button class="iconbtn del" data-act="delete">Delete</button>`;
+        <button class="iconbtn" data-act="edit">Edit</button>
+        <button class="iconbtn" data-act="print">Print</button>`;
       li.querySelector('.name').textContent = preset.name;
+      li.querySelector('.sub').textContent = bits.join(' · ');
 
       li.querySelector('[data-act="open"]').addEventListener('click', () => openPreset(preset));
+      li.querySelector('[data-act="edit"]').addEventListener('click', () => openPresetEditor(preset));
       li.querySelector('[data-act="print"]').addEventListener('click', () =>
-        printText(preset.text, `Printed "${preset.name}"`));
-      li.querySelector('[data-act="delete"]').addEventListener('click', async () => {
-        await api(`/api/presets/${preset.id}`, { method: 'DELETE' });
-        if (state.activePresetId === preset.id) {
-          state.activePresetId = null;
-          $('presetLabel').textContent = 'Untitled';
-        }
-        await loadPresets();
-        toast('Preset deleted');
-      });
+        printText(preset.text, `Printed "${preset.name}"`, preset.options));
 
       list.append(li);
     });
@@ -362,31 +610,149 @@ function openPreset(preset) {
   editor().value = preset.text || '';
   state.activePresetId = preset.id;
   $('presetLabel').textContent = preset.name;
+  // a preset carries the settings it was designed against
+  if (preset.options?.font || preset.options?.size) {
+    setPrintFont(preset.options.font, preset.options.size, { pin: true });
+  }
+  if (preset.options?.darkness) $('darkness').value = preset.options.darkness;
   showView('compose');
   refreshPreview();
   toast(`Opened "${preset.name}"`);
 }
 
-async function savePreset() {
-  const existing = state.presets.find((p) => p.id === state.activePresetId);
-  const name = prompt('Preset name', existing ? existing.name : '');
-  if (name === null) return;
-  if (!name.trim()) { toast('A preset needs a name', true); return; }
+/* --------------------------------------------------------- preset editor */
+let editingPreset = null;
 
-  // same name overwrites, so saving twice does not litter the list
-  const byName = state.presets.find(
-    (p) => p.name.toLowerCase() === name.trim().toLowerCase()
+function openPresetEditor(preset) {
+  editingPreset = preset || null;
+  $('presetModalTitle').textContent = preset ? 'Edit preset' : 'New preset';
+  $('presetName').value = preset?.name || '';
+  $('presetDesc').value = preset?.description || '';
+  $('presetText').value = preset?.text ?? editor().value;
+  $('presetFont').value = preset?.options?.font || currentFont();
+  $('presetSize').value = preset?.options?.size || $('fontSize').value || 24;
+  $('presetDarkness').value = preset?.options?.darkness || $('darkness').value || 1;
+
+  $('presetDelete').hidden = !preset;
+  $('presetDuplicate').hidden = !preset;
+
+  $('presetModal').hidden = false;
+  $('presetName').focus();
+  refreshPresetPreview();
+}
+
+function closePresetEditor() {
+  $('presetModal').hidden = true;
+  editingPreset = null;
+}
+
+function presetEditorOptions() {
+  return {
+    font: $('presetFont').value || currentFont(),
+    size: Number($('presetSize').value) || 24,
+    darkness: Number($('presetDarkness').value) || 1,
+  };
+}
+
+const refreshPresetPreview = () => renderInto(
+  'preset', $('presetText').value, $('presetPreview'), $('presetPreviewMeta'),
+  presetEditorOptions()
+);
+
+async function submitPreset() {
+  const name = $('presetName').value.trim();
+  if (!name) { toast('A preset needs a name', true); $('presetName').focus(); return; }
+
+  // a new preset that reuses an existing name updates it rather than making a
+  // second entry that is impossible to tell apart in the list
+  const clash = state.presets.find(
+    (p) => p.name.toLowerCase() === name.toLowerCase() && p.id !== editingPreset?.id
   );
+  if (clash && !confirm(`"${clash.name}" already exists. Overwrite it?`)) return;
 
   const result = await api('/api/presets', {
     method: 'POST',
-    body: JSON.stringify({ id: byName ? byName.id : undefined, name, text: editor().value }),
+    body: JSON.stringify({
+      id: editingPreset?.id || clash?.id,
+      name,
+      description: $('presetDesc').value,
+      text: $('presetText').value,
+      options: presetEditorOptions(),
+    }),
   });
+
   state.presets = result.presets;
-  state.activePresetId = result.preset.id;
-  $('presetLabel').textContent = result.preset.name;
   renderPresets();
+  closePresetEditor();
   toast(`Saved "${result.preset.name}"`);
+}
+
+function initPresetEditor() {
+  $('newPresetBtn').addEventListener('click', () => openPresetEditor(null));
+  $('presetCancel').addEventListener('click', closePresetEditor);
+  $('presetClose').addEventListener('click', closePresetEditor);
+
+  $('presetModal').addEventListener('click', (event) => {
+    if (event.target === $('presetModal')) closePresetEditor();
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !$('presetModal').hidden) closePresetEditor();
+  });
+
+  $('presetSave').addEventListener('click', submitPreset);
+
+  $('presetDelete').addEventListener('click', async () => {
+    if (!editingPreset) return;
+    if (!confirm(`Delete "${editingPreset.name}"?`)) return;
+    await api(`/api/presets/${editingPreset.id}`, { method: 'DELETE' });
+    if (state.activePresetId === editingPreset.id) {
+      state.activePresetId = null;
+      $('presetLabel').textContent = 'Untitled';
+    }
+    closePresetEditor();
+    await loadPresets();
+    toast('Preset deleted');
+  });
+
+  $('presetDuplicate').addEventListener('click', () => {
+    // drop the id so saving creates a second entry
+    editingPreset = null;
+    $('presetModalTitle').textContent = 'New preset';
+    $('presetName').value = `${$('presetName').value} copy`;
+    $('presetDelete').hidden = true;
+    $('presetDuplicate').hidden = true;
+    $('presetName').select();
+  });
+
+  ['presetText', 'presetFont', 'presetSize', 'presetDarkness'].forEach((id) => {
+    $(id).addEventListener('input', () => debounce('preset', refreshPresetPreview));
+  });
+
+  // markdown buttons and token inserts inside the modal
+  document.querySelectorAll('.tool[data-pmd]').forEach((button) => {
+    button.addEventListener('click', () => {
+      withPresetTextarea(() => MD_ACTIONS[button.dataset.pmd]?.());
+    });
+  });
+  document.querySelectorAll('.tool[data-token]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const area = $('presetText');
+      const at = area.selectionStart;
+      area.setRangeText(button.dataset.token, at, area.selectionEnd, 'end');
+      area.focus();
+      refreshPresetPreview();
+    });
+  });
+}
+
+/* The markdown helpers act on whatever editor() returns, so point it at the
+ * modal's textarea for the duration of one action rather than duplicating
+ * every wrap and prefix routine. */
+function withPresetTextarea(action) {
+  const original = editorTarget;
+  editorTarget = () => $('presetText');
+  try { action(); } finally { editorTarget = original; }
+  refreshPresetPreview();
 }
 
 /* ------------------------------------------------------------------ todos */
@@ -401,6 +767,8 @@ function renderTodos() {
   list.innerHTML = '';
   const open = state.todos.filter((t) => !t.done).length;
   $('todoCount').textContent = `${open} open`;
+
+  scheduleTodoPreview();
 
   if (!state.todos.length) {
     list.innerHTML = '<li class="empty">Nothing here yet.</li>';
@@ -435,14 +803,28 @@ function renderTodos() {
   });
 }
 
+const TODO_TITLE_KEY = 'tp.todoTitle';
+const TODO_DATE_KEY = 'tp.todoDate';
+
 function todosAsMarkdown() {
   const open = state.todos.filter((t) => !t.done);
   const done = state.todos.filter((t) => t.done);
-  const date = new Date().toLocaleDateString(undefined, {
-    weekday: 'short', day: 'numeric', month: 'short',
-  });
-  const lines = [`# To-do`, date, ''];
+
+  const title = ($('todoTitle').value || '').trim();
+  const lines = [];
+  if (title) lines.push(`# ${title}`);
+
+  if ($('todoDate').checked) {
+    lines.push(new Date().toLocaleString(undefined, {
+      weekday: 'short', day: 'numeric', month: 'short',
+      hour: '2-digit', minute: '2-digit',
+    }));
+  }
+  if (lines.length) lines.push('');
+
+  if (!open.length && !done.length) lines.push('_nothing to do_');
   open.forEach((t) => lines.push(`- ${t.text}`));
+
   if (done.length) {
     lines.push('', '> done');
     done.forEach((t) => lines.push(`- ~~${t.text}~~`));
@@ -451,6 +833,18 @@ function todosAsMarkdown() {
 }
 
 function initTodos() {
+  $('todoTitle').value = localStorage.getItem(TODO_TITLE_KEY) ?? 'To-do';
+  $('todoDate').checked = localStorage.getItem(TODO_DATE_KEY) !== 'false';
+
+  $('todoTitle').addEventListener('input', () => {
+    localStorage.setItem(TODO_TITLE_KEY, $('todoTitle').value);
+    scheduleTodoPreview();
+  });
+  $('todoDate').addEventListener('change', () => {
+    localStorage.setItem(TODO_DATE_KEY, String($('todoDate').checked));
+    refreshTodoPreview();
+  });
+
   $('todoForm').addEventListener('submit', async (event) => {
     event.preventDefault();
     const input = $('todoInput');
@@ -472,6 +866,15 @@ function initTodos() {
   $('printTodosBtn').addEventListener('click', () => {
     if (!state.todos.length) { toast('Nothing to print', true); return; }
     printText(todosAsMarkdown(), 'Printed to-do list');
+  });
+
+  $('todoToPresetBtn').addEventListener('click', () => {
+    openPresetEditor(null);
+    $('presetName').value = $('todoTitle').value || 'To-do';
+    $('presetText').value = todosAsMarkdown()
+      // keep it a live template rather than freezing today's date into it
+      .replace(/^[A-Z][a-z]{2},? .*\d{2}:\d{2}$/m, '{{datetime}}');
+    refreshPresetPreview();
   });
 }
 
@@ -571,7 +974,7 @@ function initShortcuts() {
   document.addEventListener('keydown', (event) => {
     if (!(event.ctrlKey || event.metaKey)) return;
     if (event.key === 'p') { event.preventDefault(); printText(editor().value); }
-    if (event.key === 's') { event.preventDefault(); savePreset(); }
+    if (event.key === 's') { event.preventDefault(); openPresetEditor(null); }
   });
 }
 
@@ -582,15 +985,17 @@ async function boot() {
   initConnection();
   initTodos();
   initSettings();
+  initFontControls();
+  initPresetEditor();
   initShortcuts();
 
   editor().addEventListener('input', schedulePreview);
   $('printBtn').addEventListener('click', () => printText(editor().value));
-  $('savePresetBtn').addEventListener('click', savePreset);
+  $('savePresetBtn').addEventListener('click', () => openPresetEditor(null));
 
   try {
     await refreshState();
-    await Promise.all([loadPresets(), loadTodos()]);
+    await Promise.all([loadFonts(), loadPresets(), loadTodos()]);
   } catch (error) {
     toast(`Could not reach the server: ${error.message}`, true);
   }
