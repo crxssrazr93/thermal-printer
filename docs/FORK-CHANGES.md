@@ -10,7 +10,7 @@ Upstream targeted one printer. Three things were baked in:
   a **default argument value** in `TextRenderer`, `ImageProcessor`,
   `CalendarRenderer`, `LabelRenderer` and `BannerFrame`. Default arguments are
   evaluated at import time, so `printer.width` in `config.yaml` had no effect on
-  rendering — setting it to 576 for an 80mm printer changed nothing.
+  rendering. Setting it to 576 for an 80mm printer changed nothing.
 - The start/end/status byte sequences (`GS I f0 19`, `0x9a`, `RS G 3`) are CTP-500
   vendor extensions, not ESC/POS, and were sent unconditionally to every printer.
 - A width that was not a multiple of 8 would desynchronise every raster row,
@@ -39,9 +39,9 @@ socket, and that was the sole path.
 `src/core/transport.py` adds two socket-compatible transports, so the same code
 drives all three:
 
-- `UsbTransport` — writes to `/dev/usb/lp*`. Opened non-blocking, so a printer
+- `UsbTransport` writes to `/dev/usb/lp*`. Opened non-blocking, so a printer
   that never replies cannot wedge the UI thread.
-- `CupsTransport` — spools via `lp -o raw` to any configured queue, covering USB,
+- `CupsTransport` spools via `lp -o raw` to any configured queue, covering USB,
   network and Bluetooth-backed queues.
 
 New entry points: `PrinterConnection.connect_usb()`, `.connect_cups()`,
@@ -53,9 +53,9 @@ Previously everything had to be rasterised as an image. Added, each gated behind
 the active profile's capability flags so unsupported printers are never sent
 commands they would echo as garbage:
 
-- `build_qr_command()` — `GS ( k`, guarded by `qrCode`
-- `build_barcode_command()` — CODE128 via `GS k`, guarded by `barcodeA`
-- `build_cut_command()` — `GS V`, guarded by `paperFullCut` / `paperPartCut`
+- `build_qr_command()`: `GS ( k`, guarded by `qrCode`
+- `build_barcode_command()`: CODE128 via `GS k`, guarded by `barcodeA`
+- `build_cut_command()`: `GS V`, guarded by `paperFullCut` / `paperPartCut`
 
 ## 4. Responsive layout
 
@@ -64,7 +64,7 @@ The control rows used `pack(side="left")` with hardcoded pixel widths
 
 - Narrowing the window **silently clipped controls off the right edge**. Below
   roughly 840px the **Symbols** button and **Add Date** checkbox became
-  unreachable — not wrapped or scrolled, just gone. `MIN_WINDOW_WIDTH` was 600,
+  unreachable. Not wrapped or scrolled, just gone. `MIN_WINDOW_WIDTH` was 600,
   so the window was resizable into a broken state.
 - Widening left a large dead band; only the text area expanded.
 
@@ -77,7 +77,7 @@ four rows with everything reachable.
 ## 5. Launcher fixes
 
 - The shipped `.desktop` used
-  `Exec=bash -c 'cd "$HOME/code/personal/print" && ./run.sh'` — an unquoted `&`
+  `Exec=bash -c 'cd "$HOME/code/personal/print" && ./run.sh'`, an unquoted `&`
   and nested quotes, which fails `desktop-file-validate` and can be rejected by
   the launcher. `Exec` now points straight at `run.sh`.
 - That required `run.sh` to set its own working directory (`cd "$SCRIPT_DIR"`),
@@ -169,11 +169,48 @@ repeating the splitter logic three times.
   that variable when the `except` block ends.
 - **Calibration could be lost.** `Settings.save()` is debounced behind a daemon
   timer, so a prompt close discarded it. Calibration uses `save_immediate()`.
-- **Banner used the Text tab's line spacing** - the lookup hardcoded
+- **Banner used the Text tab's line spacing**. The lookup hardcoded
   `SettingsKeys.Text` instead of the section accessor.
 - **Calendar fallback was hardcoded to 384px**, ignoring the active profile.
 - Removed a dead `PREVIEW_PAPER_WIDTH` constant and ~50 unused imports;
   portal file dialogs no longer swallow exceptions silently.
+
+## 11. A server and a web app
+
+The desktop GUI is gone. What replaced it is a stdlib-only print server with a
+browser front end, so the app runs as a systemd user service at a fixed address
+and printing is a tab away rather than a launch away. Rendering stayed in
+Python, which is why the preview is the bitmap the head will receive rather
+than a CSS impression of one, and it is why there is an HTTP API at all: the
+browser is one client of it, and anything else can be another.
+
+Everything the desktop app did lives in the web app, and a good deal it did
+not: tables you type into, pictures with eleven screening methods, right to
+left scripts, along the roll printing, labels, calendars, presets, a to-do
+list, four themes that set the paper as well as the screen.
+
+## 12. The protocol became data
+
+Following a study of RawBT (`docs/rawbt-findings.md`), every constant that
+decided whether a given printer worked at all moved into the profile:
+
+- **`flow`**: bytes per write, the pause between writes, rows per image
+  command, and how long to wait before closing. These were tuned against one
+  machine and were the difference between a printed page and a streaked one.
+- **`graphics`**: which opcode carries a bitmap. `GS v 0` is nearly universal
+  and not quite; column mode (`ESC *`) is there for the firmwares that print
+  the raster command as characters.
+- **`cut`**: nine dialects, and the feed that carries the last line past the
+  blade.
+- **`density`**: how hard the head burns, which is not the same as darkening
+  the bitmap.
+- **`driver`**: which language the printer speaks, ESC/POS or TSPL.
+
+All of it is editable in the app, under **How to talk to it** in the printer
+type editor. Alongside: printer status decoded into words, a byte stream reader
+that draws what a stream would print and names every command in it, a raw
+listener on port 9100 so other software can print through this, and blank paper
+trimmed off the end of every job rather than only off banners.
 
 ## Known limitations
 
@@ -181,5 +218,7 @@ repeating the splitter logic three times.
   template and calendar frames.
 - The CTP-500 vendor commands remain unverified on non-CTP-500 hardware; the
   `generic-*` profiles avoid them entirely.
-- `CupsTransport` is spooled, not streaming — bytes reach the printer as one job
+- `CupsTransport` is spooled, not streaming. Bytes reach the printer as one job
   on `close()`, so interactive status reads are not meaningful on that path.
+- The TSPL driver is written and untested. No label printer has been through
+  it, so it is a starting point rather than a working driver.

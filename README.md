@@ -65,6 +65,13 @@ window and icon. Network access, updating and removal are covered in
   `{{date}}`, and a **to-do list** that prints
 - **Four themes**, light and dark, each setting the paper as well as the
   screen, remembered between visits, and all of them replaceable
+- **Any printer describable**: not only the head width and the feature flags,
+  but how to talk to it, which is the part that decides whether it works at all
+- **A byte stream reader**, so a page that comes out wrong can be looked at
+  rather than guessed about, and a capture from another app compared with this
+  one's
+- **Raw printing on port 9100**, so anything that speaks ESC/POS can print
+  through this to a printer that has no network of its own
 
 ## Documentation
 

@@ -15,8 +15,10 @@
 
 That was a real bug, fixed by sending the page a band at a time and writing
 every band in full. If you see it on a build that has that fix, the printer is
-probably being fed by something else at the same time, or the battery is low
-enough that the head is browning out.
+probably being fed faster than it can burn. Settings, Add a device, Describe
+one, **How to talk to it**: halve **Bytes per write** and raise **Pause between
+writes** until it holds. Failing that, it is being fed by something else at the
+same time, or the battery is low enough that the head is browning out.
 
 ## Permission denied on USB
 
@@ -59,6 +61,24 @@ from PIL import features; print(features.check('raqm'))
 ```
 
 If that says False, install `libraqm` and reinstall Pillow.
+
+## Pictures print as pages of characters
+
+The firmware does not know `GS v 0`, the raster command. Settings, Add a
+device, Describe one, **How to talk to it**: set **Images are sent as** to one
+of the column modes (`ESC *`), starting with the twenty four dot one. It is the
+older way of sending a bitmap and nearly everything understands it.
+
+## Something is wrong and it is not obvious which end
+
+Settings has **What goes on the wire**. It reads the byte stream a print would
+send and shows the paper it describes, with every command listed by offset and
+length; anything it does not recognise is called out. If the picture there is
+right, the bytes are right and the printer is the problem. If it is wrong, the
+document or the profile is.
+
+A `.prn` capture from another app can be pasted into the same box, which is how
+to find out what that app sends differently on the same printer.
 
 ## The service will not start
 
