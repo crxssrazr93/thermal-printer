@@ -11,7 +11,17 @@ from ..config.defaults import (
     PROTOCOL_STATUS_RESPONSE_LENGTH,
     PROTOCOL_MODULO,
 )
-from ..config.printer_profile import get_printer_width, get_command, supports
+from .graphics_commands import build_bands
+from ..config.printer_profile import (
+    get_command,
+    get_cut_style,
+    get_density,
+    get_flow,
+    get_graphics_command,
+    get_print_area,
+    get_printer_width,
+    supports,
+)
 
 
 class _ProtocolMeta(type):
@@ -51,6 +61,21 @@ class PrinterProtocol(metaclass=_ProtocolMeta):
     # GS V - paper cut. m=0 full, m=1 partial
     CMD_CUT_FULL = b"\x1d\x56\x00"
     CMD_CUT_PARTIAL = b"\x1d\x56\x01"
+
+    # Four ways to say "cut" and four to say "cut most of the way", because all
+    # eight exist in the wild and a printer that does not know the one it is
+    # sent prints the bytes instead of obeying them. The profile picks.
+    CUT_COMMANDS = {
+        "gsv0": b"\x1d\x56\x00",            # GS V 0, the common one
+        "gsv65": b"\x1d\x56\x41\x00",       # GS V 65 n, feed then full cut
+        "esci": b"\x1b\x69",                # ESC i, older Epson and clones
+        "escd0": b"\x1b\x64\x00",           # ESC d 0
+        "gsv1": b"\x1d\x56\x01",            # GS V 1, partial
+        "gsv66": b"\x1d\x56\x42\x00",       # GS V 66 n, feed then partial
+        "escm": b"\x1b\x6d",                # ESC m, partial on many clones
+        "escd1": b"\x1b\x64\x01",           # ESC d 1
+        "none": b"",
+    }
 
     # GS ( k - QR code function set
     _QR_MODEL = b"\x1d\x28\x6b\x04\x00\x31\x41\x32\x00"
@@ -93,12 +118,42 @@ class PrinterProtocol(metaclass=_ProtocolMeta):
 
     @classmethod
     def build_cut_command(cls, partial: bool = False) -> bytes:
-        """Feed and cut. Returns b'' when the profile has no cutter."""
+        """Feed and cut, in whichever dialect the profile names.
+
+        The feed before it is what carries the last printed line past the
+        blade, and how far that is belongs to the printer's body rather than to
+        this code, so the profile can say it in dots. Three line feeds remain
+        the default, being what most of these printers want.
+        """
         if not cls.supports_cut():
             return b""
-        if partial and supports("paperPartCut"):
-            return cls.CMD_LINE_FEED * 3 + cls.CMD_CUT_PARTIAL
-        return cls.CMD_LINE_FEED * 3 + cls.CMD_CUT_FULL
+
+        style = get_cut_style()
+        wanted = style["partial"] if (partial and supports("paperPartCut")) else style["full"]
+        command = cls.CUT_COMMANDS.get(wanted)
+        if command is None:
+            command = cls.CMD_CUT_PARTIAL if partial else cls.CMD_CUT_FULL
+        if not command:
+            return b""
+
+        feed = (cls.build_feed_dots(style["feed_dots"])
+                if style["feed_dots"] else cls.CMD_LINE_FEED * 3)
+        return feed + command
+
+    # --- density -------------------------------------------------------------
+    # How hard the head burns. This is not the same as darkening the bitmap:
+    # more heat makes the same dots blacker, where more contrast makes more
+    # dots black and costs the edges. Printers disagree about the command, and
+    # one that does not know it prints the bytes, so it is opt-in per profile.
+    @classmethod
+    def build_density_command(cls) -> bytes:
+        """GS ( L fn49, the standard graphics density setting. b'' if unsupported."""
+        density = get_density()
+        if not density["supported"]:
+            return b""
+        level = max(0, min(8, int(density["level"])))
+        # GS ( L pL pH m fn m: 2 bytes of parameters, function 49
+        return b"\x1d\x28\x4c\x02\x00\x30\x31" + bytes([level])
 
     @classmethod
     def build_qr_command(cls, data: str, module_size: int = 6) -> bytes:
@@ -159,8 +214,87 @@ class PrinterProtocol(metaclass=_ProtocolMeta):
 
     STATUS_RESPONSE_LENGTH = PROTOCOL_STATUS_RESPONSE_LENGTH
 
+    # What the bits in an automatic status back (ASB) byte mean. The printer is
+    # already telling us why it stopped; throwing the bytes away turned "the
+    # paper has run out" into "it did not print".
+    _STATUS_BITS = (
+        (0x04, "cover_open", "The cover is open"),
+        (0x08, "paper_feed", "The feed button is held down"),
+        (0x20, "paper_out", "Out of paper"),
+        (0x40, "error", "The printer is reporting an error"),
+    )
+    _ERROR_BITS = (
+        (0x04, "cutter_error", "The cutter is jammed"),
+        (0x08, "fatal_error", "An unrecoverable error"),
+        (0x40, "over_temperature", "The head is too hot; let it cool"),
+        (0x20, "voltage_error", "The supply voltage is out of range"),
+    )
+
+    @classmethod
+    def decode_status(cls, raw: bytes) -> dict:
+        """Turn a status reply into words.
+
+        The reply is one byte in the common case and four when the printer
+        answers with the full automatic status. Anything shorter than a byte
+        means it did not answer, which is not the same as everything being
+        well, so that is said too.
+        """
+        if not raw:
+            return {"answered": False, "ok": None, "flags": [], "messages": []}
+
+        first = raw[0]
+        flags, messages = [], []
+        for mask, flag, message in cls._STATUS_BITS:
+            if first & mask:
+                flags.append(flag)
+                messages.append(message)
+
+        # a four byte reply carries the error and paper bytes as well
+        if len(raw) >= 3:
+            for mask, flag, message in cls._ERROR_BITS:
+                if raw[2] & mask:
+                    flags.append(flag)
+                    messages.append(message)
+        if len(raw) >= 4 and raw[3] & 0x0C:
+            flags.append("paper_low")
+            messages.append("The paper is nearly out")
+
+        serious = {"paper_out", "cover_open", "cutter_error",
+                   "fatal_error", "over_temperature", "voltage_error"}
+        return {
+            "answered": True,
+            "ok": not serious.intersection(flags),
+            "flags": flags,
+            "messages": messages,
+            "raw": raw.hex(),
+        }
+
+    @classmethod
+    def fit_to_head(cls, image: Image.Image) -> Image.Image:
+        """Put a composed page where the head can print it.
+
+        A page is composed at the printable width, which is the head unless the
+        profile says the printer prints less of it than it has. Anything
+        narrower is padded out to the head with blank dots and offset by the
+        left margin, because the raster command counts in whole bytes of head
+        and a short row would desynchronise every row after it.
+        """
+        area = get_print_area()
+        head = area["max_dots"]
+        if image.size[0] == head:
+            return image
+        if image.size[0] > head:
+            return image.crop((0, 0, head, image.size[1]))
+
+        # mode "1" here is already inverted for the wire, where 0 is no dot
+        sheet = Image.new(image.mode, (head, image.size[1]), 0)
+        left = min(area["margin_left"], head - image.size[0])
+        sheet.paste(image, (left, 0))
+        return sheet
+
     @classmethod
     def build_raster_command(cls: Type["PrinterProtocol"], image: Image.Image) -> bytes:
+        image = cls.fit_to_head(image)
         width_bytes = image.size[0] // PRINTER_WIDTH_BITS_PER_BYTE
         height = image.size[1]
 
@@ -185,11 +319,15 @@ class PrinterProtocol(metaclass=_ProtocolMeta):
 
     @classmethod
     def build_raster_bands(cls, image: Image.Image, band_rows: int = 0):
-        """Yield one raster command per horizontal band of the image."""
-        rows = band_rows or cls.BAND_ROWS
-        for top in range(0, image.size[1], rows):
-            band = image.crop((0, top, image.size[0], min(top + rows, image.size[1])))
-            yield cls.build_raster_command(band)
+        """Yield the page as complete commands, a band at a time.
+
+        Which command that is belongs to the profile: GS v 0 for almost
+        everything, column mode for the firmwares that never learned it. The
+        band height is the profile's too, since how much a printer can hold is
+        a fact about the printer.
+        """
+        rows = band_rows or get_flow()["band_rows"] or cls.BAND_ROWS
+        yield from build_bands(cls.fit_to_head(image), get_graphics_command(), rows)
 
     @classmethod
     def calculate_dimensions(cls: Type["PrinterProtocol"], width: int, height: int) -> Tuple[bytes, bytes]:

@@ -17,7 +17,10 @@
       "vendor": "Generic",
       "media": {
         "dpi": 203,
-        "width": { "mm": 57.5, "pixels": 384 }
+        "width": {
+          "mm": 57.5,
+          "pixels": 384
+        }
       },
       "features": {
         "bitImageRaster": true,
@@ -31,14 +34,33 @@
         "end_print": "",
         "status_request": ""
       },
-      "notes": "Standards-compliant 58mm thermal printer. Safe default for most unbranded units, including the MPT-II."
+      "notes": "Standards-compliant 58mm thermal printer. Safe default for most unbranded units, including the MPT-II.",
+      "flow": {
+        "chunk_bytes": 1024,
+        "chunk_pause_ms": 10,
+        "band_rows": 64,
+        "drain_seconds": 0.0
+      },
+      "graphics": "gsv0",
+      "cut": {
+        "full": "gsv0",
+        "partial": "gsv1",
+        "feed_dots": 0
+      },
+      "density": {
+        "supported": false,
+        "level": 0
+      }
     },
     "generic-80": {
       "name": "Generic 80mm ESC/POS",
       "vendor": "Generic",
       "media": {
         "dpi": 203,
-        "width": { "mm": 80, "pixels": 576 }
+        "width": {
+          "mm": 80,
+          "pixels": 576
+        }
       },
       "features": {
         "bitImageRaster": true,
@@ -52,14 +74,33 @@
         "end_print": "",
         "status_request": ""
       },
-      "notes": "Standards-compliant 80mm receipt printer. Most desktop POS units with an auto-cutter."
+      "notes": "Standards-compliant 80mm receipt printer. Most desktop POS units with an auto-cutter.",
+      "flow": {
+        "chunk_bytes": 1024,
+        "chunk_pause_ms": 10,
+        "band_rows": 64,
+        "drain_seconds": 0.0
+      },
+      "graphics": "gsv0",
+      "cut": {
+        "full": "gsv0",
+        "partial": "gsv1",
+        "feed_dots": 0
+      },
+      "density": {
+        "supported": false,
+        "level": 0
+      }
     },
     "ctp500": {
       "name": "Core Innovation CTP-500",
       "vendor": "Core Innovation",
       "media": {
         "dpi": 203,
-        "width": { "mm": 57.5, "pixels": 384 }
+        "width": {
+          "mm": 57.5,
+          "pixels": 384
+        }
       },
       "features": {
         "bitImageRaster": true,
@@ -73,14 +114,33 @@
         "end_print": "9a",
         "status_request": "1e4703"
       },
-      "notes": "Original target device. Needs vendor sequences around each job; these are not portable to other printers. Native QR/barcode are disabled because the firmware is not known to implement them - content is rasterised instead."
+      "notes": "Original target device. Needs vendor sequences around each job; these are not portable to other printers. Native QR/barcode are disabled because the firmware is not known to implement them - content is rasterised instead.",
+      "flow": {
+        "chunk_bytes": 1024,
+        "chunk_pause_ms": 15,
+        "band_rows": 64,
+        "drain_seconds": 0.0
+      },
+      "graphics": "gsv0",
+      "cut": {
+        "full": "gsv0",
+        "partial": "gsv1",
+        "feed_dots": 0
+      },
+      "density": {
+        "supported": false,
+        "level": 0
+      }
     },
     "nt-5890k": {
       "name": "NT-5890K",
       "vendor": "Generic",
       "media": {
         "dpi": 203,
-        "width": { "mm": 57.5, "pixels": 384 }
+        "width": {
+          "mm": 57.5,
+          "pixels": 384
+        }
       },
       "features": {
         "bitImageRaster": true,
@@ -94,7 +154,23 @@
         "end_print": "",
         "status_request": ""
       },
-      "notes": "Capabilities from escpos-printer-db. Common 58mm portable/handheld class."
+      "notes": "Capabilities from escpos-printer-db. Common 58mm portable/handheld class.",
+      "flow": {
+        "chunk_bytes": 1024,
+        "chunk_pause_ms": 10,
+        "band_rows": 64,
+        "drain_seconds": 0.0
+      },
+      "graphics": "gsv0",
+      "cut": {
+        "full": "gsv0",
+        "partial": "gsv1",
+        "feed_dots": 0
+      },
+      "density": {
+        "supported": false,
+        "level": 0
+      }
     }
   }
 }

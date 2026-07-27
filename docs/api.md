@@ -80,6 +80,7 @@ Everything under `options`, used by `/api/preview` and `/api/print`.
 | `darkness` | number | `1.0` | Contrast applied before screening; above 1 burns darker |
 | `orientation` | `portrait` \| `landscape` | `portrait` | Across the roll, or along it |
 | `page_length` | number | `1200` | Along the roll only: how long the strip is, in dots. Not how much paper the job uses, since the blank end is trimmed |
+| `trim_blank` | boolean | `true` | Cut the blank end off the page, so the job feeds only the paper it needs. Send `false` to keep the trailing space, for pre-printed stock where the position matters |
 | `style` | object | the theme's | Typographic detail: margins, rules, bullets, table treatment. Send what `GET /api/themes` gives you under `print.style`, or your own |
 
 Two things markdown cannot express ride in the document rather than in the
@@ -90,8 +91,12 @@ options, so they survive being saved:
   `none`; `widths` are percentages, one per column.
 - **How a picture is screened**, in markdown's title slot:
   `![alt](/images/ab12.png "atkinson t=200 s=0.6")`, where the first word is a
-  mode from `GET /api/dither`, `t` is the cutoff (0 to 255) and `s` the amount
-  (0 to 1).
+  mode from `GET /api/dither`, `t` is the cutoff (0 to 255), `s` the amount
+  (0 to 1) and `f` the preparation applied before screening, one of the
+  `prefilters` from the same endpoint. `f=contrast` stretches a flat photograph
+  onto the full range, `f=sketch` divides the picture by a blurred copy of
+  itself, which keeps writing and drops uneven lighting, and `f=sharpen` pulls
+  edges out before they are reduced to dots.
 
 ## `POST /api/calendar`
 
@@ -405,7 +410,7 @@ All of them return the whole list back.
 |----------|-----------------|
 | `GET /api/fonts` | `{"fonts": [...], "default": "DejaVuSansMono"}`, the families the renderer can load |
 | `GET /api/themes` | The manifest, built-in plus yours: `id`, `name`, `href`, `swatch`, `print` |
-| `GET /api/dither` | `{"modes": [{"id", "label"}], "default": "floyd-steinberg"}` |
+| `GET /api/dither` | `{"modes": [{"id", "label"}], "default": "floyd-steinberg", "prefilters": [{"id", "label"}], "prefilter_default": "none"}` |
 | `GET /api/symbols` | The glyph table, grouped: `{"groups": [{"name", "symbols": [{"char", "name", "use"}]}]}`. Sent whole, since it is small and never changes |
 
 ## `POST /api/images`

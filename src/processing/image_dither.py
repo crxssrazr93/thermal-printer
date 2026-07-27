@@ -96,6 +96,82 @@ DITHER_LABELS = {
 }
 
 
+# -----------------------------------------------------------------------------
+# what happens to the picture before it is screened
+# -----------------------------------------------------------------------------
+# A dithering kernel decides how tone becomes dots. It cannot rescue a
+# photograph that is all mid-grey, or one whose subject is an outline. These
+# passes come before the kernel and compose with it, so the cutoff and
+# amount still mean what they meant.
+
+PREFILTERS = ["none", "contrast", "sharpen", "sketch"]
+
+PREFILTER_LABELS = {
+    "none": "As it is",
+    "contrast": "Best contrast (stretch the tones)",
+    "sharpen": "Sharpen (pull the edges out first)",
+    "sketch": "Sketch (outlines only)",
+}
+
+
+def _auto_contrast(grey: Image.Image) -> Image.Image:
+    """Stretch the tones this picture actually uses across the whole range.
+
+    A photograph taken indoors occupies perhaps a third of the available range,
+    and a thermal head has one bit to spend: screened as it is, most of it
+    lands on the same side of the cutoff and comes out as a grey mush. The tail
+    percent at each end is ignored, so one white highlight cannot decide the
+    scale for everything else.
+    """
+    values = np.asarray(grey, dtype=np.uint8)
+    low, high = np.percentile(values, (1.0, 99.0))
+    if high - low < 8:                       # nothing to stretch
+        return grey
+    scaled = (values.astype(np.float32) - low) * (255.0 / (high - low))
+    return Image.fromarray(np.clip(scaled, 0, 255).astype(np.uint8), "L")
+
+
+def _sketch(grey: Image.Image) -> Image.Image:
+    """Keep the edges and throw the tone away.
+
+    An outline prints beautifully on one bit and a photograph does not, so for
+    subjects that are really line art wearing a photograph's clothes, this
+    finds the lines: the picture divided by a blurred copy of itself, which is
+    the classic dodge that leaves edges dark and flat areas white.
+    """
+    from PIL import ImageFilter
+
+    blurred = grey.filter(ImageFilter.GaussianBlur(radius=2.2))
+    base = np.asarray(grey, dtype=np.float32)
+    veil = np.asarray(blurred, dtype=np.float32)
+    # divide, guarding the zero, then invert so ink lands on the edges
+    ratio = np.divide(base * 255.0, veil + 1.0)
+    return Image.fromarray(np.clip(ratio, 0, 255).astype(np.uint8), "L")
+
+
+def _sharpen(grey: Image.Image) -> Image.Image:
+    """Put the edges back that the reduction to 384 dots took away.
+
+    A picture arrives far wider than the head and is scaled down to fit, and
+    scaling averages neighbouring pixels, which is exactly what an edge is not.
+    An unsharp mask before the screening gives the kernel something to find; it
+    is a small effect on screen and a visible one on paper.
+    """
+    from PIL import ImageFilter
+
+    return grey.filter(ImageFilter.UnsharpMask(radius=2, percent=140, threshold=3))
+
+
+def apply_prefilter(grey: Image.Image, name: str) -> Image.Image:
+    if name == "contrast":
+        return _auto_contrast(grey)
+    if name == "sharpen":
+        return _sharpen(grey)
+    if name == "sketch":
+        return _sketch(grey)
+    return grey
+
+
 def _shift(grey: Image.Image, threshold: int) -> Image.Image:
     """Move the whole picture towards paper or towards ink.
 
@@ -142,11 +218,17 @@ def _diffuse(grey: Image.Image, matrix, divisor: int, strength: float) -> Image.
 
 
 def dither_image(image: Image.Image, mode: str = "floyd-steinberg",
-                 threshold: int = 128, strength: float = 1.0) -> Image.Image:
-    """Reduce an image to one bit using the named algorithm."""
+                 threshold: int = 128, strength: float = 1.0,
+                 prefilter: str = "none") -> Image.Image:
+    """Reduce an image to one bit using the named algorithm.
+
+    The prefilter, if any, runs first: it changes what there is to screen
+    rather than how the screening is done, so it composes with everything else.
+    """
     threshold = max(0, min(255, int(threshold)))
     strength = max(0.0, min(1.0, float(strength)))
-    grey = _shift(image.convert("L"), threshold)
+    grey = apply_prefilter(image.convert("L"), prefilter)
+    grey = _shift(grey, threshold)
 
     if mode == "none" or strength == 0:
         return grey.point(lambda value: 255 if value > 128 else 0, "1")

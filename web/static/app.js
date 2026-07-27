@@ -804,13 +804,16 @@ const isRawMode = () => !isRendered();
  * mostly dark. It is a property of the image, so it rides in markdown's title
  * slot and stays with the document. */
 let ditherModes = [];
+let ditherPrefilters = [];
 
 async function loadDitherModes() {
   try {
     const data = await api('/api/dither');
     ditherModes = data.modes || [];
+    ditherPrefilters = data.prefilters || [];
   } catch (error) {
     ditherModes = [];
+    ditherPrefilters = [];
   }
   const select = $('imageDither');
   const settings = $('defaultDither');
@@ -820,6 +823,15 @@ async function loadDitherModes() {
     ditherModes.forEach(({ id, label }) => element.append(new Option(label, id)));
   });
   if (settings) settings.value = localStorage.getItem(DITHER_KEY) || 'floyd-steinberg';
+
+  // Dithering decides how grey becomes dots; preparation decides what grey the
+  // dithering is given. A flat phone photograph of a page is the case that
+  // needs it: no threshold rescues it, a contrast stretch does.
+  const prefilter = $('imagePrefilter');
+  if (prefilter) {
+    prefilter.innerHTML = '';
+    ditherPrefilters.forEach(({ id, label }) => prefilter.append(new Option(label, id)));
+  }
 }
 
 const DITHER_KEY = 'tp.dither';
@@ -843,17 +855,22 @@ function parseScreen(title) {
     const [key, value] = part.split('=');
     options[key] = Number(value);
   });
+  const prefilter = parts
+    .filter((part) => part.startsWith('f='))
+    .map((part) => part.slice(2))[0];
   return {
     mode,
     threshold: Number.isFinite(options.t) ? options.t : currentThreshold(),
     strength: Number.isFinite(options.s) ? Math.round(options.s * 100) : currentStrength(),
+    prefilter: prefilter || 'none',
   };
 }
 
-function screenTitle({ mode, threshold, strength }) {
+function screenTitle({ mode, threshold, strength, prefilter }) {
   const parts = [mode];
   if (threshold !== currentThreshold()) parts.push(`t=${threshold}`);
   if (strength !== currentStrength()) parts.push(`s=${(strength / 100).toFixed(2)}`);
+  if (prefilter && prefilter !== 'none') parts.push(`f=${prefilter}`);
   return parts.join(' ');
 }
 
@@ -870,6 +887,7 @@ function positionImageTools() {
   if (showing) {
     const screen = parseScreen(tt.getAttributes('image').title);
     $('imageDither').value = screen.mode;
+    if ($('imagePrefilter')) $('imagePrefilter').value = screen.prefilter;
     setSlider('imageThreshold', screen.threshold);
     setSlider('imageStrength', screen.strength, '%');
   }
@@ -891,6 +909,7 @@ function applyScreenToImage() {
     mode: $('imageDither').value,
     threshold: Number($('imageThreshold').value),
     strength: Number($('imageStrength').value),
+    prefilter: $('imagePrefilter') ? $('imagePrefilter').value : 'none',
   });
   // Deliberately not focus(): the editor scrolls the selection into view when
   // it takes focus back, which throws the page around under a slider that is
@@ -904,6 +923,7 @@ function initImageTools() {
   const select = $('imageDither');
   if (!select) return;
   select.addEventListener('change', applyScreenToImage);
+  $('imagePrefilter')?.addEventListener('change', applyScreenToImage);
   ['imageThreshold', 'imageStrength'].forEach((id) => {
     const suffix = id === 'imageStrength' ? '%' : '';
     $(id)?.addEventListener('input', () => setSlider(id, Number($(id).value), suffix));
@@ -914,6 +934,7 @@ function initImageTools() {
     setSlider('imageThreshold', currentThreshold());
     setSlider('imageStrength', currentStrength(), '%');
     $('imageDither').value = currentDither();
+    if ($('imagePrefilter')) $('imagePrefilter').value = 'none';
     tt.commands.updateAttributes('image', { title: null });
     schedulePreview();
   });

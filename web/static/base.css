@@ -301,8 +301,9 @@ select.control.slim{padding-right:26px}
      colour: it reads as a selection, which is what it is, and it cannot be
      mistaken for something printed. */
   padding-left:var(--paper-gap,12px);padding-right:var(--paper-gap,12px);
-  /* the roll's own edge, drawn plainly: this line is the width of the paper */
-  border:1px solid #1A1A1E;
+  /* the roll's own edge, drawn plainly: this line is the width of the paper,
+     and paper torn off a roll has corners rather than curves */
+  border:1px solid #1A1A1E;border-radius:0;
 }
 .frame-print .paper-wrap:not(.turned):not(.label-wrap) .paper{
   position:relative;

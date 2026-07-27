@@ -217,6 +217,92 @@ def get_command(name: str) -> bytes:
         return b""
 
 
+# -----------------------------------------------------------------------------
+# local extensions to the schema
+# -----------------------------------------------------------------------------
+# escpos-printer-db describes what a printer can do, not how to talk to it
+# without falling over. These blocks are ours, kept separate so a profile is
+# still readable by anything that expects that schema and ignores the rest.
+
+FLOW_DEFAULTS = {
+    "chunk_bytes": 1024,       # a write this size at a time
+    "chunk_pause_ms": 10,      # and this long between them
+    "band_rows": 64,           # rows to a raster command
+    "drain_seconds": 0.0,      # wait before closing, for printers with a slow buffer
+}
+
+
+def get_flow() -> Dict[str, Any]:
+    """How fast the printer can be fed without dropping bytes.
+
+    These three numbers decide whether a printer works at all: a whole page in
+    one write is what made this one streak. They were constants tuned against
+    one machine; now they belong to the profile, so a second machine can be
+    fixed without editing code.
+    """
+    flow = dict(FLOW_DEFAULTS)
+    stored = get_profile().get("flow") or {}
+    for key in flow:
+        if key in stored:
+            try:
+                flow[key] = type(flow[key])(stored[key])
+            except (TypeError, ValueError):
+                pass
+    flow["chunk_bytes"] = max(64, min(65536, int(flow["chunk_bytes"])))
+    flow["chunk_pause_ms"] = max(0, min(500, int(flow["chunk_pause_ms"])))
+    flow["band_rows"] = max(8, min(1024, int(flow["band_rows"])))
+    flow["drain_seconds"] = max(0.0, min(30.0, float(flow["drain_seconds"])))
+    return flow
+
+
+def get_graphics_command() -> str:
+    """Which opcode carries a bitmap. GS v 0 unless the profile says otherwise."""
+    return str(get_profile().get("graphics") or "gsv0")
+
+
+def get_cut_style() -> Dict[str, Any]:
+    """Which cut command this printer answers to, and how far to feed first."""
+    stored = get_profile().get("cut") or {}
+    return {
+        "full": str(stored.get("full") or "gsv0"),
+        "partial": str(stored.get("partial") or "gsv1"),
+        "feed_dots": max(0, min(600, int(stored.get("feed_dots") or 0))),
+    }
+
+
+def get_density() -> Dict[str, Any]:
+    """How hard the head burns, when the printer lets that be set at all."""
+    stored = get_profile().get("density") or {}
+    return {
+        "supported": bool(stored.get("supported")),
+        "level": max(0, min(8, int(stored.get("level") or 0))),
+    }
+
+
+def get_print_area() -> Dict[str, int]:
+    """The head, and the part of it this printer actually prints.
+
+    max_dots is the head. dots_per_line is what the page is composed at, which
+    is the same thing unless the profile narrows it. margin_left shifts the
+    composed page inside the head, for printers whose paper does not start
+    where their head does.
+    """
+    width = get_printer_width()
+    stored = get_profile().get("media", {}).get("print_area") or {}
+    try:
+        line = int(stored.get("dots_per_line") or width)
+    except (TypeError, ValueError):
+        line = width
+    try:
+        left = int(stored.get("margin_left") or 0)
+    except (TypeError, ValueError):
+        left = 0
+    line = max(PRINTER_WIDTH_BITS_PER_BYTE, min(width, line))
+    line -= line % PRINTER_WIDTH_BITS_PER_BYTE
+    left = max(0, min(width - line, left))
+    return {"max_dots": width, "dots_per_line": line, "margin_left": left}
+
+
 def reset_cache() -> None:
     """Drop the cached profile table - used by tests and after editing profiles."""
     global _profiles_cache

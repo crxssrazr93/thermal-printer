@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from .protocol import PrinterProtocol
+from ..config.printer_profile import get_flow
 from .transport import (
     UsbTransport,
     CupsTransport,
@@ -438,15 +439,30 @@ class PrinterConnection:
     # middle and every row after it lands shifted: the tail of the receipt
     # comes out as vertical streaks. So every write goes out in full, in pieces
     # small enough that the head can keep up with them.
+    # Defaults, used when a profile says nothing. A whole page in one write is
+    # what made this printer streak: the buffer fills, bytes are dropped, and
+    # everything after the drop lands shifted. How much a given printer can
+    # take is a fact about that printer, so the profile can say otherwise.
     _WRITE_CHUNK = 1024
     _WRITE_PAUSE = 0.01
 
+    def _flow(self) -> dict:
+        try:
+            return get_flow()
+        except Exception:                      # a broken profile must not stop a print
+            return {"chunk_bytes": self._WRITE_CHUNK,
+                    "chunk_pause_ms": int(self._WRITE_PAUSE * 1000),
+                    "band_rows": 64, "drain_seconds": 0.0}
+
     def _write(self, data: bytes) -> None:
+        flow = self._flow()
+        chunk = int(flow["chunk_bytes"])
+        pause = float(flow["chunk_pause_ms"]) / 1000.0
         view = memoryview(data)
-        for start in range(0, len(view), self._WRITE_CHUNK):
-            self._socket.sendall(view[start:start + self._WRITE_CHUNK])
-            if len(view) > self._WRITE_CHUNK:
-                time.sleep(self._WRITE_PAUSE)
+        for start in range(0, len(view), chunk):
+            self._socket.sendall(view[start:start + chunk])
+            if len(view) > chunk and pause:
+                time.sleep(pause)
 
     def send_raw(self, data: bytes, reconnect_on_failure: bool = False) -> None:
         if not self._socket:
@@ -477,6 +493,10 @@ class PrinterConnection:
         self.send_raw(PrinterProtocol.CMD_INITIALIZE)
 
     def start_print(self) -> None:
+        # density before anything is drawn, since it applies to what follows
+        density = PrinterProtocol.build_density_command()
+        if density:
+            self.send_raw(density)
         command = PrinterProtocol.CMD_START_PRINT
         if command:
             self.send_raw(command)
@@ -485,6 +505,19 @@ class PrinterConnection:
         command = PrinterProtocol.CMD_END_PRINT
         if command:
             self.send_raw(command)
+        # some printers keep printing for a moment after the last byte lands,
+        # and closing the socket under them truncates the page
+        drain = self._flow().get("drain_seconds") or 0
+        if drain:
+            time.sleep(min(30.0, float(drain)))
+
+    def read_status(self) -> dict:
+        """Ask the printer how it is, in words rather than in bits."""
+        try:
+            return PrinterProtocol.decode_status(self.get_status())
+        except Exception as error:                        # a status query must never
+            logger.debug("Status request failed: %s", error)   # break a print
+            return {"answered": False, "ok": None, "flags": [], "messages": []}
 
     def send_image(self, image_data: bytes) -> None:
         self.send_raw(image_data)

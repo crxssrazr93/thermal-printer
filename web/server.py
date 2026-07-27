@@ -63,6 +63,8 @@ from PIL import Image                              # noqa: E402
 from src.processing.image_dither import (                     # noqa: E402
     DITHER_LABELS,
     DITHER_MODES,
+    PREFILTER_LABELS,
+    PREFILTERS,
 )
 from src.processing.calendar_renderer import CalendarRenderer   # noqa: E402
 from src.processing.image_processor import ImageProcessor      # noqa: E402
@@ -310,6 +312,13 @@ class Session:
 
         if landscape:
             image = self._trim_tail(self._turn(image, head_width))
+        elif options.get("trim_blank", True):
+            # Down the page the renderer stops where the words do, but a
+            # trailing rule, a picture with white in it or a blank last line all
+            # leave paper that will only ever be fed and torn off. Trimming it
+            # here rather than at print time keeps the preview honest: what is
+            # on screen is the paper that comes out.
+            image = self._trim_tail(image)
         processor = ImageProcessor(
             brightness=1.0,
             contrast=float(options.get("darkness") or 1.0),
@@ -592,6 +601,14 @@ def api_dither(handler, match, body):
     return 200, {
         "modes": [{"id": mode, "label": DITHER_LABELS.get(mode, mode)} for mode in DITHER_MODES],
         "default": "floyd-steinberg",
+        # what happens to the picture before it is screened: a photograph and a
+        # scan of a page want different treatment, and no amount of dithering
+        # fixes a flat scan
+        "prefilters": [
+            {"id": name, "label": PREFILTER_LABELS.get(name, name)}
+            for name in PREFILTERS
+        ],
+        "prefilter_default": "none",
     }
 
 
