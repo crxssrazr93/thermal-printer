@@ -74,6 +74,7 @@ from src.processing.label_renderer import (                    # noqa: E402
     LabelRenderer,
     TextAreaConfig,
 )
+from src.processing.escpos_emulator import emulate             # noqa: E402
 from src.processing.symbols import SYMBOL_GROUPS               # noqa: E402
 from src.processing.markdown_renderer import MarkdownRenderer  # noqa: E402
 from src.utils.font_manager import get_font_manager            # noqa: E402
@@ -454,6 +455,23 @@ class Session:
 
         return self._send(self.render_for_print(text, options), None)
 
+    def build_stream(self, image, feed_dots: Optional[int] = None) -> bytes:
+        """The exact bytes a print would put on the wire, without printing.
+
+        Kept next to _send and built the same way, so what is inspected is what
+        would be sent rather than a reconstruction of it.
+        """
+        gap_dots = feed_dots if feed_dots is not None else mm_to_dots(get_tear_gap_mm())
+        stream = bytearray(PrinterProtocol.CMD_INITIALIZE)
+        stream += PrinterProtocol.CMD_START_PRINT
+        stream += PrinterProtocol.build_density_command()
+        for band in PrinterProtocol.build_raster_bands(image):
+            stream += band
+        if gap_dots:
+            stream += PrinterProtocol.build_feed_dots(gap_dots)
+        stream += PrinterProtocol.CMD_END_PRINT
+        return bytes(stream)
+
     def _send(self, image, feed_dots: Optional[int]) -> Tuple[bool, str]:
         gap_dots = feed_dots if feed_dots is not None else mm_to_dots(get_tear_gap_mm())
 
@@ -573,6 +591,56 @@ def _tear_sample(mm: float) -> Image.Image:
 @route("GET", "/api/state")
 def api_state(handler, match, body):
     return 200, SESSION.state()
+
+
+@route("POST", "/api/emulate")
+def api_emulate(handler, match, body):
+    """Read a byte stream back as paper.
+
+    Two uses. Given `hex` or `base64`, it reads a capture from anywhere, which
+    is how a stream from another app can be compared with this one's. Given
+    `text` and `options`, it builds what a print of that document would send
+    and reads that back, which answers whether a page that came out wrong was
+    composed wrong or sent wrong.
+    """
+    raw = b""
+    if body.get("hex"):
+        try:
+            raw = bytes.fromhex(re.sub(r"[\s,]|0x", "", str(body["hex"])))
+        except ValueError:
+            return 400, {"ok": False, "message": "That is not hex"}
+    elif body.get("base64"):
+        try:
+            raw = base64.b64decode(str(body["base64"]), validate=True)
+        except (binascii.Error, ValueError):
+            return 400, {"ok": False, "message": "That is not base64"}
+    else:
+        options = body.get("options") or {}
+        image = SESSION.render_for_print(body.get("text") or " ", options)
+        raw = SESSION.build_stream(image, body.get("feedDots"))
+
+    if len(raw) > 32 * 1024 * 1024:
+        return 400, {"ok": False, "message": "That stream is too large to read"}
+
+    result = emulate(raw, get_printer_width())
+    buffer = io.BytesIO()
+    result["image"].convert("L").save(buffer, format="PNG")
+    return 200, {
+        "ok": True,
+        "bytes": result["bytes"],
+        "height": result["height"],
+        "width": result["width"],
+        "cuts": result["cuts"],
+        # text is reported for completeness but can be a whole receipt, so the
+        # listing is capped: the first commands are the ones that go wrong
+        "events": [
+            {**event, "detail": str(event["detail"])[:120]}
+            for event in result["events"][:400]
+        ],
+        "truncated": len(result["events"]) > 400,
+        "png": "data:image/png;base64,"
+               + base64.b64encode(buffer.getvalue()).decode("ascii"),
+    }
 
 
 @route("GET", "/api/status")

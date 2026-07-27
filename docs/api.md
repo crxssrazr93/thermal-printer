@@ -179,6 +179,36 @@ Everything the front end needs to describe the current setup.
 `width` is the head in dots, always a multiple of eight, since the raster
 protocol packs eight dots to a byte.
 
+## `POST /api/emulate`
+
+Reads a byte stream back as paper: the picture it would print, and a listing of
+every command in it.
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `text` | string | Compose a page and read back what printing it would send |
+| `options` | object | Render options for that page, as `/api/print` takes them |
+| `feedDots` | number | Tear-off feed to include; omitted, the calibrated gap is used |
+| `hex` | string | A capture to read instead. Spaces, commas and `0x` are ignored |
+| `base64` | string | The same, base64 encoded. Up to 32 MB decoded |
+
+```json
+{ "ok": true, "bytes": 5589, "width": 384, "height": 196, "cuts": 0,
+  "events": [
+    { "at": 0, "command": "initialise", "detail": "", "bytes": 2 },
+    { "at": 2, "command": "raster image", "detail": "384 x 64 dots", "bytes": 3080 }
+  ],
+  "truncated": false,
+  "png": "data:image/png;base64,..." }
+```
+
+A page that comes out wrong was either composed wrong or sent wrong, and those
+have different fixes. Reading the stream back separates them. A `.prn` capture
+from another app can be read the same way, which is how to find out what that
+app does differently. Commands the reader does not know are listed as
+`unknown` with their bytes rather than skipped, since an unknown command is
+usually the answer. The listing stops at four hundred entries and says so.
+
 ## `GET /api/status`
 
 Asks the printer how it is, rather than reporting what the server knows.

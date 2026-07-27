@@ -758,6 +758,33 @@
             before the paper goes through rather than after.</p>
         </div>
 
+        <!-- The wire, read back as paper. Two questions when a page comes out
+             wrong: were the bytes wrong, or was the printer wrong about them.
+             This answers the first, and a capture from another app can be
+             pasted in to see what it does differently. -->
+        <details class="sub" id="wirePane">
+          <summary>What goes on the wire</summary>
+          <div class="row-form">
+            <button id="wireJobBtn" class="btn" type="button">Read the current page</button>
+            <button id="wirePasteBtn" class="btn subtle" type="button">Read what is pasted</button>
+          </div>
+          <div class="field">
+            <label for="wireInput">A capture, in hex</label>
+            <textarea id="wireInput" class="control mono" rows="3"
+                      placeholder="1b 40 1d 76 30 00 ..." spellcheck="false"></textarea>
+            <p class="hint">Anything a printer would be sent: a <code>.prn</code>
+              capture from another app, or bytes from a datasheet. Spaces and
+              <code>0x</code> are ignored.</p>
+          </div>
+          <div class="field">
+            <span class="label-text" id="wireMeta">Nothing read yet</span>
+            <div class="wire-out">
+              <img id="wirePaper" alt="The paper this byte stream describes" hidden>
+              <ol id="wireEvents" class="wire-events"></ol>
+            </div>
+          </div>
+        </details>
+
         <div class="panel-head"><h2>Network</h2>
           <span class="head-meta" id="networkMeta">&ndash;</span></div>
         <div class="field">

@@ -530,7 +530,7 @@ input[type=range]:focus-visible{outline:2px solid var(--accent);outline-offset:3
 .panel-head .head-meta{margin-left:10px}
 /* what the printer said about itself, beside the connection state */
 .conn .head-meta{margin-left:6px;max-width:26ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.conn .head-meta.bad{color:var(--danger,#B4342F)}
+.conn .head-meta.bad{color:var(--danger)}
 
 .paper-note{display:flex;align-items:center;gap:10px;padding:0 10px 8px;flex-wrap:wrap}
 .paper-note .unit{font-size:12px;color:var(--muted)}
@@ -664,3 +664,14 @@ input[type=range]:focus-visible{outline:2px solid var(--accent);outline-offset:3
   background:var(--panel-2);color:var(--ink);font:inherit;font-size:11px;text-align:center}
 .rib-width::-webkit-outer-spin-button,.rib-width::-webkit-inner-spin-button{
   -webkit-appearance:none;margin:0}
+
+/* the byte stream read back as paper: the picture beside the listing, both
+   scrolling on their own so a long receipt cannot stretch the settings pane */
+.wire-out{display:flex;gap:12px;align-items:flex-start;max-height:320px}
+.wire-out img{width:150px;max-height:320px;object-fit:contain;object-position:top;
+  border:1px solid var(--line);background:#fff}
+.wire-events{flex:1;margin:0;padding:0 0 0 4px;list-style:none;overflow:auto;
+  max-height:320px;font-family:var(--font-mono);font-size:11.5px;line-height:1.6}
+.wire-events .bad{color:var(--danger)}
+textarea.mono{font-family:var(--font-mono);font-size:12px}
+@media (max-width:720px){.wire-out{flex-direction:column}.wire-out img{width:100%}}

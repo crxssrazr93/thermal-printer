@@ -2343,6 +2343,50 @@ async function printText(text, label = 'Printed', options) {
   }
 }
 
+/* --------------------------------------------------------------- the wire */
+/* A page that comes out wrong was either composed wrong or sent wrong, and
+ * those have different fixes. This reads a byte stream back as paper: the
+ * stream this app would send for what is in the editor, or one pasted in from
+ * anywhere else. */
+async function readWire(body) {
+  const meta = $('wireMeta');
+  const paper = $('wirePaper');
+  const list = $('wireEvents');
+  if (!meta) return;
+  meta.textContent = 'Reading...';
+  list.innerHTML = '';
+  try {
+    const result = await api('/api/emulate',
+      { method: 'POST', body: JSON.stringify(body) });
+    paper.src = result.png;
+    paper.hidden = false;
+    meta.textContent = `${result.bytes} bytes, ${result.height} dot rows`
+      + `${result.cuts ? `, ${result.cuts} cuts` : ''}`;
+    (result.events || []).forEach((event) => {
+      const item = document.createElement('li');
+      const detail = event.detail ? ` ${event.detail}` : '';
+      item.textContent = `${event.at}: ${event.command}${detail} (${event.bytes} bytes)`;
+      if (event.command === 'unknown') item.className = 'bad';
+      list.append(item);
+    });
+    if (result.truncated) {
+      const item = document.createElement('li');
+      item.textContent = 'and more, not listed';
+      list.append(item);
+    }
+  } catch (error) {
+    meta.textContent = error.message;
+    paper.hidden = true;
+  }
+}
+
+function initWirePane() {
+  $('wireJobBtn')?.addEventListener('click', () =>
+    readWire({ text: editorMarkdown(), options: renderOptions() }));
+  $('wirePasteBtn')?.addEventListener('click', () =>
+    readWire({ hex: $('wireInput').value }));
+}
+
 /* ---------------------------------------------------------------- presets */
 async function loadPresets() {
   const data = await api('/api/presets');
@@ -3626,6 +3670,7 @@ function initSettings() {
 
   initNetworkSwitch();
   $('statusBtn')?.addEventListener('click', checkPrinterStatus);
+  initWirePane();
 
   $('printFrame')?.addEventListener('change', () => {
     remember(PRINT_FRAME_KEY, $('printFrame').checked ? 'on' : 'off');
