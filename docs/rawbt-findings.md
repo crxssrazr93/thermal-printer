@@ -1,4 +1,4 @@
-# RawBT 7.1.2 vs Thermal Print Studio — findings
+# RawBT 7.1.2 vs Thermal Print Studio: findings
 
 Sources used, and how to reproduce every quote:
 
@@ -80,7 +80,7 @@ Field-by-field, with the English UI label where one exists (`arsc.txt`):
 | `addFrame` | `Add frame around print area`, `Crop the frame around`, `Preview frame` | debug/alignment frame |
 | `sleepAfter` | `Wait seconds before disconnect`, `DRV_FC_SLEEP_AFTER` | drain delay before closing the link |
 | `lan_delayMS` | `Delay between packets for prevent buffer overflow (ms)`, `LAN_DELAY_MS`, `get_lan_delay`, `setLan_delayMS` | inter-chunk pause |
-| `abs` | `DRV_FC_ABS_MODE`, grouped under `Flow control` | **[INFERENCE]** Automatic Status Back — send-then-wait-for-status handshaking. Note dex also carries `[-]ESC RS a n - Set ABS:` (a STAR command) so the naming is at least overloaded |
+| `abs` | `DRV_FC_ABS_MODE`, grouped under `Flow control` | **[INFERENCE]** Automatic Status Back: send-then-wait-for-status handshaking. Note dex also carries `[-]ESC RS a n - Set ABS:` (a STAR command) so the naming is at least overloaded |
 | `darkness` | `Darkness print`, `DRV_DARKNESS`, `getDarkness`/`setDarkness` | print density |
 | `bytes_init` / `bytes_finish` | `start bytes`, `finish bytes`, `You may add ESC commands`, `Init as in prev versions of the app:`, `after default init print job` | arbitrary user hex prepended/appended per job |
 | `pageName` | `Paper Roll`, `Paper Roll Long`, `Paper Roll not cut`, `for photos`, `for photos not cut`, `for square`, `for square not cut`, `for A4`, `for LETTER`, `for LEGAL`, `for JIS_B4`, `for ROC_16K` (`dex.txt:26242…`) | named media/page-size preset |
@@ -88,7 +88,7 @@ Field-by-field, with the English UI label where one exists (`arsc.txt`):
 
 ### 1b. The SDK-facing descriptor (`rawbt/sdk/PrinterInfo`, `rawbt/api/*`)
 
-A second, flatter key set appears as snake_case JSON/parcel keys with matching accessors —
+A second, flatter key set appears as snake_case JSON/parcel keys with matching accessors:
 this is what third-party apps see: **[EVIDENCE]**
 
 ```
@@ -113,11 +113,11 @@ Two things here that my app has no equivalent of:
   is the currently-used print width. **[INFERENCE]** This is exactly the "paper width vs print
   area" distinction my `docs/printers.md` describes in prose but stores as a single number.
 - **`margin_left` / `margin_right` are per-printer, in dots.** My app has no printer-level
-  margin at all — margins are a *typographic* style property inside the renderer. RawBT also
+  margin at all, margins are a *typographic* style property inside the renderer. RawBT also
   emits real ESC/POS margin commands: `GS L - left margin:` and `GS W - print width:`
   (`dex.txt:13753`, `13754`), and `CommandLeftMargin` / `CommandPrintWidth` in the emulator.
 
-Also worth noting: RawBT ships **model-specific presets**, not just generic families —
+Also worth noting: RawBT ships **model-specific presets**, not just generic families.
 `peripage_a3_`, `peripage_a7`, `peripage_a8+`, `peripage_a8p`, `peripage_a9+`, `peripage_a9_`,
 `peripage_q7p`, `peripage_q9`, `peripage_q9p`, `peripage_q9s` (`dex.txt:29507–29516`), and a
 whole `ProfilePeripageActivity` / `ProfilePaperangActivity` / `ProfileCatActivity` /
@@ -147,14 +147,14 @@ Backed by real classes (`dex.txt:20306–20338`): `rawbt/sdk/drivers/EscGeneral`
 
 What each family means for hardware my app cannot currently drive:
 
-- **ZPL / TSPL / EPL / CPCL** — label-printer command languages. Zebra (ZPL/EPL), TSC and
+- **ZPL / TSPL / EPL / CPCL**: label-printer command languages. Zebra (ZPL/EPL), TSC and
   most cheap Chinese 4×6 shipping-label printers (TSPL), Zebra/Comtec mobile (CPCL). These
   are *not* ESC/POS supersets; they are page-description languages with their own image
   opcodes (`^GF` for ZPL, `BITMAP` for TSPL). My app sends `GS v 0` and would print nothing
   but garbage on any of them. RawBT's own help says as much: *"The situation with label
   printers is much worse (there are a lot of different, incompatible sets of commands)."*
   **[EVIDENCE]**
-- **PERIPAGE / PAPERANG / PAPERANG2 / CAT_PRINTER** — the popular pocket BLE "sticker/mini"
+- **PERIPAGE / PAPERANG / PAPERANG2 / CAT_PRINTER**: the popular pocket BLE "sticker/mini"
   printers (PeriPage A6/A9, Paperang P1/P2, and the MX05/GB01/GB02 "cat printers"). These use
   proprietary framed packet protocols over BLE GATT, not ESC/POS over RFCOMM. Evidence of a
   full Paperang command set in the dex: `Paperang (0xA5..0x5A)` (framing bytes),
@@ -162,15 +162,15 @@ What each family means for hardware my app cannot currently drive:
   `PRT_GET_TEMP`, `PRT_GET_VOLTAGE`, `PRT_GET_BAT_STATUS`, `PRT_SET_CRC_KEY`, `crcPacket`,
   `crckeyset`, `PRT_PAPER_FEED_SPEED`, `PRT_SET_POWER_DOWN_TIME`, `PRT_USB_UPDATE_FIRMWARE`.
   **[EVIDENCE]** My app cannot talk to any of these.
-- **AIDL_ATOL10 / AIDL_COM_IPOS / AIDL_WOYOU_IPOS / AIDL_WOYOU_JIUIV5** — Android-only. These
+- **AIDL_ATOL10 / AIDL_COM_IPOS / AIDL_WOYOU_IPOS / AIDL_WOYOU_JIUIV5**. Android-only. These
   bind to a vendor service on integrated POS terminals (Sunmi = "woyou", iPOS, ATOL fiscal
   registrars) instead of opening a port. `AIDL - for POS terminals` (`arsc.txt`). **Irrelevant
-  to a Linux print server — skip.**
-- **DOTHAN_TECH / `cylobtprinter`** — DothanTech / D11-class BLE label printers.
-- **GSv0 as a *driver* distinct from ESC_GENERAL** — **[INFERENCE]** a stripped-down mode that
+  to a Linux print server, skip.**
+- **DOTHAN_TECH / `cylobtprinter`**. DothanTech / D11-class BLE label printers.
+- **GSv0 as a *driver* distinct from ESC_GENERAL**, **[INFERENCE]** a stripped-down mode that
   only ever emits `GS v 0` raster and no text/codepage commands, for printers whose text path
   is broken. That is essentially what my app already does, which is reassuring.
-- **RAW_TRANSFER / `RealRAW`** — pass bytes straight through, no driver. Useful escape hatch.
+- **RAW_TRANSFER / `RealRAW`**: pass bytes straight through, no driver. Useful escape hatch.
 
 Transports are a separate axis from drivers (`rawbt/sdk/transport/`): `Bt`, `BLE`,
 `USB`, `SerialCom`, `P910nd`, `AIDL`, `HidBridge`, `PrintToFile`, `PrintToGallery`,
@@ -223,7 +223,7 @@ Related image-fitting options: `doScale`, `Squeeze images`, `no scaling`, `fill 
 
 Two separate mechanisms:
 
-1. `darkness` / `DRV_DARKNESS` / `Darkness print` on the printer record — a real command sent
+1. `darkness` / `DRV_DARKNESS` / `Darkness print` on the printer record, a real command sent
    to the printer. For ESC/POS the dex carries `[-]ESC RS d n - STAR. Set print density:` and
    `GS(L fn49 - Set the reference standard dot density for graphics.` / `GS8L fn49 - …`.
    **[EVIDENCE]**
@@ -231,7 +231,7 @@ Two separate mechanisms:
    `PRT_SENT_HEAT_DENSITY`, plus `PRT_PAPER_FEED_SPEED` and `PRT_ENERGY`. **[EVIDENCE]**
 
 My app's `darkness` render option (`docs/api.md`) is *contrast applied to the bitmap before
-screening* — a completely different thing. I have **no** command that tells the head to fire
+screening*, a completely different thing. I have **no** command that tells the head to fire
 hotter. That is a real gap: burning darker in software costs ink coverage and blurs edges;
 burning darker in firmware does not.
 
@@ -248,15 +248,15 @@ burning darker in firmware does not.
   between sending chunks of data."* **[EVIDENCE]**
 - Root cause stated plainly: *"The reason is an overflow of the printer's internal buffer due
   to the fact that data is sent to the printer faster than it can process it."* **[EVIDENCE]**
-- `abs` / `DRV_FC_ABS_MODE` — **[INFERENCE]** status-based flow control rather than blind
+- `abs` / `DRV_FC_ABS_MODE`, **[INFERENCE]** status-based flow control rather than blind
   timing.
-- `Allow data compression` / `DATA_COMPRESS` / `PRT_PRINT_DATA_COMPRESS` — RLE compression on
+- `Allow data compression` / `DATA_COMPRESS` / `PRT_PRINT_DATA_COMPRESS`. RLE compression on
   the wire for Paperang. **[EVIDENCE]**
 
 My app's equivalents: `_WRITE_CHUNK = 1024` with `_WRITE_PAUSE = 0.01` (`src/core/printer.py:441`),
 `BAND_ROWS = 64` (`src/core/protocol.py:184`), and `USB_DRAIN_BYTES_PER_SECOND = 12000` /
 `MAX_DRAIN_SECONDS = 8.0` in `src/core/transport.py`. All hard-coded constants. RawBT exposes
-every one of these as a per-printer setting — which is the right call when the same code has to
+every one of these as a per-printer setting, which is the right call when the same code has to
 survive hundreds of firmwares.
 
 ### 3d. Overheating / anti-blur
@@ -271,7 +271,7 @@ RawBT does **not** actively throttle for heat in the ESC/POS path. What it has:
   is high, the voltage may drop below a critical value and the printer electronics will turn
   off for a short time."* **[EVIDENCE]**
 - **Status decoding.** `Thermal head high temperature` (`dex.txt:22743`), `Motor high temperature`
-  (`dex.txt:21269`), `Paper less` (`dex.txt:21687`) — these sit next to the Paperang
+  (`dex.txt:21269`), `Paper less` (`dex.txt:21687`). These sit next to the Paperang
   `PRT_SENT_STATUS` / `PRT_GET_TEMP` / `PRT_GET_VOLTAGE` / `PRT_GET_BAT_STATUS` command set and
   the ESC/POS `CommandSensors` + `rawbt/sdk/drivers/responses/{StatusResponse,BatteryResponse,
   ModelResponse,SerialNumberResponse,ModelVersionResponse,WrongResponse}` classes.
@@ -285,7 +285,7 @@ RawBT does **not** actively throttle for heat in the ESC/POS path. What it has:
   that anti-aliased screen text screened to 1-bit produces angular edges. **[EVIDENCE]**
 
 Honest summary: **RawBT's overheating story is a help article plus a status readout, not a
-mitigation.** There is nothing here to copy wholesale — but the *status readout* is worth
+mitigation.** There is nothing here to copy wholesale, but the *status readout* is worth
 copying (see §6).
 
 ### 3e. Raster vs bit-image: how it decides
@@ -303,7 +303,7 @@ The implementations are concrete classes under `rawbt/sdk/drivers/esc_commands/`
 |---|---|---|
 | `Gsv0` | `GS v 0 - default` | `GS v 0` raster |
 | `GSv0old` | (`photo_wrong_gsv0`, `photo_wrong_gsv0_new` illustration assets) | legacy variant |
-| `Gsv0AndEscJ` | — | raster band + `ESC J` feed between bands |
+| `Gsv0AndEscJ` | none | raster band + `ESC J` feed between bands |
 | `GS_L` | `GS ( L - Epson modern` | `GS ( L` graphics |
 | `GS8L` | `GS 8 L - Epson modern` | `GS 8 L` large graphics |
 | `GsAsterisk` | `GS * - Define downloaded bit image. Obsolete.` + `GS * - Attention! Read the printer manual before.` | `GS *` |
@@ -312,7 +312,7 @@ The implementations are concrete classes under `rawbt/sdk/drivers/esc_commands/`
 | `EscGsS` | `ESC GS S - starPRNT` | STAR raster |
 
 Also present: `decodeRasterFormat` and `decodeColumnFormat` (`dex.txt`), `eachLinePixForStar`,
-`eachLinePixToCmd`, `encodeLine` — the packing routines for both orientations.
+`eachLinePixToCmd` and `encodeLine` are the packing routines for both orientations.
 
 **[INFERENCE]** The `Gsv0AndEscJ` variant is the interesting one: it is banded `GS v 0` with an
 explicit `ESC J` dot-feed between bands, which is what you need on firmwares that do not
@@ -339,10 +339,10 @@ plumbing, no "free version watermark").
 3. **A real hardware darkness/density command.** `darkness` on the printer record, sent to the
    printer, distinct from my software contrast. Cheap to add, immediately visible on paper.
 
-4. **`bytes_init` / `bytes_finish` — user-editable hex around every job.** RawBT lets any user
+4. **`bytes_init` / `bytes_finish`: user-editable hex around every job.** RawBT lets any user
    paste ESC bytes without a code change (`start bytes`, `finish bytes`, `You may add ESC
    commands`). I already have `commands.start_print` / `end_print` in the profile JSON, but they
-   are only editable by hand-writing JSON — not exposed in the web UI's "Describe one" form.
+   are only editable by hand-writing JSON, not exposed in the web UI's "Describe one" form.
 
 5. **`max_dots` vs `dots_per_line` + `margin_left` / `margin_right` in dots.** Lets a 58 mm
    printer be driven at 320 dots centred, or a label offset to match a die-cut. My renderer's
@@ -360,7 +360,7 @@ plumbing, no "free version watermark").
 8. **Label/pocket-printer driver families (TSPL, ZPL, EPL, CPCL; PeriPage, Paperang, Cat).**
    Genuinely large scope, but it is the difference between "works with my one printer" and
    "works with the printer someone buys next". **[INFERENCE]** TSPL is the highest
-   value-per-effort of these — it is text-based, well documented, and covers the whole cheap
+   value-per-effort of these, it is text-based, well documented, and covers the whole cheap
    4×6 label market.
 
 9. **Codepage / native-text printing.** RawBT bundles `iconv-lite.bundle.js` (376 KB) and ships
@@ -368,17 +368,17 @@ plumbing, no "free version watermark").
    four variants each (`res/drawable-nodpi-v4/cp*_{ab,ar,bb,br}.png`), plus `cp_to_page`,
    `cp_to_star`, `cp_to_page_pt210`, `CommandSelectCodepage`, and UTF-8 variants
    (`CommandUTFepson`, `CommandUTFstar`, `CommandUTFcitizen`, `CommandUTFpt210`). My app is
-   **image-only** — every character is rasterised. That is a deliberate and mostly good choice
+   **image-only**: every character is rasterised. That is a deliberate and mostly good choice
    (it is why RTL and 900 symbols work), but it means a plain receipt costs ~48× the bytes of
    the same receipt in native text, and prints correspondingly slower.
 
-10. **`cut max empty space` — auto-trim whitespace on any job**, not just along-the-roll.
+10. **`cut max empty space`: auto-trim whitespace on any job**, not just along-the-roll.
 
 11. **A byte-level ESC/POS emulator + preview + `.prn` viewer.** `rawbt/sdk/emulator/escpos/
     EscPosEmulator` with ~60 `Command*` classes, `ParserPrn`, `PreviewTask`, `Debugger`,
     `ru/a402d/prnviewer/ViewActivity`, and the human-readable disassembly strings
     (`[!] ESC GS - Unknown`, `[-] GS ( J - undocumented, what do they do?`). This renders a
-    *byte stream* back to a picture. My preview renders the *source document* to a picture —
+    *byte stream* back to a picture. My preview renders the *source document* to a picture.
     which is not the same guarantee. An emulator would catch a malformed command; my preview
     cannot.
 
@@ -391,11 +391,11 @@ plumbing, no "free version watermark").
 
 Explicitly **not** worth copying: AIDL POS drivers, the Android print-service integration,
 Play billing, `AutoPrint Folder` (inotify `Event CLOSE_WRITE` / `Event MOVE_TO` on a watched
-directory — arguably nice, but the web API already covers it), the in-app browser.
+directory, arguably nice, but the web API already covers it), the in-app browser.
 
 ---
 
-## 5. Where my app is already better — do not regress these
+## 5. Where my app is already better: do not regress these
 
 1. **Dithering breadth and control.** Eleven kernels in `src/processing/image_dither.py`
    (`floyd-steinberg`, `false-floyd-steinberg`, `jarvis`, `stucki`, `burkes`, `sierra`,
@@ -412,7 +412,7 @@ directory — arguably nice, but the web API already covers it), the in-app brow
 3. **escpos-printer-db schema for capability profiles.** `src/config/data/printer_profiles.json`
    follows the upstream schema, so profiles are portable to python-escpos and escpos-php.
    RawBT's model is entirely bespoke and exportable nowhere. Do not drift the schema when
-   adding `margin_left` / `graphics_command` / `darkness` — put local extensions in a clearly
+   adding `margin_left` / `graphics_command` / `darkness`, put local extensions in a clearly
    marked block the way `commands` already is.
 
 4. **Graceful capability degradation.** `PrinterProtocol.build_qr_command` returns `b""` when
@@ -428,11 +428,11 @@ directory — arguably nice, but the web API already covers it), the in-app brow
    and borders, calendars, labels on printed backgrounds, presets with `{{date}}`, to-dos,
    themes that style paper as well as screen.** RawBT has `DocumentTemplate` /
    `TEMPLATE_TOP_TEXT` / `TEMPLATE_BOTTOM_TEXT` / `TEMPLATE_PAPER_CUT` / `TEMPLATE_SIMPLE` and
-   a logo — that is the entire authoring story. Mine is a different and much larger product.
+   a logo, that is the entire authoring story. Mine is a different and much larger product.
 
 7. **Calibrated tear-off gap, stored per profile, with a wizard.** `get_tear_gap_mm` /
    `set_tear_gap_mm` keyed by profile name, plus `save_immediate()` so a short-lived process
-   cannot lose the calibration. RawBT has `skipLinesAfterJob` — a blind line count, not a
+   cannot lose the calibration. RawBT has `skipLinesAfterJob`, a blind line count, not a
    measured millimetre distance.
 
 8. **Blocking `O_RDWR` USB writes + `fsync` + a computed drain sleep**
@@ -451,9 +451,9 @@ directory — arguably nice, but the web API already covers it), the in-app brow
 ## 6. Prioritised enhancements
 
 Effort estimates assume the existing structure. **HW** marks anything that needs a real
-printer to verify — a wrong opcode on a thermal printer produces garbage, not an exception.
+printer to verify, a wrong opcode on a thermal printer produces garbage, not an exception.
 
-### P1 — high value, low risk
+### P1: high value, low risk
 
 **1. Per-profile flow-control block. (small)**
 *What:* add `flow: { chunk_bytes, chunk_pause_ms, band_rows, drain_seconds }` to the profile
@@ -464,7 +464,7 @@ invisible and un-fixable without editing source.
 *Where:* `src/config/data/printer_profiles.json` (new `flow` block, marked as a local extension
 alongside `commands`); accessors in `src/config/printer_profile.py` beside `get_command`;
 consumed in `src/core/printer.py` (`_WRITE_CHUNK` / `_WRITE_PAUSE` → instance attrs read at
-connect), `src/core/protocol.py:build_raster_bands` (`band_rows` already a parameter — just
+connect), `src/core/protocol.py:build_raster_bands` (`band_rows` already a parameter, just
 pass it), `src/core/transport.py:UsbTransport.close`.
 *HW:* only to tune; the defaults are already known-good.
 
@@ -478,16 +478,16 @@ sharpness or coverage, which is the single biggest quality lever on cheap 58 mm 
 `PrinterConnection.start_print()` in `src/core/printer.py`; flag in
 `src/config/data/printer_profiles.json`; UI in the "Describe one" form in `web/static/app.js`
 and the profile endpoints in `web/server.py` (`POST /api/printer-types`).
-*HW:* **yes** — density opcodes vary by firmware and a wrong one prints stray characters.
+*HW:* **yes**, density opcodes vary by firmware and a wrong one prints stray characters.
 Guard behind the feature flag, default off.
 
 **3. Decode printer status into words. (small)**
 *What:* parse the `GS r n` / `DLE EOT n` / ASB response bits into `paper out`, `cover open`,
 `cutter error`, `head over-temperature`, `voltage error`, and show them in the UI.
 *Why:* I already request status and throw the bytes away. RawBT turns them into
-`Thermal head high temperature`, `Motor high temperature`, `Paper less` — which is the whole
+`Thermal head high temperature`, `Motor high temperature`, `Paper less`, which is the whole
 difference between "it stopped" and "let it cool down". Zero risk: reading is passive.
-*Where:* `PrinterProtocol` — new `decode_status(raw: bytes) -> dict` beside
+*Where:* `PrinterProtocol`, new `decode_status(raw: bytes) -> dict` beside
 `STATUS_RESPONSE_LENGTH` in `src/core/protocol.py`; called from
 `PrinterConnection.get_status()` in `src/core/printer.py`; surfaced through `GET /api/state`
 in `web/server.py` and the status pill in `web/static/app.js`.
@@ -498,7 +498,7 @@ nothing (`recv` already returns `b''` on timeout).
 *What:* two hex fields in "Describe one", validated, written into the profile's `commands`
 block.
 *Why:* `bytes_init` / `bytes_finish` is how RawBT supports printers nobody has profiled. I have
-the mechanism (`get_command`, `bytes.fromhex`) and only lack the form field — so this is
+the mechanism (`get_command`, `bytes.fromhex`) and only lack the form field, so this is
 mostly free.
 *Where:* `web/static/app.js` (the printer-type form), `web/server.py`
 (`POST /api/printer-types` validation), `src/config/printer_profile.py:save_user_profile`.
@@ -513,7 +513,7 @@ replacing the hard-coded three line feeds.
 `commands` in `printer_profiles.json`; the form in `web/static/app.js`.
 *HW:* **yes**, but only on a printer that actually has a cutter.
 
-### P2 — medium value, medium effort
+### P2: medium value, medium effort
 
 **6. Device margins and a print width narrower than the head. (medium)**
 *What:* `media.print_area.{max_dots, dots_per_line, margin_left, margin_right}` in the profile;
@@ -524,7 +524,7 @@ left margin.
 margin can do because it moves with the theme.
 *Where:* `src/config/printer_profile.py` (`get_printer_width` grows a sibling
 `get_print_area()`); `src/core/protocol.py:build_raster_command` (pad rather than assume
-image width == head width — note it currently does `image.size[0] // 8` with no check);
+image width == head width, note it currently does `image.size[0] // 8` with no check);
 `src/processing/markdown_renderer.py` (canvas width comes from the print area, not the head).
 *Risk:* touches the one invariant the whole raster path relies on. Add a hard assertion that
 padded width is a whole number of bytes.
@@ -543,7 +543,7 @@ to change if the generator signature holds.
 right. Keep `gsv0` the default and treat the rest as opt-in.
 
 **8. Auto-trim empty space on every job. (small–medium)**
-*What:* RawBT's `cut max empty space` — trim uniform white rows from the top and bottom of the
+*What:* RawBT's `cut max empty space`, trim uniform white rows from the top and bottom of the
 final bitmap before banding, with an option to keep N mm.
 *Why:* saves paper on every single job; I currently only do this for along-the-roll.
 *Where:* `src/core/print_job.py` just before `build_raster_bands`, so the preview and the print
@@ -554,7 +554,7 @@ agree; a `trim_blank` render option in `docs/api.md` and `web/static/app.js`.
 *Why:* the two RawBT filters that have no counterpart in my eleven kernels. Both are
 pure-Pillow/numpy, no hardware involvement, and both markedly improve photographs on a 1-bit
 head.
-*Where:* `src/processing/image_dither.py` (as pre-passes, not new kernels — they compose with
+*Where:* `src/processing/image_dither.py` (as pre-passes, not new kernels, they compose with
 the existing cutoff/amount), exposed via `GET /api/dither` and the picker in `web/static/app.js`.
 
 **10. A `.prn` / byte-stream previewer. (medium)**
@@ -565,13 +565,13 @@ actually goes wrong when a new opcode or profile is added. It also makes items 2
 testable without paper.
 *Where:* new `src/processing/escpos_emulator.py`; a `POST /api/emulate` endpoint in
 `web/server.py`; a debug pane in `web/static/app.js`. Start with only the commands I emit
-(`ESC @`, `GS v 0`, `ESC J`, `GS V`, `GS ( k`, `GS k`, `LF`) — that is a day, not a month.
+(`ESC @`, `GS v 0`, `ESC J`, `GS V`, `GS ( k`, `GS k`, `LF`), that is a day, not a month.
 
-### P3 — large, only if the scope is wanted
+### P3: large, only if the scope is wanted
 
 **11. TSPL driver family. (large)**
 *What:* a second command language behind a `driver` key on the profile, exactly as RawBT's
-`PrinterDriverFactory` does — the renderer keeps producing a 1-bit bitmap, only the wrapper
+`PrinterDriverFactory` does, the renderer keeps producing a 1-bit bitmap, only the wrapper
 changes (`SIZE`/`GAP`/`BITMAP`/`PRINT` instead of `GS v 0`).
 *Why:* covers the entire cheap 4×6 shipping-label market, which is the most likely second
 printer anyone attaches. Text-based and well documented, so the least risky of the four label
@@ -586,7 +586,7 @@ directly. This refactor is the real cost, not TSPL itself.
 *What:* when a document is plain ASCII/Latin-1 and no styling is used, send `ESC t n` + bytes
 instead of a raster.
 *Why:* RawBT's whole text path. ~48× fewer bytes, correspondingly faster, and battery printers
-last longer. **But** it forfeits fonts, RTL, symbols, tables and themes — everything my app is
+last longer. **But** it forfeits fonts, RTL, symbols, tables and themes, everything my app is
 actually for. **[INFERENCE]** Only worth it as a narrow fast path for the to-do list and
 plain-text presets, if at all. I would rank this last and would not be sorry to skip it.
 
@@ -597,6 +597,36 @@ forward it to the connected printer.
 HTTP API already covers every case I personally have, so it is a want rather than a need.
 *Where:* a new listener thread in `web/server.py` reusing the existing print lock, so a network
 job cannot interleave with a browser job.
+
+---
+
+## 7. What was done, July 2026
+
+Everything in P1 and P2 is in, plus two of the three P3 items.
+
+| Item | Where it landed |
+|------|-----------------|
+| Per-profile flow block | `flow` in every profile, `get_flow()`, consumed by `printer.py` and the band builder |
+| Graphics opcode per profile | `graphics` key, `src/core/graphics_commands.py` with raster and column mode builders |
+| Cut dialects | `cut` block, nine dialects in `PrinterProtocol.CUT_COMMANDS`, feed before the blade |
+| Density | `density` block, `GS ( L` fn49, a heat slider in the type editor |
+| Status decoding | `decode_status`, `GET /api/status`, a Check button beside the connection state |
+| Init and finish sequences | hex fields in the type editor, validated on the way in |
+| Image preparation | contrast, sharpen and outline passes before screening, in the picture controls and as `f=` |
+| Auto trim | the blank end is cut off every job, not only banners |
+| Byte stream reader | `src/processing/escpos_emulator.py`, `POST /api/emulate`, What goes on the wire in Settings |
+| Raw port 9100 | a listener sharing the print lock, behind a switch beside the network one |
+| Driver families | `src/core/drivers/`, ESC/POS and TSPL, chosen by the profile's `driver` key |
+
+Not done, deliberately: the native text path. The case against it is in section 5
+and has not changed. Printing text as text is faster and needs no bitmap, but it
+gives up the fonts, the shaping, the right to left support and the promise that
+the preview is the page. That is the whole character of this app, traded for a
+speed nobody asked for.
+
+The TSPL driver is written and untested: no label printer has been through it.
+It is correct on paper and should be treated as a starting point rather than a
+working driver until somebody prints a label with it.
 
 ---
 

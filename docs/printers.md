@@ -62,7 +62,9 @@ folded away because the defaults are right for nearly every printer.
 - **Printer language.** Receipt printers speak ESC/POS. The label printers sold
   beside them usually speak TSPL, which thinks in labels of a declared size
   rather than in an endless roll. A TSPL printer sent ESC/POS prints a label of
-  characters and stops.
+  characters and stops. The TSPL driver is written but untested: no label
+  printer has been through it, so treat it as a starting point and tell us how
+  it goes.
 - **Images are sent as.** `GS v 0` is the raster command nearly everything
   understands. Firmwares that do not know it print the bytes as characters,
   which is what "my pictures come out as garbage" means; column mode
