@@ -79,6 +79,7 @@ window and icon. Network access, updating and removal are covered in
 | [Development](docs/development.md) | Layout, running from a checkout, the HTTP API, the editor bundle |
 | [Troubleshooting](docs/troubleshooting.md) | When it will not connect, print, or find a font |
 | [Fork changes](docs/FORK-CHANGES.md) | What this fork changed, and why |
+| [RawBT findings](docs/rawbt-findings.md) | What the best Android app in this space does, and what is worth taking from it |
 | [Credits](docs/CREDITS.md) | Whose work this builds on |
 
 ## Requirements
