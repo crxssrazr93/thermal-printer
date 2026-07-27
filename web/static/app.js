@@ -2003,8 +2003,7 @@ function describePaper(state) {
       : `${dots} dots at ${state.dpi} dpi`;
   }
 
-  // the same two fills, named, under the paper they describe: a hatch is only
-  // obvious once something says what it means
+  // named underneath, since a marquee says where but not how much
   ['composeLegend', 'todoLegend'].forEach((id) => {
     const legend = $(id);
     if (!legend) return;
@@ -2013,6 +2012,29 @@ function describePaper(state) {
     $(`${id}Print`).textContent = `${state.printWidthMm} mm`;
     $(`${id}Paper`).textContent = `${paperMm} mm`;
   });
+
+  root.style.setProperty('--mm', `${perMm}px`);
+  ['composeRuler', 'todoRuler'].forEach((id) => drawRuler($(id), showing ? paperMm : 0));
+}
+
+/* Ticks every millimetre and a number every ten, across the width of the roll.
+ * The paper is sold in millimetres and the head is quoted in dots, so the one
+ * that can be held against the other belongs on screen. */
+function drawRuler(ruler, paperMm) {
+  if (!ruler) return;
+  ruler.hidden = !paperMm;
+  if (!paperMm) return;
+  // measured from the sheet beside it rather than left to the layout, which
+  // has no idea how wide a ruler with no content ought to be
+  const sheet = ruler.parentElement?.querySelector('.paper-wrap');
+  if (sheet?.offsetWidth) ruler.style.width = `${sheet.offsetWidth}px`;
+  ruler.querySelectorAll('b').forEach((label) => label.remove());
+  for (let mm = 10; mm < paperMm; mm += 10) {
+    const label = document.createElement('b');
+    label.textContent = mm;
+    label.style.left = `${(mm / paperMm) * 100}%`;
+    ruler.append(label);
+  }
 }
 
 /* -------------------------------------------------------- printer types */

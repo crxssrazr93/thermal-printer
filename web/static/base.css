@@ -296,32 +296,65 @@ select.control.slim{padding-right:26px}
    Left off the turned view, where the page is scaled to be read, and off the
    label pane, where the preview is fitted to the panel. */
 .frame-print .paper-wrap:not(.turned):not(.label-wrap){
+  /* All of it is paper, so all of it is white. What changes is where the head
+     can reach, and that is drawn as a moving marquee rather than as a second
+     colour: it reads as a selection, which is what it is, and it cannot be
+     mistaken for something printed. */
   padding-left:var(--paper-gap,12px);padding-right:var(--paper-gap,12px);
-  /* Two areas, and both of them are paper. The head's reach is the bright
-     white the page is drawn on; the strip either side of it is the warmer,
-     slightly shaded tone of a roll nothing has been printed on. Stripes were
-     the wrong idea: they read as transparency rather than as paper. */
-  background:
-    linear-gradient(#FFFFFF,#FFFFFF) content-box,
-    linear-gradient(#F0EFE9,#F0EFE9) padding-box;
-  border:1px solid #D8D6CE;
+  /* the roll's own edge, drawn plainly: this line is the width of the paper */
+  border:1px solid #1A1A1E;
 }
 .frame-print .paper-wrap:not(.turned):not(.label-wrap) .paper{
-  /* the boundary is a crease rather than a border: a hairline of shadow on
-     the margin side, so the printable panel sits slightly proud of the rest */
-  outline:1px dashed #A9A69B;outline-offset:0;
-  box-shadow:0 0 0 1px rgba(255,255,255,.9), 0 0 6px rgba(0,0,0,.05);
+  position:relative;
+}
+.frame-print .paper-wrap:not(.turned):not(.label-wrap)::after{
+  content:"";position:absolute;pointer-events:none;
+  top:14px;bottom:20px;left:var(--paper-gap,12px);right:var(--paper-gap,12px);
+  background-image:
+    repeating-linear-gradient(90deg,#4A4A55 0 5px,transparent 5px 10px),
+    repeating-linear-gradient(90deg,#4A4A55 0 5px,transparent 5px 10px),
+    repeating-linear-gradient(0deg,#4A4A55 0 5px,transparent 5px 10px),
+    repeating-linear-gradient(0deg,#4A4A55 0 5px,transparent 5px 10px);
+  background-size:100% 1px,100% 1px,1px 100%,1px 100%;
+  background-position:0 0,0 100%,0 0,100% 0;
+  background-repeat:no-repeat;
+  animation:ants 900ms linear infinite;
+}
+.frame-print .paper-wrap:not(.turned):not(.label-wrap){position:relative}
+@keyframes ants{
+  to{background-position:10px 0,-10px 100%,0 -10px,100% 10px}
+}
+/* an animation nobody asked for is still an animation: held still for anyone
+   who has said they would rather it were */
+@media (prefers-reduced-motion:reduce){
+  .frame-print .paper-wrap:not(.turned):not(.label-wrap)::after{animation:none}
 }
 
-/* what the two areas are, in words and in the same two fills, under the paper
-   they describe */
+/* A ruler above the paper, in millimetres, because that is what the roll is
+   sold in and what the head width is quoted in. Ticks every millimetre, a
+   taller one every five, a number every ten. */
+.paper-column{display:flex;flex-direction:column;align-items:stretch}
+.paper-ruler{position:relative;height:17px;margin:0 auto -4px;
+  color:var(--faint);font-size:9px;line-height:1}
+.paper-ruler[hidden]{display:none !important}
+.paper-ruler .ticks{position:absolute;inset:auto 0 0 0;height:9px;
+  background-image:
+    repeating-linear-gradient(90deg,var(--line-strong) 0 1px,transparent 1px var(--mm,8px)),
+    repeating-linear-gradient(90deg,var(--line-strong) 0 1px,transparent 1px calc(var(--mm,8px) * 5));
+  background-size:100% 4px,100% 8px;
+  background-position:bottom left,bottom left;
+  background-repeat:no-repeat;
+  border-bottom:1px solid var(--line-strong);
+}
+.paper-ruler b{position:absolute;bottom:9px;transform:translateX(-50%);font-weight:500}
+
 .paper-legend{display:flex;align-items:center;justify-content:center;gap:14px;
   padding:8px 14px 0;font-size:11.5px;color:var(--faint);flex-wrap:wrap}
 .paper-legend[hidden]{display:none !important}
 .paper-legend span{display:inline-flex;align-items:center;gap:6px}
 .paper-legend i{width:13px;height:13px;border-radius:2px;display:inline-block}
-.paper-legend .ink{background:#fff;border:1px dashed #A9A69B}
-.paper-legend .edge{background:#F0EFE9;border:1px solid #D8D6CE}
+.paper-legend .ink{background:#fff;border:1px dashed #4A4A55}
+.paper-legend .edge{background:#fff;border:1px solid #1A1A1E}
 /* Shown at 1:1, so one printer dot is one pixel. Scaling a 1-bit dithered
    bitmap to fit resamples it into mush, which is why this pane is sized to
    the paper rather than the paper to the pane. */
