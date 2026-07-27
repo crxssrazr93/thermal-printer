@@ -77,6 +77,19 @@ class PrinterProtocol(metaclass=_ProtocolMeta):
         "none": b"",
     }
 
+    # the same table said in words, for a dropdown in the printer type editor
+    CUT_LABELS = {
+        "gsv0": "GS V 0, full cut, the common one",
+        "gsv65": "GS V 65, feed then full cut",
+        "esci": "ESC i, full cut, older Epson and clones",
+        "escd0": "ESC d 0, full cut",
+        "gsv1": "GS V 1, partial cut",
+        "gsv66": "GS V 66, feed then partial cut",
+        "escm": "ESC m, partial cut, many clones",
+        "escd1": "ESC d 1, partial cut",
+        "none": "No cutter",
+    }
+
     # GS ( k - QR code function set
     _QR_MODEL = b"\x1d\x28\x6b\x04\x00\x31\x41\x32\x00"
     _QR_STORE_PREFIX = b"\x1d\x28\x6b"

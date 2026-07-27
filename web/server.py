@@ -37,6 +37,7 @@ from src.config.defaults import (                # noqa: E402
     TEAR_CALIBRATION_LINES,
 )
 from src.config.printer_profile import (          # noqa: E402
+    FLOW_DEFAULTS,
     delete_user_profile as delete_user_printer_profile,
     get_dpi,
     get_printer_width,
@@ -57,6 +58,7 @@ from src.core.device_discovery import (           # noqa: E402
 )
 from src.core.printer import PrinterConnection    # noqa: E402
 from src.core.protocol import PrinterProtocol     # noqa: E402
+from src.core.graphics_commands import COMMANDS as GRAPHICS_COMMANDS  # noqa: E402
 import numpy as np                                 # noqa: E402
 from PIL import Image                              # noqa: E402
 
@@ -573,6 +575,23 @@ def api_state(handler, match, body):
     return 200, SESSION.state()
 
 
+@route("GET", "/api/status")
+def api_status(handler, match, body):
+    """Ask the printer how it is: paper, cover, head, cutter.
+
+    Deliberately not part of /api/state, which the page polls: this one talks
+    to the hardware and waits for an answer, and it takes the print lock so a
+    status query cannot interleave with a job on the same socket. Printers that
+    do not answer are not broken, they are quiet, and that is said as much.
+    """
+    if not SESSION.printer.is_connected:
+        return 200, {"connected": False, "answered": False,
+                     "ok": None, "flags": [], "messages": []}
+    with SESSION.lock:
+        status = SESSION.printer.read_status()
+    return 200, {"connected": True, **status}
+
+
 @route("GET", "/api/fonts")
 def api_fonts(handler, match, body):
     # a font installed while this is running should turn up in the list the
@@ -934,9 +953,26 @@ def api_printer_types(handler, match, body):
             "features": profile.get("features", {}) or {},
             "notes": profile.get("notes", ""),
             "custom": bool(profile.get("custom")),
+            # the protocol side of a type: which opcode carries a bitmap, how
+            # fast the printer can be fed, which cut it answers to, and the two
+            # byte sequences some printers need around a job
+            "graphics": profile.get("graphics", "gsv0"),
+            "flow": {**FLOW_DEFAULTS, **(profile.get("flow") or {})},
+            "cut": {"full": "gsv0", "partial": "gsv1", "feed_dots": 0,
+                    **(profile.get("cut") or {})},
+            "density": {"supported": False, "level": 0,
+                        **(profile.get("density") or {})},
+            "commands": profile.get("commands", {}) or {},
         })
     entries.sort(key=lambda entry: (entry["custom"], entry["name"].lower()))
-    return 200, {"types": entries}
+    return 200, {
+        "types": entries,
+        "graphicsOptions": [{"id": key, "label": label}
+                            for key, label in GRAPHICS_COMMANDS.items()],
+        "cutOptions": [{"id": key, "label": label}
+                       for key, label in PrinterProtocol.CUT_LABELS.items()],
+        "flowDefaults": FLOW_DEFAULTS,
+    }
 
 
 @route("POST", "/api/printer-types")
@@ -972,13 +1008,64 @@ def api_printer_type_save(handler, match, body):
                      "paperFullCut", "paperPartCut")
     }
 
+    # Some printers want a byte sequence before a job and another after it:
+    # a mode reset, a character set, a line feed the firmware forgets. Taken as
+    # hex because that is how every datasheet writes them, and refused rather
+    # than silently dropped when they are not hex, so a typo is visible here
+    # instead of on paper.
+    # A type that is being edited keeps the sequences the form does not ask
+    # about, so copying a shipped profile does not quietly drop its status
+    # request.
+    known = load_printer_profiles().get(str(body.get("key") or ""), {})
+    commands = dict(known.get("commands") or {})
+    for field in ("start_print", "end_print", "status_request"):
+        sent = (body.get("commands") or {}).get(field)
+        if sent is None:
+            commands.setdefault(field, "")
+            continue
+        raw = re.sub(r"[\s,]|0x", "", str(sent))
+        if raw:
+            try:
+                bytes.fromhex(raw)
+            except ValueError:
+                return 400, {"ok": False,
+                             "message": f"{field.replace('_', ' ')} is not hex"}
+        commands[field] = raw.lower()
+
+    wanted_flow = body.get("flow") or {}
+    flow = dict(FLOW_DEFAULTS)
+    for field in flow:
+        try:
+            flow[field] = type(flow[field])(wanted_flow[field])
+        except (KeyError, TypeError, ValueError):
+            pass
+
+    wanted_cut = body.get("cut") or {}
+    wanted_density = body.get("density") or {}
+    try:
+        feed_dots = max(0, min(600, int(wanted_cut.get("feed_dots") or 0)))
+        level = max(0, min(8, int(wanted_density.get("level") or 0)))
+    except (TypeError, ValueError):
+        feed_dots, level = 0, 0
+
     key = str(body.get("key") or "").strip() or f"custom-{_slug(name) or 'printer'}"
     profile = {
         "name": name,
         "vendor": str(body.get("vendor") or "Custom"),
         "media": {"dpi": dpi, "width": {"mm": width_mm, "pixels": dots}},
         "features": features,
-        "commands": {"start_print": "", "end_print": "", "status_request": ""},
+        "commands": commands,
+        "graphics": str(body.get("graphics") or "gsv0"),
+        "flow": flow,
+        "cut": {
+            "full": str(wanted_cut.get("full") or "gsv0"),
+            "partial": str(wanted_cut.get("partial") or "gsv1"),
+            "feed_dots": feed_dots,
+        },
+        "density": {
+            "supported": bool(wanted_density.get("supported")),
+            "level": level,
+        },
         "notes": str(body.get("notes") or "Described in the app."),
     }
     save_user_printer_profile(key, profile)

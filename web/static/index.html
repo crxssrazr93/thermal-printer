@@ -39,6 +39,11 @@
       <span id="connState" class="state" role="status" aria-live="polite">
         <span class="dot" aria-hidden="true"></span><span id="connText">Disconnected</span>
       </span>
+      <!-- what the printer says about itself, asked for rather than polled:
+           paper, cover, head, cutter. Hidden until there is something to say. -->
+      <button id="statusBtn" class="btn subtle" type="button" hidden
+              title="Ask the printer how it is">Check</button>
+      <span id="printerStatus" class="head-meta" role="status" aria-live="polite"></span>
     </div>
   </header>
 
@@ -642,6 +647,90 @@
                 drawn into the picture instead, which is slower and softer but
                 always works.</p>
             </div>
+            <!-- How to talk to it, as opposed to what it can do. Folded away
+                 because the defaults are right for nearly every printer, and
+                 wrong in a way that is only findable on paper for the rest. -->
+            <details class="sub">
+              <summary>How to talk to it</summary>
+              <div class="field">
+                <label for="typeGraphics">Images are sent as</label>
+                <select id="typeGraphics" class="control"></select>
+                <p class="hint">If pictures come out as pages of characters, the
+                  firmware does not know <code>GS v 0</code>. Column mode is the
+                  older way and nearly everything understands it.</p>
+              </div>
+              <div class="field-row">
+                <div class="field">
+                  <label for="typeChunk">Bytes per write</label>
+                  <input id="typeChunk" class="control" type="number" min="64"
+                         max="65536" step="64" value="1024">
+                </div>
+                <div class="field">
+                  <label for="typePause">Pause between writes, in ms</label>
+                  <input id="typePause" class="control" type="number" min="0"
+                         max="500" step="1" value="10">
+                </div>
+              </div>
+              <div class="field-row">
+                <div class="field">
+                  <label for="typeBand">Rows per image command</label>
+                  <input id="typeBand" class="control" type="number" min="8"
+                         max="1024" step="8" value="64">
+                </div>
+                <div class="field">
+                  <label for="typeDrain">Wait before closing, in seconds</label>
+                  <input id="typeDrain" class="control" type="number" min="0"
+                         max="30" step="0.5" value="0">
+                </div>
+              </div>
+              <p class="hint">These four decide whether a long page prints or
+                streaks. A printer that drops the bottom half of everything is
+                being fed faster than it can burn: smaller writes, a longer
+                pause.</p>
+              <div class="field-row">
+                <div class="field">
+                  <label for="typeCutFull">Full cut</label>
+                  <select id="typeCutFull" class="control"></select>
+                </div>
+                <div class="field">
+                  <label for="typeCutPartial">Partial cut</label>
+                  <select id="typeCutPartial" class="control"></select>
+                </div>
+              </div>
+              <div class="field">
+                <label for="typeCutFeed">Feed before cutting, in dots</label>
+                <input id="typeCutFeed" class="control" type="number" min="0"
+                       max="600" step="8" value="0">
+                <p class="hint">The head and the cutter are not in the same
+                  place, so the last lines have to be fed past the blade. Zero
+                  feeds three lines instead.</p>
+              </div>
+              <div class="field">
+                <label class="check"><input type="checkbox" id="typeDensity">
+                  It accepts a heat setting</label>
+                <label class="slider" for="typeDensityLevel">Heat
+                  <input id="typeDensityLevel" type="range" min="0" max="8"
+                         step="1" value="0">
+                  <output id="typeDensityLevelOut">0</output>
+                </label>
+                <p class="hint">More heat makes the same dots blacker. More
+                  darkness, in the page settings, makes more dots black and
+                  costs the fine detail: reach for heat first.</p>
+              </div>
+              <div class="field-row">
+                <div class="field">
+                  <label for="typeInit">Sent before a job, in hex</label>
+                  <input id="typeInit" class="control" placeholder="1b 40">
+                </div>
+                <div class="field">
+                  <label for="typeFinish">Sent after a job, in hex</label>
+                  <input id="typeFinish" class="control" placeholder="1b 4a 60">
+                </div>
+              </div>
+              <p class="hint">Some printers want a reset, a character set or a
+                last feed that the firmware forgets. Datasheets write these in
+                hex, so they are taken in hex.</p>
+            </details>
             <div class="row-form">
               <button id="typeSaveBtn" class="btn" type="button">Save printer type</button>
               <button id="typeDeleteBtn" class="btn danger" type="button" hidden>Delete type</button>

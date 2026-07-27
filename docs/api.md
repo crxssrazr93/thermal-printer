@@ -179,6 +179,23 @@ Everything the front end needs to describe the current setup.
 `width` is the head in dots, always a multiple of eight, since the raster
 protocol packs eight dots to a byte.
 
+## `GET /api/status`
+
+Asks the printer how it is, rather than reporting what the server knows.
+
+```json
+{ "connected": true, "answered": true, "ok": false,
+  "flags": ["paper_out"], "messages": ["The paper has run out"] }
+```
+
+This one talks to the hardware and waits, and it takes the print lock, so it
+is not something to poll: call it when a job fails, or when a person asks. Many
+of these printers never answer, particularly over a one-way Bluetooth link, and
+that is `answered: false` with `ok: null`, which is not the same as a fault.
+`flags` are stable identifiers (`cover_open`, `paper_feed`, `paper_out`,
+`paper_low`, `error`, `cutter_error`, `fatal_error`, `over_temperature`,
+`voltage_error`); `messages` are the same thing in words.
+
 ## `GET /api/devices?transport=Bluetooth`
 
 What the machine can see right now. `transport` is `Bluetooth`, `USB` or
@@ -293,12 +310,28 @@ an entry means the same thing to python-escpos or escpos-php.
     "dpi": 203, "widthDots": 384, "widthMm": 57.5,
     "features": { "bitImageRaster": true, "qrCode": true, "barcodeA": true,
                   "paperFullCut": false, "paperPartCut": false },
-    "notes": "", "custom": false }
-] }
+    "notes": "", "custom": false,
+    "graphics": "gsv0",
+    "flow": { "chunk_bytes": 1024, "chunk_pause_ms": 10,
+              "band_rows": 64, "drain_seconds": 0.0 },
+    "cut": { "full": "gsv0", "partial": "gsv1", "feed_dots": 0 },
+    "density": { "supported": false, "level": 0 },
+    "commands": { "start_print": "", "end_print": "", "status_request": "" } }
+],
+  "graphicsOptions": [{ "id": "gsv0", "label": "GS v 0, the raster command ..." }],
+  "cutOptions": [{ "id": "gsv0", "label": "GS V 0, full cut, the common one" }],
+  "flowDefaults": { "chunk_bytes": 1024, "chunk_pause_ms": 10,
+                    "band_rows": 64, "drain_seconds": 0.0 } }
 ```
 
 Shipped types first, then yours; `custom` says which is which, and only a
 custom one can be deleted.
+
+`features` is what the printer can do, in the escpos-printer-db schema.
+Everything after it is how to talk to it, which that schema does not cover, so
+those blocks are this project's own and are ignored by anything that reads the
+schema alone. `graphicsOptions` and `cutOptions` are the values `graphics` and
+`cut` accept, already labelled for a dropdown.
 
 ## `POST /api/printer-types`
 
@@ -311,8 +344,18 @@ custom one can be deleted.
 | `widthMm` | number | derived | Paper width; computed from dots and dpi if omitted |
 | `features` | object | all false | `bitImageRaster`, `qrCode`, `barcodeA`, `paperFullCut`, `paperPartCut`; anything else is ignored |
 | `key` | string | derived | Send it to edit an existing custom type in place; omitted, a key is made from the name |
+| `graphics` | string | `gsv0` | Which opcode carries a bitmap, from `graphicsOptions`. Column mode (`esc_star_*`) for firmwares that print `GS v 0` as characters |
+| `flow` | object | see below | `chunk_bytes` (64–65536), `chunk_pause_ms` (0–500), `band_rows` (8–1024), `drain_seconds` (0–30) |
+| `cut` | object | `gsv0` / `gsv1` / `0` | `full` and `partial` from `cutOptions`, and `feed_dots` (0–600) to push the last lines past the blade. Zero feeds three lines |
+| `density` | object | off | `supported`, and `level` 0–8: how hard the head burns |
+| `commands` | object | kept | `start_print`, `end_print` and `status_request`, each a hex string. Spaces, commas and `0x` are ignored; anything that is not hex is a `400`. A field that is not sent keeps what the type already had |
 
 **Returns** `{"ok": true, "key": "custom-...", "state": {...}}`.
+
+`flow` is the block that decides whether a long page prints or streaks. A
+printer that drops the bottom half of everything is being fed faster than it
+can burn: smaller writes and a longer pause between them. It was a constant
+tuned against one machine before it was a profile field.
 
 Anything the printer cannot do in firmware is drawn into the picture instead,
 which is slower and softer but always prints. The head width is the one field

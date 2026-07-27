@@ -1987,6 +1987,8 @@ async function refreshState() {
   $('connState').classList.toggle('on', data.connected);
   $('connText').textContent = data.connected ? 'Connected' : 'Disconnected';
   $('connectBtn').textContent = data.connected ? 'Disconnect' : 'Connect';
+  if ($('statusBtn')) $('statusBtn').hidden = !data.connected;
+  if (!data.connected && $('printerStatus')) $('printerStatus').textContent = '';
   $('statusProfile').textContent = data.activeProfile || 'no device';
   $('statusWidth').textContent = `${data.width} px - ${data.dpi} dpi - tear ${data.tearGapMm} mm`;
   $('tearGap').value = data.tearGapMm;
@@ -1994,6 +1996,27 @@ async function refreshState() {
   if ($('newCapability') && !$('newCapability').options.length) loadPrinterTypes();
 
   renderDevices(data.profiles);
+}
+
+/* Most of these printers will say whether they have paper, whether the cover is
+ * shut and whether the head is too hot, and many of them will say nothing at
+ * all: a one-way Bluetooth link is common. Silence is reported as silence
+ * rather than dressed up as good news, and the query is on a button because it
+ * takes the same lock a print does. */
+async function checkPrinterStatus() {
+  const out = $('printerStatus');
+  if (!out) return;
+  out.textContent = 'Asking...';
+  try {
+    const status = await api('/api/status');
+    if (!status.connected) out.textContent = '';
+    else if (!status.answered) out.textContent = 'No answer (normal over Bluetooth)';
+    else if (status.ok) out.textContent = 'Ready';
+    else out.textContent = (status.messages || []).join('. ') || 'Not ready';
+    out.classList.toggle('bad', status.answered && status.ok === false);
+  } catch (error) {
+    out.textContent = 'Could not ask it';
+  }
 }
 
 /* ------------------------------------------------------------- the paper */
@@ -2068,7 +2091,13 @@ let printerTypes = [];
 
 async function loadPrinterTypes(select) {
   try {
-    printerTypes = (await api('/api/printer-types')).types || [];
+    const data = await api('/api/printer-types');
+    printerTypes = data.types || [];
+    // the opcode and cut dialects are the server's to name, so the editor asks
+    // for them rather than keeping its own copy of the table
+    fillOptions('typeGraphics', data.graphicsOptions);
+    fillOptions('typeCutFull', data.cutOptions);
+    fillOptions('typeCutPartial', data.cutOptions);
   } catch (error) {
     printerTypes = [];
     return;
@@ -2116,6 +2145,35 @@ function fillTypeEditor(type) {
   $('typeBarcode').checked = !!features.barcodeA;
   $('typeFullCut').checked = !!features.paperFullCut;
   $('typePartCut').checked = !!features.paperPartCut;
+
+  const flow = type?.flow || {};
+  $('typeGraphics').value = type?.graphics || 'gsv0';
+  $('typeChunk').value = flow.chunk_bytes ?? 1024;
+  $('typePause').value = flow.chunk_pause_ms ?? 10;
+  $('typeBand').value = flow.band_rows ?? 64;
+  $('typeDrain').value = flow.drain_seconds ?? 0;
+
+  const cut = type?.cut || {};
+  $('typeCutFull').value = cut.full || 'gsv0';
+  $('typeCutPartial').value = cut.partial || 'gsv1';
+  $('typeCutFeed').value = cut.feed_dots ?? 0;
+
+  const density = type?.density || {};
+  $('typeDensity').checked = !!density.supported;
+  setSlider('typeDensityLevel', density.level ?? 0);
+
+  const commands = type?.commands || {};
+  $('typeInit').value = commands.start_print || '';
+  $('typeFinish').value = commands.end_print || '';
+}
+
+/* Options a dropdown is given by the server: nothing about which opcodes exist
+ * belongs in the page. */
+function fillOptions(id, options) {
+  const element = $(id);
+  if (!element || !Array.isArray(options)) return;
+  element.innerHTML = '';
+  options.forEach(({ id: value, label }) => element.append(new Option(label, value)));
 }
 
 /* What the numbers in the editor come to in millimetres, said back as they are
@@ -2164,6 +2222,9 @@ function initPrinterTypes() {
     describeTypeWidth();
   });
 
+  $('typeDensityLevel')?.addEventListener('input', () =>
+    setSlider('typeDensityLevel', Number($('typeDensityLevel').value)));
+
   $('newCapability').addEventListener('change', markCustomType);
   $('typeEditBtn').addEventListener('click', () => {
     // a listed type is a starting point rather than a thing to be overwritten:
@@ -2187,6 +2248,26 @@ function initPrinterTypes() {
         barcodeA: $('typeBarcode').checked,
         paperFullCut: $('typeFullCut').checked,
         paperPartCut: $('typePartCut').checked,
+      },
+      graphics: $('typeGraphics').value,
+      flow: {
+        chunk_bytes: Number($('typeChunk').value),
+        chunk_pause_ms: Number($('typePause').value),
+        band_rows: Number($('typeBand').value),
+        drain_seconds: Number($('typeDrain').value),
+      },
+      cut: {
+        full: $('typeCutFull').value,
+        partial: $('typeCutPartial').value,
+        feed_dots: Number($('typeCutFeed').value),
+      },
+      density: {
+        supported: $('typeDensity').checked,
+        level: Number($('typeDensityLevel').value),
+      },
+      commands: {
+        start_print: $('typeInit').value,
+        end_print: $('typeFinish').value,
       },
     };
     // editing one of your own keeps its key, so the devices already pointing
@@ -3544,6 +3625,7 @@ function initSettings() {
   });
 
   initNetworkSwitch();
+  $('statusBtn')?.addEventListener('click', checkPrinterStatus);
 
   $('printFrame')?.addEventListener('change', () => {
     remember(PRINT_FRAME_KEY, $('printFrame').checked ? 'on' : 'off');
