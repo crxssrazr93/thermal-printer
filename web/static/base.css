@@ -297,16 +297,20 @@ select.control.slim{padding-right:26px}
    label pane, where the preview is fitted to the panel. */
 .frame-print .paper-wrap:not(.turned):not(.label-wrap){
   padding-left:var(--paper-gap,12px);padding-right:var(--paper-gap,12px);
-  /* two areas, told apart at a glance: the head's reach is the white the page
-     is drawn on, and the paper it cannot touch is hatched. The hatch is the
-     honest colour for it, since nothing will ever be printed there. */
+  /* Two areas, and both of them are paper. The head's reach is the bright
+     white the page is drawn on; the strip either side of it is the warmer,
+     slightly shaded tone of a roll nothing has been printed on. Stripes were
+     the wrong idea: they read as transparency rather than as paper. */
   background:
     linear-gradient(#FFFFFF,#FFFFFF) content-box,
-    repeating-linear-gradient(45deg,#E4E4E9 0 4px,#F4F4F7 4px 9px) padding-box;
-  border:1px solid #C9C9D2;
+    linear-gradient(#F0EFE9,#F0EFE9) padding-box;
+  border:1px solid #D8D6CE;
 }
 .frame-print .paper-wrap:not(.turned):not(.label-wrap) .paper{
-  outline:1px dashed #7C7C88;outline-offset:0;
+  /* the boundary is a crease rather than a border: a hairline of shadow on
+     the margin side, so the printable panel sits slightly proud of the rest */
+  outline:1px dashed #A9A69B;outline-offset:0;
+  box-shadow:0 0 0 1px rgba(255,255,255,.9), 0 0 6px rgba(0,0,0,.05);
 }
 
 /* what the two areas are, in words and in the same two fills, under the paper
@@ -316,9 +320,8 @@ select.control.slim{padding-right:26px}
 .paper-legend[hidden]{display:none !important}
 .paper-legend span{display:inline-flex;align-items:center;gap:6px}
 .paper-legend i{width:13px;height:13px;border-radius:2px;display:inline-block}
-.paper-legend .ink{background:#fff;border:1px dashed #7C7C88}
-.paper-legend .edge{background:repeating-linear-gradient(45deg,#E4E4E9 0 4px,#F4F4F7 4px 9px);
-  border:1px solid #C9C9D2}
+.paper-legend .ink{background:#fff;border:1px dashed #A9A69B}
+.paper-legend .edge{background:#F0EFE9;border:1px solid #D8D6CE}
 /* Shown at 1:1, so one printer dot is one pixel. Scaling a 1-bit dithered
    bitmap to fit resamples it into mush, which is why this pane is sized to
    the paper rather than the paper to the pane. */
