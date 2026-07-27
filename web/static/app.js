@@ -1993,7 +1993,8 @@ function describePaper(state) {
 
   root.style.setProperty('--paper-gap', `${gap}px`);
   const frame = recall(PRINT_FRAME_KEY) !== 'off';
-  document.body.classList.toggle('frame-print', frame && !!paperMm);
+  const showing = frame && !!paperMm;
+  document.body.classList.toggle('frame-print', showing);
   if ($('printFrame')) $('printFrame').checked = frame;
   if ($('paperNote')) {
     $('paperNote').textContent = paperMm
@@ -2001,6 +2002,17 @@ function describePaper(state) {
         + `(${dots} dots at ${state.dpi} dpi)`
       : `${dots} dots at ${state.dpi} dpi`;
   }
+
+  // the same two fills, named, under the paper they describe: a hatch is only
+  // obvious once something says what it means
+  ['composeLegend', 'todoLegend'].forEach((id) => {
+    const legend = $(id);
+    if (!legend) return;
+    legend.hidden = !showing;
+    if (!showing) return;
+    $(`${id}Print`).textContent = `${state.printWidthMm} mm`;
+    $(`${id}Paper`).textContent = `${paperMm} mm`;
+  });
 }
 
 /* -------------------------------------------------------- printer types */

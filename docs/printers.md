@@ -65,7 +65,7 @@ if you would rather see the bitmap alone.
 Both numbers belong to the printer type, so **Describe one** takes the paper
 width in millimetres and the print area in dots, with a **From mm** button that
 does the multiplication: dots are millimetres times eight at 203 dpi, times
-twelve at 300, rounded down to a whole byte because eight dots share one. The
+twelve at 304, rounded down to a whole byte because eight dots share one. The
 hint under the field says what the numbers come to, and warns you when the
 print area is wider than the paper you said it uses.
 

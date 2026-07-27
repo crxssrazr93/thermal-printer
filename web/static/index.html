@@ -210,6 +210,10 @@
               <img id="preview" class="paper" alt="Print preview">
             </div>
           </div>
+          <p class="paper-legend" id="composeLegend" hidden>
+            <span><i class="ink"></i><b id="composeLegendPrint"></b> printable</span>
+            <span><i class="edge"></i><b id="composeLegendPaper"></b> paper</span>
+          </p>
           <!-- only along the roll: how long a strip to compose, and a way to
                read it, since it comes off the paper turned on its side -->
           <div class="paper-note" id="alongTools" hidden>
@@ -306,6 +310,10 @@
             <img id="todoPreview" class="paper" alt="To-do list print preview">
           </div>
         </div>
+          <p class="paper-legend" id="todoLegend" hidden>
+            <span><i class="ink"></i><b id="todoLegendPrint"></b> printable</span>
+            <span><i class="edge"></i><b id="todoLegendPaper"></b> paper</span>
+          </p>
         <div class="paper-note" id="todoAlongTools" hidden>
           <label class="slider" for="todoLength">Strip up to
             <input id="todoLength" class="control slim" type="number"
@@ -590,7 +598,7 @@
               <label for="typeDpi">Resolution</label>
               <select id="typeDpi" class="control">
                 <option value="203">203 dpi, 8 dots to the millimetre</option>
-                <option value="300">300 dpi, 12 dots to the millimetre</option>
+                <option value="304">304 dpi, 12 dots to the millimetre</option>
               </select>
             </div>
             <div class="field-row">
