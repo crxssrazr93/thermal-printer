@@ -1961,6 +1961,8 @@ async function refreshState() {
     select.append(option);
   });
 
+  describePaper(data);
+
   $('connState').classList.toggle('on', data.connected);
   $('connText').textContent = data.connected ? 'Connected' : 'Disconnected';
   $('connectBtn').textContent = data.connected ? 'Disconnect' : 'Connect';
@@ -1971,6 +1973,34 @@ async function refreshState() {
   if ($('newCapability') && !$('newCapability').options.length) loadPrinterTypes();
 
   renderDevices(data.profiles);
+}
+
+/* ------------------------------------------------------------- the paper */
+/* The head is narrower than the roll: 58 mm of paper takes 48 mm of print, and
+ * the rest is margin whether you wanted one or not. The preview is drawn at
+ * the width of the paper with the printable part marked inside it, so the
+ * margin is something you can see rather than something you find out about
+ * after the roll has gone through. */
+const PRINT_FRAME_KEY = 'tp.printFrame';
+
+function describePaper(state) {
+  const root = document.documentElement;
+  const dots = Number(state.width) || 384;
+  const perMm = Number(state.dotsPerMm) || (Number(state.dpi) || 203) / 25.4;
+  const paperMm = Number(state.paperWidthMm) || 0;
+  // one preview pixel is one dot, so the margin is in dots too
+  const gap = paperMm ? Math.max(6, Math.round((paperMm * perMm - dots) / 2)) : 12;
+
+  root.style.setProperty('--paper-gap', `${gap}px`);
+  const frame = recall(PRINT_FRAME_KEY) !== 'off';
+  document.body.classList.toggle('frame-print', frame && !!paperMm);
+  if ($('printFrame')) $('printFrame').checked = frame;
+  if ($('paperNote')) {
+    $('paperNote').textContent = paperMm
+      ? `${paperMm} mm of paper, ${state.printWidthMm} mm of it printable `
+        + `(${dots} dots at ${state.dpi} dpi)`
+      : `${dots} dots at ${state.dpi} dpi`;
+  }
 }
 
 /* -------------------------------------------------------- printer types */
@@ -2016,7 +2046,15 @@ function fillTypeEditor(type) {
   $('typeName').value = type ? `${type.name}${type.custom ? '' : ' (copy)'}` : '';
   $('typeVendor').value = type?.vendor || '';
   $('typeWidth').value = type?.widthDots || 384;
-  $('typeDpi').value = type?.dpi || 203;
+  $('typePaper').value = type?.widthMm || 58;
+  // a dpi the list does not offer is still a dpi, so it is added rather than
+  // silently rounded to one of the two common ones
+  const dpi = String(type?.dpi || 203);
+  if (!Array.from($('typeDpi').options).some((option) => option.value === dpi)) {
+    $('typeDpi').append(new Option(`${dpi} dpi`, dpi));
+  }
+  $('typeDpi').value = dpi;
+  describeTypeWidth();
   const features = type?.features || { bitImageRaster: true };
   $('typeRaster').checked = features.bitImageRaster !== false;
   $('typeQr').checked = !!features.qrCode;
@@ -2025,9 +2063,51 @@ function fillTypeEditor(type) {
   $('typePartCut').checked = !!features.paperPartCut;
 }
 
+/* What the numbers in the editor come to in millimetres, said back as they are
+ * typed: dots are what the protocol counts and millimetres are what the paper
+ * is sold in, and getting the head width wrong is the one mistake that ruins
+ * every page. */
+function describeTypeWidth() {
+  const hint = $('typeWidthHint');
+  if (!hint) return;
+  const dpi = Number($('typeDpi').value) || 203;
+  const dots = Number($('typeWidth').value) || 0;
+  const paper = Number($('typePaper').value) || 0;
+  const perMm = dpi / 25.4;
+  const printed = dots / perMm;
+  const margin = paper - printed;
+  hint.textContent = dots
+    ? `${dots} dots at ${dpi} dpi is ${printed.toFixed(1)} mm of print`
+      + (paper ? `, leaving ${margin.toFixed(1)} mm of paper unprinted.` : '.')
+    : 'How much of the paper the head can print, in dots.';
+  if (paper && margin < -0.5) {
+    hint.textContent += ' That is wider than the paper you have said it uses.';
+  }
+}
+
 function initPrinterTypes() {
   const editor = $('typeEditor');
   if (!editor) return;
+
+  ['typeWidth', 'typeDpi', 'typePaper'].forEach((id) =>
+    $(id)?.addEventListener('input', describeTypeWidth));
+
+  // the calculator RawBt has, which is only a multiplication but is the one
+  // people get wrong: dots are millimetres times eight, or twelve at 300 dpi
+  $('typeCalc')?.addEventListener('click', () => {
+    const perMm = (Number($('typeDpi').value) || 203) / 25.4;
+    const suggested = Math.round((Number($('typePaper').value) || 58) - 10);
+    const answer = prompt(
+      `How many millimetres does the head print?\n\n`
+      + `At ${$('typeDpi').value} dpi that is ${perMm.toFixed(1)} dots to the millimetre. `
+      + `A 58 mm roll usually prints 48.`, String(suggested));
+    if (answer === null) return;
+    const mm = Number(answer);
+    if (!mm) return;
+    const dots = Math.max(64, Math.min(2048, Math.floor(mm * perMm / 8) * 8));
+    $('typeWidth').value = dots;
+    describeTypeWidth();
+  });
 
   $('newCapability').addEventListener('change', markCustomType);
   $('typeEditBtn').addEventListener('click', () => {
@@ -2044,6 +2124,7 @@ function initPrinterTypes() {
       name: $('typeName').value,
       vendor: $('typeVendor').value,
       widthDots: Number($('typeWidth').value),
+      widthMm: Number($('typePaper').value),
       dpi: Number($('typeDpi').value),
       features: {
         bitImageRaster: $('typeRaster').checked,
@@ -3408,6 +3489,11 @@ function initSettings() {
   });
 
   initNetworkSwitch();
+
+  $('printFrame')?.addEventListener('change', () => {
+    remember(PRINT_FRAME_KEY, $('printFrame').checked ? 'on' : 'off');
+    describePaper(state.printer || {});
+  });
 
   $('saveTearBtn').addEventListener('click', async () => {
     await api('/api/tear-gap', { method: 'POST', body: JSON.stringify({ mm: $('tearGap').value }) });

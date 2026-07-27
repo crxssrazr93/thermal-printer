@@ -586,16 +586,32 @@
                 <input id="typeVendor" class="control" placeholder="Unknown">
               </div>
             </div>
+            <div class="field">
+              <label for="typeDpi">Resolution</label>
+              <select id="typeDpi" class="control">
+                <option value="203">203 dpi, 8 dots to the millimetre</option>
+                <option value="300">300 dpi, 12 dots to the millimetre</option>
+              </select>
+            </div>
             <div class="field-row">
               <div class="field">
-                <label for="typeWidth">Head width, in dots</label>
-                <input id="typeWidth" class="control" type="number" min="64" max="2048"
-                       step="8" value="384">
+                <label for="typePaper">Paper width, in mm</label>
+                <input id="typePaper" class="control" type="number" min="20" max="220"
+                       step="0.5" value="58">
+                <p class="hint">What the roll measures. 58 and 80 are the usual
+                  sizes.</p>
               </div>
               <div class="field">
-                <label for="typeDpi">Resolution, in dpi</label>
-                <input id="typeDpi" class="control" type="number" min="50" max="600"
-                       step="1" value="203">
+                <label for="typeWidth">Print area, in dots</label>
+                <div class="slider-row">
+                  <input id="typeWidth" class="control grow" type="number" min="64" max="2048"
+                         step="8" value="384">
+                  <button type="button" class="btn subtle" id="typeCalc"
+                          title="Work the dots out from a width in millimetres">From mm</button>
+                </div>
+                <p class="hint" id="typeWidthHint">How much of that the head can
+                  actually print, in dots. It is always less than the paper: a
+                  58 mm roll usually prints 48 mm of itself.</p>
               </div>
             </div>
             <div class="field">
@@ -625,6 +641,17 @@
             <button id="cancelEditBtn" class="btn subtle" type="button" hidden>Cancel</button>
           </div>
         </details>
+
+        <div class="panel-head"><h2>Paper</h2>
+          <span class="head-meta" id="paperNote">&ndash;</span></div>
+        <div class="field">
+          <label class="check"><input type="checkbox" id="printFrame" checked>
+            Show the printable area in the preview</label>
+          <p class="hint">The roll is wider than the head. With this on, the
+            preview is drawn at the width of the paper and the part the printer
+            can actually reach is outlined inside it, so the margin is visible
+            before the paper goes through rather than after.</p>
+        </div>
 
         <div class="panel-head"><h2>Network</h2>
           <span class="head-meta" id="networkMeta">&ndash;</span></div>

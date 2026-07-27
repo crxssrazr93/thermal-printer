@@ -288,6 +288,19 @@ select.control.slim{padding-right:26px}
   display:flex;justify-content:center;align-items:flex-start}
 .paper-wrap{background:#fff;border-radius:var(--radius-paper);padding:14px 12px 20px;
   box-shadow:var(--shadow-lift);flex:none}
+
+/* The paper is wider than the head. A 58 mm roll prints 48 mm of itself, and
+   the difference is not a rounding error: it is the margin your words will sit
+   inside. So the sheet is drawn at the width of the roll, the printable part
+   is marked inside it, and the gap between them is real rather than decorative.
+   Left off the turned view, where the page is scaled to be read, and off the
+   label pane, where the preview is fitted to the panel. */
+.frame-print .paper-wrap:not(.turned):not(.label-wrap){
+  padding-left:var(--paper-gap,12px);padding-right:var(--paper-gap,12px);
+}
+.frame-print .paper-wrap:not(.turned):not(.label-wrap) .paper{
+  outline:1px dashed #9A9AA0;outline-offset:0;
+}
 /* Shown at 1:1, so one printer dot is one pixel. Scaling a 1-bit dithered
    bitmap to fit resamples it into mush, which is why this pane is sized to
    the paper rather than the paper to the pane. */

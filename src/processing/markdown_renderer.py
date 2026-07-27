@@ -467,14 +467,22 @@ class MarkdownRenderer:
     # -------------------------------------------------------------------------
     # layout
     # -------------------------------------------------------------------------
-    def _wrap_spans(self, spans: List[Span], font_size: int, available: int
+    def _wrap_spans(self, spans: List[Span], font_size: int, available: int,
+                    force_bold: bool = False, force_italic: bool = False
                     ) -> List[List[Tuple[Span, str, object]]]:
-        """Greedy word wrap that keeps per-word styling."""
+        """Greedy word wrap that keeps per-word styling.
+
+        Whatever the line will be drawn in has to be what it is measured in.
+        A quote is set in italic, and the oblique face borrowed for that is not
+        the width of the upright one: measured upright and drawn slanted, a
+        line that just fitted runs off the edge of the paper.
+        """
         lines: List[List[Tuple[Span, str, object]]] = [[]]
         x = 0
 
         for span in spans:
-            font = self._font(font_size, span.bold, span.italic, span.mono)
+            font = self._font(font_size, span.bold or force_bold,
+                              span.italic or force_italic, span.mono)
             if font is None:
                 continue
             for word in re.findall(r"\s+|\S+", span.text) or []:
@@ -731,10 +739,12 @@ class MarkdownRenderer:
             bar = int(self.style["quote_bar"])
             inner = left + int(self.style["quote_pad"])
             top = y
-            lines = self._wrap_spans(block.spans, self.font_size, width - inner - right_margin)
+            italic = bool(self.style["quote_italic"])
+            lines = self._wrap_spans(block.spans, self.font_size,
+                                     width - inner - right_margin, force_italic=italic)
             for line in lines:
                 y = self._draw_line(draw, line, y, inner, self.font_size,
-                                    force_italic=bool(self.style["quote_italic"]))
+                                    force_italic=italic)
             if bar:
                 draw.rectangle([left, top, left + bar, y], fill="black")
             return y
@@ -824,7 +834,8 @@ class MarkdownRenderer:
         banner = bool(self.style["heading_banner"]) and block.level == 1
         pad = 5 if banner else 0
         available = width - left - self.margin - 2 * pad
-        lines = self._wrap_spans(spans, size, available)
+        # headings are drawn bold, so they are measured bold
+        lines = self._wrap_spans(spans, size, available, force_bold=True)
 
         if banner:
             # a filled bar with the heading knocked out of it; the strongest

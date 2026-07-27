@@ -52,6 +52,23 @@ The head width is the part that has to be right. Everything else degrades
 gracefully: a QR code on a printer with no QR command is drawn into the picture
 instead, which is slower and softer but always prints.
 
+## The paper and the print area
+
+These are two different widths and confusing them is the usual reason a page
+comes out wrong. The roll is 58 mm; the head prints 48 mm of it, 384 dots at
+203 dpi. The rest is margin whether you asked for one or not.
+
+The preview says so: the sheet is drawn at the width of the roll and the part
+the head can reach is outlined inside it. Turn it off in Settings under Paper
+if you would rather see the bitmap alone.
+
+Both numbers belong to the printer type, so **Describe one** takes the paper
+width in millimetres and the print area in dots, with a **From mm** button that
+does the multiplication: dots are millimetres times eight at 203 dpi, times
+twelve at 300, rounded down to a whole byte because eight dots share one. The
+hint under the field says what the numbers come to, and warns you when the
+print area is wider than the paper you said it uses.
+
 ## The tear-off gap
 
 Paper has to come out far enough to clear the tear bar, and how far is a fact

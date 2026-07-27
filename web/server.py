@@ -40,6 +40,7 @@ from src.config.printer_profile import (          # noqa: E402
     delete_user_profile as delete_user_printer_profile,
     get_dpi,
     get_printer_width,
+    get_printer_width_mm,
     get_profile_labels,
     get_tear_gap_mm,
     load_profiles as load_printer_profiles,
@@ -480,6 +481,12 @@ class Session:
             "capabilityProfiles": get_profile_labels(),
             "width": get_printer_width(),
             "dpi": get_dpi(),
+            # the paper is wider than the head: 58 mm rolls print 48 mm of it.
+            # Both numbers go out so the preview can show the difference rather
+            # than leave it to be discovered on paper.
+            "paperWidthMm": get_printer_width_mm(),
+            "printWidthMm": round(get_printer_width() * 25.4 / get_dpi(), 1),
+            "dotsPerMm": round(get_dpi() / 25.4, 3),
             "tearGapMm": get_tear_gap_mm(),
             "lastError": self.last_error,
         }
