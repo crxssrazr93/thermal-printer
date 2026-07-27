@@ -322,6 +322,30 @@ select.control.slim{padding-right:26px}
   animation:ants 900ms linear infinite;
 }
 .frame-print .paper-wrap:not(.turned):not(.label-wrap){position:relative}
+
+/* Turned to be read, the same two widths are still true, only rotated: the
+   roll's edge is now the top and bottom of the card, and the head reaches
+   everything between the bands. Drawn the same way so it reads as the same
+   fact seen from the other side. */
+.frame-print .paper-wrap.turned:not(.label-wrap){
+  border:1px solid #1A1A1E;border-radius:0;
+}
+.frame-print .paper-wrap.turned:not(.label-wrap)::after{
+  content:"";position:absolute;pointer-events:none;
+  left:0;right:0;top:var(--turn-gap,0);bottom:var(--turn-gap,0);
+  background-image:
+    repeating-linear-gradient(90deg,#4A4A55 0 5px,transparent 5px 10px),
+    repeating-linear-gradient(90deg,#4A4A55 0 5px,transparent 5px 10px),
+    repeating-linear-gradient(0deg,#4A4A55 0 5px,transparent 5px 10px),
+    repeating-linear-gradient(0deg,#4A4A55 0 5px,transparent 5px 10px);
+  background-size:100% 1px,100% 1px,1px 100%,1px 100%;
+  background-position:0 0,0 100%,0 0,100% 0;
+  background-repeat:no-repeat;
+  animation:ants 900ms linear infinite;
+}
+@media (prefers-reduced-motion:reduce){
+  .frame-print .paper-wrap.turned:not(.label-wrap)::after{animation:none}
+}
 @keyframes ants{
   to{background-position:10px 0,-10px 100%,0 -10px,100% 10px}
 }
@@ -348,6 +372,22 @@ select.control.slim{padding-right:26px}
   border-bottom:1px solid var(--line-strong);
 }
 .paper-ruler b{position:absolute;bottom:9px;transform:translateX(-50%);font-weight:500}
+
+/* Turned to be read, the paper is still only as wide as it is: that limit is
+   now the height of the card, and the length running across the screen has no
+   limit at all. So the ruler stands up beside the sheet, measuring the one
+   dimension that ends. */
+.paper-ruler.upright{position:absolute;left:-24px;top:0;bottom:0;width:20px;
+  height:auto;margin:0}
+.paper-ruler.upright .ticks{inset:0 0 0 auto;width:9px;height:auto;
+  background-image:
+    repeating-linear-gradient(0deg,var(--line-strong) 0 1px,transparent 1px var(--mm,8px)),
+    repeating-linear-gradient(0deg,var(--line-strong) 0 1px,transparent 1px calc(var(--mm,8px) * 5));
+  background-size:4px 100%,8px 100%;
+  background-position:bottom right,bottom right;
+  border-bottom:0;border-right:1px solid var(--line-strong);
+}
+.paper-ruler.upright b{bottom:auto;right:11px;left:auto;transform:translateY(-50%)}
 
 .paper-legend{display:flex;align-items:center;justify-content:center;gap:14px;
   padding:8px 14px 0;font-size:11.5px;color:var(--faint);flex-wrap:wrap}

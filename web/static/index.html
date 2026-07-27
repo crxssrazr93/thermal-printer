@@ -216,6 +216,10 @@
             <div class="paper-column">
               <div class="paper-ruler" id="composeRuler" hidden><span class="ticks"></span></div>
               <div class="paper-wrap">
+                <!-- turned, the limited axis is the height of the card: the
+                     paper is only so wide however long the strip runs -->
+                <div class="paper-ruler upright" id="composeRulerSide" hidden
+                     aria-hidden="true"><span class="ticks"></span></div>
                 <img id="preview" class="paper" alt="Print preview">
               </div>
             </div>
@@ -319,6 +323,8 @@
           <div class="paper-column">
           <div class="paper-ruler" id="todoRuler" hidden><span class="ticks"></span></div>
           <div class="paper-wrap">
+            <div class="paper-ruler upright" id="todoRulerSide" hidden
+                 aria-hidden="true"><span class="ticks"></span></div>
             <img id="todoPreview" class="paper" alt="To-do list print preview">
           </div>
           </div>

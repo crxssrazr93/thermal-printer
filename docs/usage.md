@@ -140,6 +140,12 @@ The head prints the full 48 mm width whatever is on it, so a strip shallower
 than that leaves bare paper along one side. The page sits at the start of the
 width and the spare paper follows it.
 
+Turned, the paper marks are turned with it. The roll's edge is the top and
+bottom of the card, the printable band lies between them, and the ruler stands
+up on the left, because that is now the dimension that ends: the strip running
+across the screen is as long as you make it, while the paper is only ever as
+wide as it is.
+
 ## Languages
 
 Arabic, Hebrew and the other right to left scripts print properly: the text is

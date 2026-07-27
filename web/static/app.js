@@ -193,6 +193,9 @@ function showView(name) {
   // label should not drop you back in the editor
   remember(VIEW_KEY, name);
   if (name === 'compose') $('editor').focus();
+  // a panel that was hidden measured zero, so its ruler could not be drawn
+  // until now
+  if (typeof refreshRulers === 'function') refreshRulers();
   if (name === 'todos') refreshTodoPreview();
   if (name === 'calendar') refreshCalendar();
   if (name === 'labels') refreshLabel();
@@ -1713,9 +1716,13 @@ function sizeTurnedWrap(image = 'preview') {
   if (!wrap.classList.contains('turned')) {
     wrap.style.width = '';
     wrap.style.height = '';
+    wrap.style.removeProperty('--turn-gap');
     img.style.width = '';
     img.style.transform = '';
     img.style.top = '';
+    // the ruler measured the strip while it was turned, and now measures the
+    // paper again
+    refreshRulers();
     return;
   }
 
@@ -1733,11 +1740,23 @@ function sizeTurnedWrap(image = 'preview') {
   // cannot be read at all; past that point the stage scrolls instead
   const scale = Math.max(0.34, Math.min(1, available / height));
 
+  // The margin is on the paper whichever way the page is read. Turned, it is
+  // the band above and below rather than the strip either side, so the sheet
+  // grows by it and the page sits that far down inside it.
+  const framed = document.body.classList.contains('frame-print');
+  const gap = framed
+    ? Math.round(parseFloat(
+      getComputedStyle(document.documentElement).getPropertyValue('--paper-gap')
+    ) || 0) * scale
+    : 0;
+
   img.style.width = `${width}px`;
   img.style.transform = `rotate(-90deg) scale(${scale})`;
-  img.style.top = `${width * scale}px`;
+  img.style.top = `${width * scale + gap}px`;
   wrap.style.width = `${height * scale}px`;
-  wrap.style.height = `${width * scale}px`;
+  wrap.style.height = `${width * scale + gap * 2}px`;
+  wrap.style.setProperty('--turn-gap', `${gap}px`);
+  refreshRulers();
 }
 
 function initOrientation() {
@@ -2058,25 +2077,61 @@ function describePaper(state) {
   });
 
   root.style.setProperty('--mm', `${perMm}px`);
-  ['composeRuler', 'todoRuler'].forEach((id) => drawRuler($(id), showing ? paperMm : 0));
+  paperFacts = { paperMm, perMm, showing };
+  refreshRulers();
+}
+
+/* What the paper is, kept so the rulers can be redrawn without asking the
+ * server again: they have to be, because a turned page measures something
+ * different from an upright one and the panel can be any width. */
+let paperFacts = { paperMm: 0, perMm: 8, showing: false };
+
+function refreshRulers() {
+  [['composeRuler', 'composeRulerSide', 'preview'],
+   ['todoRuler', 'todoRulerSide', 'todoPreview']].forEach(
+    ([acrossId, downId, imageId]) => {
+      const image = $(imageId);
+      if (!image) return;
+      const turned = image.closest('.paper-wrap')?.classList.contains('turned');
+      // The ruler measures the dimension that ends. Upright that is across the
+      // paper; turned it is the height of the card, because the strip running
+      // across the screen is as long as you care to make it and the width is
+      // the only thing the printer fixes.
+      const span = paperFacts.showing ? paperFacts.paperMm : 0;
+      drawRuler($(acrossId), turned ? 0 : span);
+      drawRuler($(downId), turned ? span : 0, 'down');
+    });
 }
 
 /* Ticks every millimetre and a number every ten, across the width of the roll.
  * The paper is sold in millimetres and the head is quoted in dots, so the one
  * that can be held against the other belongs on screen. */
-function drawRuler(ruler, paperMm) {
+function drawRuler(ruler, spanMm, axis = 'across') {
   if (!ruler) return;
-  ruler.hidden = !paperMm;
-  if (!paperMm) return;
-  // measured from the sheet beside it rather than left to the layout, which
-  // has no idea how wide a ruler with no content ought to be
-  const sheet = ruler.parentElement?.querySelector('.paper-wrap');
-  if (sheet?.offsetWidth) ruler.style.width = `${sheet.offsetWidth}px`;
+  // Measured from the sheet beside it rather than left to the layout, which
+  // has no idea how wide a ruler with no content ought to be. A hidden panel
+  // measures zero, and a ruler drawn against zero is worse than none, so it
+  // waits until there is something to measure.
+  const sheet = axis === 'down'
+    ? ruler.closest('.paper-wrap')
+    : ruler.parentElement?.querySelector('.paper-wrap');
+  const box = sheet ? sheet.getBoundingClientRect() : null;
+  const width = box ? box.width : 0;
+  ruler.hidden = !spanMm || !box || !box.width || !box.height;
+  if (ruler.hidden) return;
+
+  if (axis === 'down') ruler.style.width = '';
+  else ruler.style.width = `${width}px`;
+  // the sheet is scaled to fit the panel, so a millimetre on screen is not a
+  // millimetre of dots: the ticks follow what is actually drawn
+  const along = axis === 'down' ? sheet.getBoundingClientRect().height : width;
+  ruler.style.setProperty('--mm', `${along / spanMm}px`);
   ruler.querySelectorAll('b').forEach((label) => label.remove());
-  for (let mm = 10; mm < paperMm; mm += 10) {
+  const step = spanMm > 220 ? 50 : spanMm > 90 ? 20 : 10;
+  for (let mm = step; mm < spanMm - step / 4; mm += step) {
     const label = document.createElement('b');
     label.textContent = mm;
-    label.style.left = `${(mm / paperMm) * 100}%`;
+    label.style[axis === 'down' ? 'top' : 'left'] = `${(mm / spanMm) * 100}%`;
     ruler.append(label);
   }
 }
@@ -3698,6 +3753,9 @@ function initSettings() {
   initNetworkSwitch();
   $('statusBtn')?.addEventListener('click', checkPrinterStatus);
   initWirePane();
+  // the sheet is scaled to the panel, so the ruler under it has to be redrawn
+  // when the panel changes size
+  window.addEventListener('resize', () => refreshRulers());
 
   $('printFrame')?.addEventListener('change', () => {
     remember(PRINT_FRAME_KEY, $('printFrame').checked ? 'on' : 'off');
