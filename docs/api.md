@@ -292,6 +292,29 @@ Where the server is listening, and whether that is a choice the app can make.
 `addresses` is what this machine would be reached at, asked of the routing
 table rather than of DNS. `override` is `THERMAL_WEB_HOST` when it is set,
 which means the decision was made outside the app and cannot be changed here.
+`rawPort` says whether raw printing is wanted, `rawPortOpen` whether the port
+is actually listening, and `rawPortNumber` which port that is (9100, or
+`THERMAL_RAW_PORT`).
+
+## `POST /api/raw-port`
+
+`{"enabled": true}` opens the raw printing port, `false` closes it.
+
+```json
+{ "ok": true, "enabled": true, "open": true, "port": 9100, "host": "127.0.0.1" }
+```
+
+Port 9100 is what every print system means by a network printer: send it
+ESC/POS and it prints. With this on, CUPS on another machine, a till, or
+anything that speaks the protocol can print through this app to a printer that
+has no network of its own. Bytes are passed through untouched, under the same
+lock the app's own jobs take, so the two cannot interleave on one socket. A job
+is everything sent until the sender closes or goes quiet for five seconds, up
+to 16 MB.
+
+It follows `POST /api/network`: local only until the app itself is exposed.
+There is no authentication on it, so anything that reaches it prints.
+`{"ok": false}` with a message means the port was already taken.
 
 ## `POST /api/network`
 

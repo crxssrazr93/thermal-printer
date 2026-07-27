@@ -796,6 +796,16 @@
             <strong>there is no password</strong>. Turn it on for a network you
             trust, and off again when you are done.</p>
         </div>
+        <div class="field">
+          <label class="check"><input type="checkbox" id="rawPort">
+            Accept raw printing on port 9100</label>
+          <p class="hint" id="rawPortHint">Port 9100 is what every print system
+            means by a network printer. With this on, CUPS on another machine, a
+            till, or anything that speaks ESC/POS can print through this app to
+            a printer that has no network of its own. The bytes are passed
+            through untouched, under the same lock the app's own jobs take. It
+            follows the setting above: local only until this app is exposed.</p>
+        </div>
       </div>
     </section>
 

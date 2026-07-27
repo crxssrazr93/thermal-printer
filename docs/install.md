@@ -55,6 +55,23 @@ systemctl --user edit --full thermal-print-studio   # set THERMAL_WEB_HOST=0.0.0
 systemctl --user restart thermal-print-studio
 ```
 
+## Printing to it from other software
+
+Under **Network** there is a second switch, **Accept raw printing on port
+9100**. Port 9100 is what every print system means by a network printer: send
+it ESC/POS and it prints. With it on, CUPS on another machine, a till, or
+anything that speaks the protocol can print through this app to a printer that
+has no network of its own.
+
+```bash
+lp -h thishost:9100 -o raw receipt.prn     # from another machine
+```
+
+The bytes are passed through untouched, under the same lock the app's own jobs
+take, so a job from the app and a job from the network cannot interleave. It
+follows the switch above: local only until the app itself is exposed, and with
+no authentication either. `THERMAL_RAW_PORT` moves it off 9100.
+
 ## Managing it
 
 ```bash

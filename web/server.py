@@ -175,7 +175,11 @@ def network_exposed() -> bool:
 
 
 def set_network_exposed(exposed: bool) -> None:
-    _write_json(NETWORK_FILE, {"exposed": bool(exposed)})
+    stored = _read_json(NETWORK_FILE, {})
+    if not isinstance(stored, dict):
+        stored = {}
+    stored["exposed"] = bool(exposed)
+    _write_json(NETWORK_FILE, stored)
 
 
 def listen_host() -> str:
@@ -203,6 +207,117 @@ def local_addresses():
     return found
 
 
+# -----------------------------------------------------------------------------
+# the raw port
+# -----------------------------------------------------------------------------
+# Port 9100 is what every print system means by "a network printer": send it
+# ESC/POS and it prints. Turning it on here puts this app in front of a printer
+# that has no network of its own, so CUPS on another machine, a point of sale
+# till or anything that speaks the protocol can use it. The bytes are passed
+# through untouched, under the same lock a job from the app takes, so the two
+# cannot interleave on one socket.
+RAW_PORT = int(os.environ.get("THERMAL_RAW_PORT", "9100"))
+RAW_MAX_BYTES = 16 * 1024 * 1024      # one job; anything larger is a runaway
+RAW_IDLE_SECONDS = 5.0                # a sender that stops mid-job is done
+
+_raw_server = None
+_raw_lock = threading.Lock()
+
+
+def raw_port_enabled() -> bool:
+    stored = _read_json(NETWORK_FILE, {})
+    return bool(stored.get("rawPort")) if isinstance(stored, dict) else False
+
+
+def set_raw_port_enabled(enabled: bool) -> None:
+    stored = _read_json(NETWORK_FILE, {})
+    if not isinstance(stored, dict):
+        stored = {}
+    stored["rawPort"] = bool(enabled)
+    _write_json(NETWORK_FILE, stored)
+
+
+def _raw_serve(sock) -> None:
+    while True:
+        try:
+            client, address = sock.accept()
+        except OSError:
+            return                                   # the listener was closed
+        threading.Thread(target=_raw_job, args=(client, address),
+                         daemon=True).start()
+
+
+def _raw_job(client, address) -> None:
+    """Read one job off the socket and put it on the printer, unaltered."""
+    data = bytearray()
+    try:
+        client.settimeout(RAW_IDLE_SECONDS)
+        while len(data) < RAW_MAX_BYTES:
+            chunk = client.recv(65536)
+            if not chunk:
+                break
+            data += chunk
+    except OSError:
+        pass
+    finally:
+        try:
+            client.close()
+        except OSError:
+            pass
+
+    if not data or SESSION is None:
+        return
+    if not SESSION.printer.is_connected:
+        logger.warning("Raw job of %d bytes from %s dropped: no printer",
+                       len(data), address[0])
+        return
+
+    with SESSION.lock:
+        try:
+            SESSION.printer.send_raw(bytes(data))
+            logger.info("Raw job of %d bytes from %s printed", len(data), address[0])
+        except Exception as error:
+            logger.warning("Raw job from %s failed: %s", address[0], error)
+            SESSION.last_error = str(error)
+
+
+def start_raw_port() -> Optional[int]:
+    """Open the raw port if it is wanted and not already open."""
+    global _raw_server
+    import socket as socket_module
+
+    with _raw_lock:
+        if _raw_server is not None or not raw_port_enabled():
+            return RAW_PORT if _raw_server is not None else None
+        sock = socket_module.socket(socket_module.AF_INET, socket_module.SOCK_STREAM)
+        sock.setsockopt(socket_module.SOL_SOCKET, socket_module.SO_REUSEADDR, 1)
+        try:
+            # follows the web listener: local only unless the app is exposed,
+            # since a raw port is the same decision with fewer questions asked
+            sock.bind((listen_host(), RAW_PORT))
+            sock.listen(4)
+        except OSError as error:
+            sock.close()
+            logger.warning("Could not open the raw port: %s", error)
+            return None
+        _raw_server = sock
+        threading.Thread(target=_raw_serve, args=(sock,), daemon=True).start()
+        logger.info("Raw port listening on %s:%d", listen_host(), RAW_PORT)
+        return RAW_PORT
+
+
+def stop_raw_port() -> None:
+    global _raw_server
+    with _raw_lock:
+        if _raw_server is None:
+            return
+        try:
+            _raw_server.close()
+        except OSError:
+            pass
+        _raw_server = None
+
+
 def request_rebind() -> None:
     """Bring the listener back up on the other address.
 
@@ -214,6 +329,8 @@ def request_rebind() -> None:
     global _rebind_wanted
     if SERVER is None:
         return
+    # the raw port follows the web listener, so it moves with it
+    stop_raw_port()
     _rebind_wanted = True
     threading.Thread(target=SERVER.shutdown, daemon=True).start()
 
@@ -1162,6 +1279,9 @@ def api_network(handler, match, body):
         "port": PORT,
         "override": HOST_OVERRIDE,
         "addresses": local_addresses(),
+        "rawPort": raw_port_enabled(),
+        "rawPortNumber": RAW_PORT,
+        "rawPortOpen": _raw_server is not None,
     }
 
 
@@ -1187,6 +1307,27 @@ def api_network_set(handler, match, body):
     return 200, {"ok": True, "exposed": exposed, "host": listen_host(),
                  "port": PORT, "addresses": local_addresses(),
                  "message": "Listening on {} now".format(listen_host())}
+
+
+@route("POST", "/api/raw-port")
+def api_raw_port(handler, match, body):
+    """Open or close the raw printing port.
+
+    It follows the web listener: local only unless the app is exposed to the
+    network, since it is the same decision with fewer questions asked. There is
+    no authentication on it either, and anything that reaches it prints.
+    """
+    wanted = bool(body.get("enabled"))
+    set_raw_port_enabled(wanted)
+    if wanted:
+        opened = start_raw_port()
+        if opened is None:
+            return 200, {"ok": False, "enabled": True, "open": False,
+                         "message": f"Port {RAW_PORT} is in use by something else"}
+    else:
+        stop_raw_port()
+    return 200, {"ok": True, "enabled": wanted, "open": _raw_server is not None,
+                 "port": RAW_PORT, "host": listen_host()}
 
 
 @route("POST", "/api/tear-gap")
@@ -1431,6 +1572,8 @@ def main() -> int:
         if host == OPEN_HOST:
             logger.warning("Open to the network on port %d, with no authentication", PORT)
         logger.info("Thermal Printer web UI on http://%s:%d", host, PORT)
+        # the raw printing port, when it is wanted, on the same address
+        start_raw_port()
 
         try:
             SERVER.serve_forever()
@@ -1444,6 +1587,7 @@ def main() -> int:
             break
         _rebind_wanted = False
 
+    stop_raw_port()
     if SESSION.printer.is_connected:
         SESSION.disconnect()
     return 0

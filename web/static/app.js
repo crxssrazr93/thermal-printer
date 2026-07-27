@@ -3576,11 +3576,35 @@ async function initNetworkSwitch() {
       : 'this machine only';
   };
 
+  // the raw printing port, which follows the switch above rather than having
+  // an address of its own
+  const raw = $('rawPort');
+  const describeRaw = (data) => {
+    if (!raw) return;
+    raw.checked = !!data.rawPort;
+  };
+
   try {
-    describe(await api('/api/network'));
+    const data = await api('/api/network');
+    describe(data);
+    describeRaw(data);
   } catch (error) {
     return;
   }
+
+  raw?.addEventListener('change', async () => {
+    const wanted = raw.checked;
+    try {
+      const result = await api('/api/raw-port',
+        { method: 'POST', body: JSON.stringify({ enabled: wanted }) });
+      if (result.message) toast(result.message, true);
+      else toast(wanted ? `Listening on port ${result.port}` : 'Raw port closed');
+      raw.checked = wanted ? !!result.open : false;
+    } catch (error) {
+      raw.checked = !wanted;
+      toast(error.message, true);
+    }
+  });
 
   box.addEventListener('change', async () => {
     const wanted = box.checked;
