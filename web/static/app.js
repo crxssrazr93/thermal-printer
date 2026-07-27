@@ -2095,6 +2095,7 @@ async function loadPrinterTypes(select) {
     printerTypes = data.types || [];
     // the opcode and cut dialects are the server's to name, so the editor asks
     // for them rather than keeping its own copy of the table
+    fillOptions('typeDriver', data.driverOptions);
     fillOptions('typeGraphics', data.graphicsOptions);
     fillOptions('typeCutFull', data.cutOptions);
     fillOptions('typeCutPartial', data.cutOptions);
@@ -2147,6 +2148,7 @@ function fillTypeEditor(type) {
   $('typePartCut').checked = !!features.paperPartCut;
 
   const flow = type?.flow || {};
+  $('typeDriver').value = type?.driver || 'escpos';
   $('typeGraphics').value = type?.graphics || 'gsv0';
   $('typeChunk').value = flow.chunk_bytes ?? 1024;
   $('typePause').value = flow.chunk_pause_ms ?? 10;
@@ -2249,6 +2251,7 @@ function initPrinterTypes() {
         paperFullCut: $('typeFullCut').checked,
         paperPartCut: $('typePartCut').checked,
       },
+      driver: $('typeDriver').value,
       graphics: $('typeGraphics').value,
       flow: {
         chunk_bytes: Number($('typeChunk').value),

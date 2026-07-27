@@ -255,6 +255,17 @@ def get_flow() -> Dict[str, Any]:
     return flow
 
 
+def get_driver_name() -> str:
+    """Which printer language this profile speaks.
+
+    A receipt printer and a label printer sold beside it look identical and
+    understand nothing of each other: ESC/POS streams down an endless roll,
+    TSPL declares a label of a known size. Sending one the other's bytes prints
+    a page of characters, so this is a property of the model, not a setting.
+    """
+    return str(get_profile().get("driver") or "escpos")
+
+
 def get_graphics_command() -> str:
     """Which opcode carries a bitmap. GS v 0 unless the profile says otherwise."""
     return str(get_profile().get("graphics") or "gsv0")

@@ -364,6 +364,7 @@ an entry means the same thing to python-escpos or escpos-php.
     "features": { "bitImageRaster": true, "qrCode": true, "barcodeA": true,
                   "paperFullCut": false, "paperPartCut": false },
     "notes": "", "custom": false,
+    "driver": "escpos",
     "graphics": "gsv0",
     "flow": { "chunk_bytes": 1024, "chunk_pause_ms": 10,
               "band_rows": 64, "drain_seconds": 0.0 },
@@ -371,6 +372,7 @@ an entry means the same thing to python-escpos or escpos-php.
     "density": { "supported": false, "level": 0 },
     "commands": { "start_print": "", "end_print": "", "status_request": "" } }
 ],
+  "driverOptions": [{ "id": "escpos", "label": "ESC/POS, receipt printers" }],
   "graphicsOptions": [{ "id": "gsv0", "label": "GS v 0, the raster command ..." }],
   "cutOptions": [{ "id": "gsv0", "label": "GS V 0, full cut, the common one" }],
   "flowDefaults": { "chunk_bytes": 1024, "chunk_pause_ms": 10,
@@ -397,6 +399,7 @@ schema alone. `graphicsOptions` and `cutOptions` are the values `graphics` and
 | `widthMm` | number | derived | Paper width; computed from dots and dpi if omitted |
 | `features` | object | all false | `bitImageRaster`, `qrCode`, `barcodeA`, `paperFullCut`, `paperPartCut`; anything else is ignored |
 | `key` | string | derived | Send it to edit an existing custom type in place; omitted, a key is made from the name |
+| `driver` | `escpos` \| `tspl` | `escpos` | Which language the printer speaks. Receipt printers speak ESC/POS; the label printers sold beside them usually speak TSPL, and one sent ESC/POS prints a label of characters |
 | `graphics` | string | `gsv0` | Which opcode carries a bitmap, from `graphicsOptions`. Column mode (`esc_star_*`) for firmwares that print `GS v 0` as characters |
 | `flow` | object | see below | `chunk_bytes` (64–65536), `chunk_pause_ms` (0–500), `band_rows` (8–1024), `drain_seconds` (0–30) |
 | `cut` | object | `gsv0` / `gsv1` / `0` | `full` and `partial` from `cutOptions`, and `feed_dots` (0–600) to push the last lines past the blade. Zero feeds three lines |

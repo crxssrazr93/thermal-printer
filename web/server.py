@@ -59,6 +59,7 @@ from src.core.device_discovery import (           # noqa: E402
 from src.core.printer import PrinterConnection    # noqa: E402
 from src.core.protocol import PrinterProtocol     # noqa: E402
 from src.core.graphics_commands import COMMANDS as GRAPHICS_COMMANDS  # noqa: E402
+from src.core.drivers import DRIVER_LABELS, get_driver          # noqa: E402
 import numpy as np                                 # noqa: E402
 from PIL import Image                              # noqa: E402
 
@@ -579,28 +580,27 @@ class Session:
         would be sent rather than a reconstruction of it.
         """
         gap_dots = feed_dots if feed_dots is not None else mm_to_dots(get_tear_gap_mm())
-        stream = bytearray(PrinterProtocol.CMD_INITIALIZE)
-        stream += PrinterProtocol.CMD_START_PRINT
-        stream += PrinterProtocol.build_density_command()
-        for band in PrinterProtocol.build_raster_bands(image):
+        driver = get_driver()
+        stream = bytearray(driver.prologue())
+        for band in driver.bands(image):
             stream += band
-        if gap_dots:
-            stream += PrinterProtocol.build_feed_dots(gap_dots)
-        stream += PrinterProtocol.CMD_END_PRINT
+        stream += driver.epilogue(gap_dots)
         return bytes(stream)
 
     def _send(self, image, feed_dots: Optional[int]) -> Tuple[bool, str]:
         gap_dots = feed_dots if feed_dots is not None else mm_to_dots(get_tear_gap_mm())
 
+        # the printer's language, which is ESC/POS unless the profile says it
+        # is a label printer and speaks TSPL instead
+        driver = get_driver()
+
         with self.lock:
             try:
-                self.printer.initialize()
-                self.printer.start_print()
-                for band in PrinterProtocol.build_raster_bands(image):
+                self.printer.send_raw(driver.prologue())
+                for band in driver.bands(image):
                     self.printer.send_image(band)
-                if gap_dots:
-                    self.printer.send_raw(PrinterProtocol.build_feed_dots(gap_dots))
-                self.printer.end_print()
+                self.printer.send_raw(driver.epilogue(gap_dots))
+                self.printer.drain()
             except Exception as error:
                 logger.warning("Print failed: %s", error)
                 self.last_error = str(error)
@@ -1141,6 +1141,7 @@ def api_printer_types(handler, match, body):
             # the protocol side of a type: which opcode carries a bitmap, how
             # fast the printer can be fed, which cut it answers to, and the two
             # byte sequences some printers need around a job
+            "driver": profile.get("driver", "escpos"),
             "graphics": profile.get("graphics", "gsv0"),
             "flow": {**FLOW_DEFAULTS, **(profile.get("flow") or {})},
             "cut": {"full": "gsv0", "partial": "gsv1", "feed_dots": 0,
@@ -1152,6 +1153,8 @@ def api_printer_types(handler, match, body):
     entries.sort(key=lambda entry: (entry["custom"], entry["name"].lower()))
     return 200, {
         "types": entries,
+        "driverOptions": [{"id": key, "label": label}
+                          for key, label in DRIVER_LABELS.items()],
         "graphicsOptions": [{"id": key, "label": label}
                             for key, label in GRAPHICS_COMMANDS.items()],
         "cutOptions": [{"id": key, "label": label}
@@ -1240,6 +1243,7 @@ def api_printer_type_save(handler, match, body):
         "media": {"dpi": dpi, "width": {"mm": width_mm, "pixels": dots}},
         "features": features,
         "commands": commands,
+        "driver": ("tspl" if str(body.get("driver")) == "tspl" else "escpos"),
         "graphics": str(body.get("graphics") or "gsv0"),
         "flow": flow,
         "cut": {

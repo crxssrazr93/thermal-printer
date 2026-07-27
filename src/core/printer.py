@@ -505,8 +505,15 @@ class PrinterConnection:
         command = PrinterProtocol.CMD_END_PRINT
         if command:
             self.send_raw(command)
-        # some printers keep printing for a moment after the last byte lands,
-        # and closing the socket under them truncates the page
+        self.drain()
+
+    def drain(self) -> None:
+        """Wait for the printer to catch up before the socket is closed.
+
+        Some of these keep printing for a moment after the last byte lands, and
+        closing the socket under them truncates the page. How long is a
+        property of the printer, so it comes from the profile.
+        """
         drain = self._flow().get("drain_seconds") or 0
         if drain:
             time.sleep(min(30.0, float(drain)))

@@ -52,6 +52,40 @@ The head width is the part that has to be right. Everything else degrades
 gracefully: a QR code on a printer with no QR command is drawn into the picture
 instead, which is slower and softer but always prints.
 
+## How to talk to it
+
+What a printer can do and how to reach it are different questions, and the
+escpos-printer-db schema only answers the first. The second lives in blocks of
+this project's own, under **How to talk to it** in the type editor, and it is
+folded away because the defaults are right for nearly every printer.
+
+- **Printer language.** Receipt printers speak ESC/POS. The label printers sold
+  beside them usually speak TSPL, which thinks in labels of a declared size
+  rather than in an endless roll. A TSPL printer sent ESC/POS prints a label of
+  characters and stops.
+- **Images are sent as.** `GS v 0` is the raster command nearly everything
+  understands. Firmwares that do not know it print the bytes as characters,
+  which is what "my pictures come out as garbage" means; column mode
+  (`ESC *`) is the older way and works nearly everywhere.
+- **Flow.** Bytes per write, the pause between writes, rows per image command,
+  and how long to wait before closing. These four decide whether a long page
+  prints or streaks: a printer that drops the bottom half of everything is
+  being fed faster than it can burn.
+- **Cut.** Eight dialects exist in the wild and a printer sent the wrong one
+  prints the bytes instead of obeying them. The feed before the cut is how far
+  the last line has to travel to clear the blade.
+- **Heat.** More heat makes the same dots blacker. More darkness, in the page
+  settings, makes more dots black and costs the fine detail, so reach for heat
+  first if the printer accepts it.
+- **Before and after a job.** Two byte sequences, in hex, for printers that
+  want a reset, a character set or a last feed the firmware forgets.
+
+If a page still comes out wrong, **What goes on the wire** in Settings reads
+the byte stream back as paper: the picture it describes and every command in
+it, with the ones it does not recognise called out. A capture from another app
+can be pasted in the same way, which is how to find out what that app does
+differently on the same printer.
+
 ## The paper and the print area
 
 These are two different widths and confusing them is the usual reason a page
